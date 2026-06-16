@@ -1,0 +1,26 @@
+name: Deploy Saundarya
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to Oracle VM
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.ORACLE_HOST }}
+        username: ${{ secrets.ORACLE_USER }}
+        key: ${{ secrets.ORACLE_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/saundarya
+          git pull origin main
+          source venv/bin/activate
+          pip install -r requirements.txt --quiet
+          sudo systemctl restart saundarya
+          echo "Deployed at $(date)"
