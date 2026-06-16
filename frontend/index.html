@@ -671,10 +671,11 @@ table tbody tr:hover td{background:var(--bg2)}
 <!-- TOPBAR -->
 <div class="topbar" id="topbar">
   <div class="logo-wrap">
-    <div class="logo-placeholder" id="logo-ph" title="Upload logo">
-      <input type="file" accept="image/*" onchange="uploadLogo(event)">
-      <i class="fas fa-leaf" id="logo-hint"></i>
-      <img id="logo-img" class="logo-img-el" alt="Logo">
+    <div class="logo-placeholder" id="logo-ph" style="border:none;cursor:default">
+      <img src="/static/logo.png" id="logo-img" class="logo-img-el" alt="Saundarya Logo"
+        style="display:block;width:40px;height:40px;object-fit:contain;border-radius:6px"
+        onerror="this.style.display='none';document.getElementById('logo-fallback').style.display='flex'">
+      <div id="logo-fallback" style="display:none;width:40px;height:40px;background:var(--gold);border-radius:6px;align-items:center;justify-content:center;font-size:18px">🌸</div>
     </div>
     <div><div class="brand-name">Saundarya</div><div class="brand-sub">Beauty Care</div></div>
   </div>
@@ -700,11 +701,11 @@ table tbody tr:hover td{background:var(--bg2)}
     <div style="position:relative">
       <div class="profile-btn" onclick="toggleProfile()" id="profile-btn">
         <div class="profile-av" id="profile-av-txt">PO</div>
-        <div class="profile-name" id="profile-name-txt">Priya Owner</div>
+        <div class="profile-name" id="profile-name-txt">Loading...</div>
         <i class="fas fa-chevron-down" style="font-size:9px;color:rgba(255,255,255,0.4)"></i>
       </div>
       <div class="profile-drop" id="profile-drop">
-        <div class="pd-header"><div class="pd-name" id="pd-name">Priya Owner</div><div class="pd-role">Administrator</div></div>
+        <div class="pd-header"><div class="pd-name" id="pd-name">Loading...</div><div class="pd-role">Administrator</div></div>
         <div class="pd-item" onclick="openPwChange()"><i class="fas fa-key"></i>Change Password</div>
         <div class="pd-item" onclick="toggleDark()"><i class="fas fa-moon"></i>Toggle Dark Mode</div>
         <div class="pd-divider"></div>
@@ -789,6 +790,13 @@ table tbody tr:hover td{background:var(--bg2)}
       <option>Confirmed</option><option>Pending</option><option>Completed</option><option>Cancelled</option>
     </select>
     <input type="date" id="a-fdate" class="fsel" onchange="renderApptTbl()">
+    <input type="month" id="a-fmonth" class="fsel" onchange="renderApptTbl()" title="Filter by month" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;font-size:12px;background:var(--surface);font-family:'Inter',sans-serif;color:var(--ink)">
+    <select id="a-fsort" class="fsel" onchange="renderApptTbl()">
+      <option value="date_desc">Date ↓ Newest</option>
+      <option value="date_asc">Date ↑ Oldest</option>
+      <option value="name">Name A-Z</option>
+    </select>
+    <button onclick="v('a-search').value='';v('a-fstt').value='';v('a-fdate').value='';v('a-fmonth').value='';v('a-fsort').value='date_desc';renderApptTbl()" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r8);padding:8px 12px;font-size:12px;cursor:pointer;color:var(--ink3);font-family:'Inter',sans-serif"><i class="fas fa-times"></i> Clear</button>
   </div>
   <div class="tbl-wrap"><div class="tbl-hd" style="background:var(--rose-l)"><div style="font-size:11px;font-weight:600;color:var(--rose);display:flex;align-items:center;gap:6px"><i class="fas fa-list"></i>All Appointments</div></div>
     <div class="ow"><table><thead><tr><th>Client</th><th>Phone</th><th>Service</th><th>Date</th><th>Time</th><th>Staff</th><th>Advance</th><th>Status</th><th>Notes</th><th>Action</th></tr></thead>
@@ -1051,7 +1059,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <div style="background:var(--amber-l);border:1px solid var(--amber-b);border-radius:var(--r8);padding:9px 12px;font-size:10.5px;color:var(--amber);margin-top:12px"><i class="fas fa-info-circle"></i> <strong>NOTE:</strong> We do not provide haircut, beard services or any salon services. We only provide makeup, hairstyling & draping for your special functions.</div>
       <div class="fl" style="margin-top:14px"><label>Selected Package</label><input type="text" id="gr-pkg-sel" readonly placeholder="Select a package above" style="background:var(--gold-l);font-weight:600;color:var(--gold)"></div>
       <div class="ow" style="margin-top:12px"><table class="ptable"><thead><tr><th>Function</th><th>Date</th><th>Timing</th><th>Artist</th><th>Notes</th></tr></thead>
-        <tbody id="gr-fb"><tr><td><select style="width:100%"><option>Wedding Day</option><option>Reception</option><option>Engagement</option><option>Sangeet</option><option>Haldi</option><option>Ring Ceremony</option><option>Other Function</option></select></td><td><input type="date" style="width:100%"></td><td><input type="time" style="width:80px"></td><td><select style="width:100%"><option>Assign Artist</option></select></td><td><input type="text" placeholder="Notes"></td></tr></tbody>
+        <tbody id="gr-fb"><tr><td><select style="width:100%"><option>Wedding Day</option><option>Reception</option><option>Engagement</option><option>Sangeet</option><option>Haldi</option><option>Ring Ceremony</option><option>Other Function</option></select></td><td><input type="date" style="width:100%"></td><td><input type="time" style="width:80px"></td><td><input type="text" placeholder="Notes" style="width:100%"></td><td><select style="width:100%;font-size:11px" id="gr-fb-staff-0"><option value="">— Assign Staff —</option></select></td><td><input type="number" placeholder="Staff fee ₹" style="width:90px" min="0"></td></tr></tbody>
       </table></div>
       <button class="add-r" onclick="addGrFuncRow()"><i class="fas fa-plus"></i>Add Function</button>
     </div></div>
@@ -1093,6 +1101,8 @@ table tbody tr:hover td{background:var(--bg2)}
             <optgroup label="Engagement/Reception"><option value="12500">HD Makeup</option><option value="15499">UHD Makeup</option><option value="18499">Airbrush + Flower</option></optgroup>
           </select></td>
           <td><input type="number" placeholder="0" style="width:72px" oninput="sdBill()"></td>
+          <td><select style="width:100%;font-size:11px" id="sd-staff-0"><option value="">— Staff —</option></select></td>
+          <td><input type="number" placeholder="Fee ₹" style="width:70px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" min="0"></td>
           <td><button class="rm-r" onclick="rmRow(this)">×</button></td>
         </tr></tbody>
       </table></div>
@@ -1326,7 +1336,7 @@ table tbody tr:hover td{background:var(--bg2)}
     </div></div>
   </div>
   <div class="tbl-wrap"><div class="tbl-hd" style="background:var(--sky-l)"><div style="font-size:11px;font-weight:600;color:var(--sky);display:flex;align-items:center;gap:6px"><i class="fas fa-users"></i>All Clients</div></div>
-    <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Birthday</th><th>Skin</th><th>Hair</th><th>Tag</th><th>Visits</th><th>Total Spent</th><th>Source</th></tr></thead>
+    <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Birthday</th><th>Skin</th><th>Hair</th><th>Tag</th><th>Bridal / Notes</th><th>Visits</th><th>Total Spent</th><th>Action</th></tr></thead>
       <tbody id="cl-tbody"><tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:20px">No clients yet</td></tr></tbody>
     </table></div>
   </div>
@@ -1372,7 +1382,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div style="font-size:11px;font-weight:600;color:var(--emerald);display:flex;align-items:center;gap:6px"><i class="fas fa-rupee-sign"></i>Salary + Commission — <span id="sal-ml"></span></div>
         <input type="month" id="sal-month" style="border:1px solid var(--emerald-b);border-radius:var(--r6);padding:4px 8px;font-size:10px;font-family:'Inter',sans-serif;background:var(--emerald-l);color:var(--emerald)" onchange="renderSalary()">
       </div>
-      <div class="ow"><table><thead><tr><th>Staff</th><th>Role</th><th>Days Present</th><th>Per Day</th><th>Base Earned</th><th>Services</th><th>Commission</th><th>Total Payable</th><th>Paid</th><th>Balance</th></tr></thead>
+      <div class="ow"><table><thead><tr><th>Staff</th><th>Role</th><th>Days Present</th><th>Per Day</th><th>Base Earned</th><th>Services</th><th>Commission</th><th>Morning Duty</th><th>Total Payable</th><th>Paid</th><th>Balance</th></tr></thead>
         <tbody id="sal-tbody"><tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:16px">No records</td></tr></tbody>
       </table></div>
     </div>
@@ -1681,7 +1691,7 @@ function go(btn,id){
   if(id==="revenue"){updateRevKpis();renderRevDaily();}
   if(id==="reports")updateReports();
   if(id==="staff"){renderStaffGrid();renderSalary();renderAtt();}
-  if(id==="bridal")renderBridalList('','');
+  if(id==="bridal"){renderBridalList('','');updateStaffSels();}
   if(id==="appt")renderApptTbl();
   if(id==="daily"){renderDailyView();updateStaffSels();}
   if(id==="clients")renderClients('');
@@ -1794,7 +1804,38 @@ function closeFab(){fabOpen=false;v("fab-menu").classList.remove("show");v("fab-
 // ════════════════════════════════
 // LOGO UPLOAD
 // ════════════════════════════════
-function uploadLogo(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{v("logo-img").src=ev.target.result;v("logo-img").style.display="block";v("logo-hint").style.display="none";};r.readAsDataURL(f);}
+function uploadLogo(e){
+  const f=e.target.files[0];if(!f)return;
+  if(f.size > 2*1024*1024){toast('Image too large — max 2MB','var(--rose)');return;}
+  const r=new FileReader();
+  r.onload=ev=>{
+    const data=ev.target.result;
+    v("logo-img").src=data;
+    v("logo-img").style.display="block";
+    v("logo-hint").style.display="none";
+    const rb=v("logo-remove-btn");if(rb)rb.style.display="block";
+    // Save to localStorage so it persists on refresh
+    try{localStorage.setItem('sn_logo',data);}catch(e){}
+  };
+  r.readAsDataURL(f);
+}
+function removeLogo(){
+  v("logo-img").src='';
+  v("logo-img").style.display="none";
+  v("logo-hint").style.display="block";
+  const rb=v("logo-remove-btn");if(rb)rb.style.display="none";
+  try{localStorage.removeItem('sn_logo');}catch(e){}
+}
+function loadSavedLogo(){
+  try{
+    const saved=localStorage.getItem('sn_logo');
+    if(saved){
+      v("logo-img").src=saved;
+      v("logo-img").style.display="block";
+      v("logo-hint").style.display="none";
+    }
+  }catch(e){}
+}
 
 // ════════════════════════════════
 // TABS
@@ -1804,6 +1845,20 @@ function bTab(el,id){
   document.querySelectorAll(".btc").forEach(c=>c.classList.remove("on"));
   el.classList.add("on");v("bt-"+id).classList.add("on");
   if(id==="list")renderBridalList("","");
+  // Populate staff dropdowns when switching to groom or sider tab
+  if(id==="groom"||id==="sider"){
+    updateStaffSels().then(()=>populateBridalStaffDropdowns());
+  }
+}
+
+function populateBridalStaffDropdowns(){
+  // Fill any empty staff selects in groom/sider forms
+  const opts=getStaffOpts();
+  document.querySelectorAll('#gr-fb select, #sd-body select').forEach(sel=>{
+    if(sel.options.length<=1){
+      sel.innerHTML=opts;
+    }
+  });
 }
 function revTab(el,id){
   document.querySelectorAll(".rev-tab").forEach(t=>t.classList.remove("on"));
@@ -2017,7 +2072,32 @@ function renderSelSvcs(){
     <td><button class="rm-r" onclick="removeSelSvc(${i})">×</button></td>
   </tr>`).join("");
 }
-function removeSelSvc(i){selectedSvcs.splice(i,1);renderSelSvcs();deBill();}
+function removeSelSvc(i){
+  const removed=selectedSvcs[i];
+  selectedSvcs.splice(i,1);
+  // If this was a split row, find its partner and restore full price
+  if(removed.splitFrom!==undefined && removed.originalPrice){
+    // Find partner split row (same name, also has splitFrom)
+    const partner=selectedSvcs.find(s=>s.splitFrom!==undefined && s.name===removed.name);
+    if(partner){
+      partner.price=removed.originalPrice;
+      delete partner.splitFrom;
+      delete partner.originalPrice;
+    }
+  }
+  renderSelSvcs();deBill();
+}
+
+function splitService(i){
+  const orig=selectedSvcs[i];
+  const fullPrice=orig.price||0;
+  const half=Math.round(fullPrice/2);
+  // Store original price so removing one part restores the other
+  selectedSvcs[i]={...orig,price:half,staff:'',staffId:null,splitFrom:i,originalPrice:fullPrice};
+  selectedSvcs.splice(i+1,0,{...orig,price:half,staff:'',staffId:null,splitFrom:i,originalPrice:fullPrice});
+  renderSelSvcs();deBill();
+  toast('<i class="fas fa-cut"></i> Split into 2 — assign staff to each','var(--teal)');
+}
 function deBill(){
   const tot=selectedSvcs.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
   const disc=parseFloat(v("de-disc").value)||0;const net=Math.max(0,tot-disc);
@@ -2169,23 +2249,115 @@ async function updApptStatus(id,status){
 async function renderApptTbl(){
   const tb=v('a-tbody');if(!tb)return;
   tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
-  const rows=await apiCall('GET','/appointments?limit=200');
+  const srch=v('a-search')?.value||'';
+  const fstt=v('a-fstt')?.value||'';
+  const fdate=v('a-fdate')?.value||'';
+  const fsort=v('a-fsort')?.value||'date_desc';
+  const fmonth=v('a-fmonth')?.value||'';
+
+  let path='/appointments?limit=500';
+  if(srch)path+=`&search=${encodeURIComponent(srch)}`;
+  if(fstt)path+=`&status=${encodeURIComponent(fstt)}`;
+
+  const rows=await apiCall('GET',path);
   if(!rows){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--rose);padding:20px">Failed to load</td></tr>';return;}
-  if(!rows.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:20px">No appointments yet</td></tr>';return;}
+
+  // Filter client side
+  let filtered=[...rows];
+  if(fdate)filtered=filtered.filter(a=>(a.appt_date||'').startsWith(fdate));
+  if(fmonth)filtered=filtered.filter(a=>(a.appt_date||'').startsWith(fmonth));
+
+  // Sort
+  filtered.sort((a,b)=>{
+    if(fsort==='date_desc')return (b.appt_date||'')>(a.appt_date||'')?1:-1;
+    if(fsort==='date_asc') return (a.appt_date||'')>(b.appt_date||'')?1:-1;
+    if(fsort==='name')     return a.client_name.localeCompare(b.client_name);
+    return 0;
+  });
+
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:20px">No appointments found</td></tr>';return;}
+
   const sc={'Confirmed':'p-bk','Pending':'p-nd','Completed':'p-ok','Cancelled':'p-er'};
-  tb.innerHTML=rows.map(a=>`<tr>
-    <td><b>${a.client_name}</b></td><td>${a.phone||'—'}</td><td>${a.service||'—'}</td>
-    <td>${a.appt_date||'—'}</td><td>${a.appt_time||'—'}</td><td>${a.staff_name||'—'}</td>
-    <td>${fmt(a.advance||0)}</td><td><span class="pill ${sc[a.status]||'p-lt'}">${a.status}</span></td>
-    <td>${a.notes||'—'}</td>
-    <td style="display:flex;gap:4px;align-items:center">
-      <select onchange="updApptStatus(${a.id},this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--surface)">
-        <option value="">Change</option>
-        ${['Confirmed','Pending','Completed','Cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
-      </select>
-      ${a.phone?`<button onclick="sendWaAppt('${a.phone}','${a.client_name}','${a.service||''}','${a.appt_date||''}','${a.appt_time||''}')" style="background:none;border:none;cursor:pointer;font-size:16px"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:''}
-    </td>
-  </tr>`).join('');
+
+  // Group by month then date
+  const monthGroups={};
+  filtered.forEach(a=>{
+    const d=a.appt_date||'';
+    let mLabel='No Date';
+    if(d.length>=7){
+      const dt=new Date(d+'T00:00:00');
+      mLabel=dt.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    }
+    if(!monthGroups[mLabel])monthGroups[mLabel]={};
+    const dKey=d.substring(0,10)||'No Date';
+    if(!monthGroups[mLabel][dKey])monthGroups[mLabel][dKey]=[];
+    monthGroups[mLabel][dKey].push(a);
+  });
+
+  let html_rows='';
+  Object.entries(monthGroups).forEach(([mLabel,dates])=>{
+    const allInMonth=Object.values(dates).flat();
+    const confirmed=allInMonth.filter(a=>a.status==='Confirmed').length;
+    const completed=allInMonth.filter(a=>a.status==='Completed').length;
+    const cancelled=allInMonth.filter(a=>a.status==='Cancelled').length;
+
+    html_rows+=`<tr style="background:var(--surface);cursor:pointer" onclick="toggleApptMonth('am-${mLabel.replace(/\s/g,'_')}')">
+      <td colspan="10" style="padding:10px 14px;border-top:2px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:700;color:var(--ink)">
+            <i class="fas fa-chevron-down" style="font-size:10px;margin-right:6px;color:var(--ink3)"></i>
+            ${mLabel}
+          </span>
+          <span style="font-size:10px;background:#e8f5ee;color:var(--emerald);border-radius:20px;padding:2px 8px">✓ ${confirmed} Confirmed</span>
+          <span style="font-size:10px;background:#f0f0f0;color:var(--ink3);border-radius:20px;padding:2px 8px">● ${completed} Done</span>
+          ${cancelled?`<span style="font-size:10px;background:#fff0f0;color:var(--rose);border-radius:20px;padding:2px 8px">✗ ${cancelled} Cancelled</span>`:''}
+          <span style="margin-left:auto;font-size:11px;color:var(--ink3)">${allInMonth.length} total</span>
+        </div>
+      </td>
+    </tr>`;
+
+    Object.entries(dates).sort((a,b)=>a[0]>b[0]?1:-1).forEach(([dKey,appts])=>{
+      const dLabel=dKey!=='No Date'?new Date(dKey+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'}):'No Date';
+      html_rows+=`<tr class="am-${mLabel.replace(/\s/g,'_')}" style="background:var(--surface)">
+        <td colspan="10" style="padding:5px 14px 5px 28px;border-top:1px solid var(--border)">
+          <span style="font-size:11px;font-weight:600;color:var(--ink3)">
+            <i class="fas fa-calendar-day" style="margin-right:4px"></i>${dLabel} — ${appts.length} appointment${appts.length>1?'s':''}
+          </span>
+        </td>
+      </tr>`;
+      appts.forEach(a=>{
+        html_rows+=`<tr class="am-${mLabel.replace(/\s/g,'_')}">
+          <td style="padding:7px 14px 7px 32px"><b>${a.client_name}</b></td>
+          <td style="font-size:11px">${a.phone||'—'}</td>
+          <td style="font-size:11px">${a.service||'—'}</td>
+          <td style="font-size:11px">${a.appt_date||'—'}</td>
+          <td style="font-size:11px">${a.appt_time||'—'}</td>
+          <td style="font-size:11px">${a.staff_name||'—'}</td>
+          <td style="font-size:11px">${fmt(a.advance||0)}</td>
+          <td><span class="pill ${sc[a.status]||'p-lt'}" style="font-size:10px">${a.status}</span></td>
+          <td style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.notes||'—'}</td>
+          <td style="display:flex;gap:4px;align-items:center">
+            <select onchange="updApptStatus(${a.id},this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;background:var(--surface)">
+              <option value="">Change</option>
+              ${['Confirmed','Pending','Completed','Cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
+            </select>
+            ${a.phone?`<button onclick="sendWaAppt('${a.phone}','${a.client_name}','${a.service||''}','${a.appt_date||''}','${a.appt_time||''}')" style="background:none;border:none;cursor:pointer;font-size:15px"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:''}
+          </td>
+        </tr>`;
+      });
+    });
+  });
+
+  tb.innerHTML=html_rows;
+}
+
+function toggleApptMonth(cls){
+  const rows=document.querySelectorAll(`tr.${cls}`);
+  const first=rows[0];if(!first)return;
+  const hidden=first.style.display==='none';
+  rows.forEach(r=>r.style.display=hidden?'':'none');
+  const chevron=document.querySelector(`[onclick*="${cls}"] .fa-chevron-down,[onclick*="${cls}"] .fa-chevron-right`);
+  if(chevron){chevron.classList.toggle('fa-chevron-down');chevron.classList.toggle('fa-chevron-right');}
 }
 function sendWaAppt(phone,name,svc,date,time){
   const ph=phone.replace(/\s/g,'').replace(/^0/,'+91').replace(/^(?!\+)/,'+91');
@@ -2208,8 +2380,8 @@ function toggleCF(){const f=v('cl-form-wrap');if(f)f.style.display=f.style.displ
 async function renderClients(s){
   const tb=v('cl-tbody');if(!tb)return;
   const rows=await apiCall('GET',`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`);
-  if(!rows){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
-  if(!rows.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:20px">No clients</td></tr>';return;}
+  if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
+  if(!rows.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:20px">No clients</td></tr>';return;}
   const tg={'VIP':'p-bk','Regular':'p-nd','New':'p-lt','Bridal':'p-wa'};
   tb.innerHTML=rows.map(c=>`<tr>
     <td><b>${c.name}</b></td><td>${c.phone||'—'}</td><td>${c.email||'—'}</td>
@@ -2267,7 +2439,7 @@ function renderSelSvcs(){
   wrap.classList.add('show');
   const staffOpts=['<option value="">— Staff —</option>',..._staffCache.map(st=>`<option value="${st.id}">${st.name}</option>`)].join('');
   tbody.innerHTML=selectedSvcs.map((s,i)=>`<tr class="anim-fade">
-    <td style="font-size:11.5px;font-weight:500">${s.name}</td>
+    <td style="font-size:11.5px;font-weight:500">${s.name}${s.splitFrom!==undefined?'<br><small style="color:var(--ink3);font-size:9px">Split '+(s.splitFrom+1)+'</small>':''}</td>
     <td>
       <select style="width:100%;font-size:11px" onchange="selectedSvcs[${i}].staff=this.options[this.selectedIndex].text;selectedSvcs[${i}].staffId=this.value||null">
         ${staffOpts.replace(`value="${s.staffId||''}"`,`value="${s.staffId||''}" selected`)}
@@ -2276,7 +2448,10 @@ function renderSelSvcs(){
     <td><input type="number" value="${s.qty}" min="1" style="width:55px" onchange="selectedSvcs[${i}].qty=parseInt(this.value)||1;deBill()"></td>
     <td><input type="number" value="${s.price}" style="width:80px" onchange="selectedSvcs[${i}].price=parseFloat(this.value)||0;deBill()"></td>
     <td style="font-weight:600;color:var(--emerald)">${fmt((s.price||0)*(s.qty||1))}</td>
-    <td><button class="rm-r" onclick="removeSelSvc(${i})">×</button></td>
+    <td style="display:flex;gap:3px">
+      ${s.splitFrom===undefined?`<button title="Split between 2 staff" onclick="splitService(${i})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px">Split</button>`:''}
+      <button class="rm-r" onclick="removeSelSvc(${i})">×</button>
+    </td>
   </tr>`).join('');
 }
 
@@ -2393,13 +2568,18 @@ function selBridalPkg(el,pkgName,price,funcsStr){
   if(d){d.style.display='block';d.innerHTML=`<i class="fas fa-gem" style="color:var(--violet)"></i> <strong>${pkgName}</strong> — ₹${parseInt(price).toLocaleString('en-IN')} selected`;}
   const fw=v('br-fn-wrap');if(fw)fw.style.display='block';
   const fb=v('br-fb');
-  if(fb)fb.innerHTML=funcsStr.split(',').map(f=>`<tr>
+  if(fb){
+    const staffOpts2='<option value="">— Assign Staff —</option>'+(_staffCache||[]).map(st=>`<option value="${st.id}">${st.name}</option>`).join('');
+    fb.innerHTML=funcsStr.split(',').map(f=>`<tr>
     <td><strong style="font-size:11px;color:var(--violet)">${f}</strong></td>
     <td><input type="date" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input type="time" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input type="number" placeholder="Persons" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" min="1"></td>
     <td><input type="text" value="${pkgName}" placeholder="Package detail" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px;background:var(--gold-l)"></td>
+    <td><select style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px">${staffOpts2}</select></td>
+    <td><input type="number" placeholder="Staff fee ₹" style="width:90px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" min="0" title="Custom price paid to this staff for function"></td>
   </tr>`).join('');
+  }
   toast(`<i class="fas fa-gem" style="color:var(--violet)"></i> ${pkgName} selected`,'var(--violet)');
 }
 
@@ -2415,9 +2595,19 @@ async function saveBridal(type){
     phone=v('br-ph')?.value||null;
     // br-rf = Reference (stored in reference field)
     v('br-fb')?.querySelectorAll('tr').forEach(r=>{
-      const strong=r.querySelector('strong');const inputs=r.querySelectorAll('input');
+      const strong=r.querySelector('strong');
+      const inputs=r.querySelectorAll('input');
+      const sel=r.querySelector('select');
       const fn=strong?.textContent?.trim();
-      if(fn)funcs.push({function_name:fn,fn_date:inputs[0]?.value||null,fn_time:inputs[1]?.value||null,person_count:inputs[2]?.value||null,pkg_detail:inputs[3]?.value||null});
+      if(fn)funcs.push({
+        function_name:fn,
+        fn_date:inputs[0]?.value||null,
+        fn_time:inputs[1]?.value||null,
+        person_count:inputs[2]?.value||null,
+        pkg_detail:inputs[3]?.value||null,
+        artist_id:sel?.value||null,
+        artist_name:sel?.options[sel?.selectedIndex]?.text||null
+      });
     });
   } else if(type==='groom'){
     name=v('gr-n').value.trim();if(!name){toast('Enter groom name','var(--rose)');return;}
@@ -2489,6 +2679,17 @@ async function saveBridal(type){
   const r=await apiCall('POST','/bridal',payload);
   if(!r)return;
   toast(`<i class="fas fa-gem" style="color:var(--violet)"></i> Booking saved — ${r.job_no}`,'var(--violet)');
+  // Auto-add client to CRM with Bridal tag
+  if(name && payload.phone){
+    await apiCall('POST','/clients',{
+      name:name,
+      phone:payload.phone||null,
+      tag:'Bridal',
+      skin_type:'Normal',
+      hair_type:'Normal',
+      preferences:`${payload.booking_type} booking — ${payload.package_name||''}`
+    });
+  }
   clearBridal(type);
   const listTab=document.querySelector('[onclick*="bt-list"]');
   if(listTab)bTab(listTab,'bt-list');
@@ -2794,6 +2995,9 @@ function grBill(){
   const ga=v('gb-a');if(ga)ga.textContent=fmt(ad);
   const gdue=v('gb-due');if(gdue)gdue.textContent=fmt(due);
 }
+function getStaffOpts(){
+  return '<option value="">— Assign Staff —</option>'+(_staffCache||[]).map(st=>`<option value="${st.id}">${st.name}</option>`).join('');
+}
 function selGroomPkg(el,pkgName,price){
   document.querySelectorAll('.gpkg').forEach(c=>c.classList.remove('sel-pkg'));
   el.classList.add('sel-pkg');
@@ -2861,6 +3065,7 @@ function addSdRow(){
       <option value="15499">UHD Makeup</option>
       <option value="18499">Airbrush + Flower</option>
     </optgroup>`;
+  const soS=getStaffOpts();
   tr.innerHTML=`<td style="color:var(--ink4);font-weight:600;font-size:11px;text-align:center">${rowNum}</td>
     <td><input type="text" placeholder="Person name e.g. Rikesh" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 5px;font-size:11px"></td>
     <td><input type="text" placeholder="Function e.g. Ghrashanti" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 5px;font-size:11px"></td>
@@ -2868,6 +3073,8 @@ function addSdRow(){
     <td><input type="time" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><select style="width:100%;font-size:11px" onchange="sdAmt(this)">${pkgOpts}</select></td>
     <td><input type="number" placeholder="0" value="0" oninput="sdBill()" style="width:65px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><select style="width:100%;font-size:11px">${soS}</select></td>
+    <td><input type="number" placeholder="Fee ₹" style="width:65px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" min="0"></td>
     <td><button onclick="this.closest('tr').remove();sdBill()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer;padding:2px 4px">×</button></td>`;
   tb.appendChild(tr);
 }
@@ -2919,28 +3126,39 @@ async function renderStaffGrid(){
 // SALARY CALCULATOR — Shows what owner needs to pay, NOT a payment button
 async function renderSalary(){
   const tb=v('sal-tbody');if(!tb)return;
-  tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  tb.innerHTML='<tr><td colspan="11" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
   const rows=await apiCall('GET','/staff');
-  if(!rows){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
-  if(!rows.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
+  if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
+  if(!rows.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
   const month=v('sal-month')?.value||tM();
   const [yr,mo]=month.split('-').map(Number);
   const daysInMonth=new Date(yr,mo,0).getDate();
   tb.innerHTML=rows.map(s=>{
     const perDay=daysInMonth>0?(s.base_salary||0)/daysInMonth:0;
     const baseEarned=Math.round(perDay*(s.days_present||0));
-    const workDone=s.comm_earned||0;    // total service value done by staff
-    // Commission: 2% of amount above ₹2L, else use their set commission_pct
+    // Morning duty: ₹150 per morning duty day (fetched from attendance)
+    const morningDutyPay=(s.morning_duty_count||0)*150;
+    const workDone=s.comm_earned||0;
+    // Commission tiers:
+    // Under ₹1L  → 2% of work done
+    // ₹1L - ₹2L  → 2% of work done
+    // Above ₹2L  → 3% (max cap — not more than 3%)
     let commissionAmt=0;
+    let tierLabel='';
     if(workDone>200000){
-      commissionAmt=Math.round(workDone*0.02);  // 2% of all work done
+      commissionAmt=Math.round(workDone*0.03);  // 3% max
+      tierLabel='3% (above ₹2L)';
+    } else if(workDone>100000){
+      commissionAmt=Math.round(workDone*0.02);  // 2%
+      tierLabel='2% (₹1L-₹2L)';
     } else {
-      commissionAmt=Math.round(workDone*(s.commission_pct||10)/100);
+      commissionAmt=Math.round(workDone*0.02);  // 2% under 1L
+      tierLabel='2% (under ₹1L)';
     }
-    const totalPayable=baseEarned+commissionAmt;
+    const totalPayable=baseEarned+commissionAmt+morningDutyPay;
     const paidSoFar=s.paid_salary||0;
     const balance=Math.max(0,totalPayable-paidSoFar);
-    const tierBadge=workDone>=200000?'<br><small style="color:var(--emerald)">⭐ 2% tier (work > ₹2L)</small>':'';
+    const tierBadge=`<br><small style="color:var(--ink3)">${tierLabel}</small>`;
     return `<tr>
       <td><b>${s.name}</b><br><small style="color:var(--ink3)">${s.role||''}</small></td>
       <td>${s.role||'—'}</td>
@@ -2949,7 +3167,8 @@ async function renderSalary(){
       <td>${fmt(baseEarned)}</td>
       <td>${s.total_services||0}</td>
       <td>${fmt(workDone)}${tierBadge}</td>
-      <td><b style="color:var(--emerald)">${fmt(commissionAmt)}</b><br><small style="color:var(--ink3)">${workDone>=200000?'2% of work':''+s.commission_pct+'%'}</small></td>
+      <td><b style="color:var(--emerald)">${fmt(commissionAmt)}</b></td>
+      <td>${morningDutyPay>0?`<b style="color:var(--teal)">+${fmt(morningDutyPay)}</b><br><small style="color:var(--ink3)">${s.morning_duty_count||0} days×₹150</small>`:'—'}</td>
       <td><b>${fmt(totalPayable)}</b></td>
       <td style="color:${balance>0?'var(--rose)':'var(--emerald)'}"><b>${fmt(balance)}</b></td>
     </tr>`;
@@ -2962,8 +3181,16 @@ async function updateStaffSels(){
   const rows=await apiCall('GET','/staff');if(!rows)return;
   _staffCache=rows;
   const opts=['<option value="">Select staff</option>',...rows.map(s=>`<option value="${s.name}">${s.name}</option>`)].join('');
+  // Appointment staff
   ['a-staff'].forEach(id=>{const el=v(id);if(el){const cur=el.value;el.innerHTML=opts;el.value=cur;}});
+  // Daily entry staff
   if(selectedSvcs.length)renderSelSvcs();
+  // Populate ALL staff selects in bridal/groom/sider forms
+  const bridalOpts='<option value="">— Assign Staff —</option>'+rows.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  document.querySelectorAll('#gr-fb select, #sd-body select[id^="sd-staff"], #sd-body select:not([onchange])').forEach(sel=>{
+    sel.innerHTML=bridalOpts;
+  });
+  // Also update getStaffOpts for future rows
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2978,11 +3205,11 @@ async function renderDashAtt(){
   const list=v('att-dash-list');if(!list)return;
   const lbl=v('att-dash-date');
   if(lbl)lbl.textContent=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'});
-  if(_role==='staff'){
-    // Staff sees only their own attendance
-    await _renderAttSelf(list);
+  if(_role==='admin'){
+    // Admin sees FULL view with time inputs, morning duty, all controls
+    await _renderAttList(list, true);
   } else {
-    // Admin sees all staff compact
+    // Staff (reception) sees compact view — can mark everyone present/absent
     await _renderAttList(list, false);
   }
 }
@@ -3034,21 +3261,25 @@ async function _renderAttList(container, showTimeInputs){
                    :'<span style="background:var(--emerald);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600">FULL</span>')
       :'<span style="background:var(--rose);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600">ABSENT</span>';
     if(showTimeInputs){
-      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r8);background:var(--surface);margin-bottom:8px">
+      return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r8);background:var(--surface);margin-bottom:8px;flex-wrap:wrap">
         <div style="width:34px;height:34px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${ini}</div>
-        <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${s.name}</div><div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div></div>
+        <div style="min-width:90px"><div style="font-size:12px;font-weight:600">${s.name}</div><div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div></div>
         <input type="time" id="att-in-${s.id}" value="${att.in_time||''}" title="In Time"
-          style="width:85px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface)"
+          style="width:82px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface)"
           onchange="saveAttTime(${s.id})">
         <input type="time" id="att-out-${s.id}" value="${att.out_time||''}" title="Out Time"
-          style="width:85px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface)"
+          style="width:82px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface)"
           onchange="saveAttTime(${s.id})">
-        <div id="att-hrs-${s.id}" style="font-size:11px;color:var(--ink3);min-width:32px;text-align:center">${att.hours?att.hours+'h':''}</div>
+        <div id="att-hrs-${s.id}" style="font-size:11px;color:var(--ink3);min-width:30px;text-align:center">${att.hours?att.hours+'h':''}</div>
+        <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink3);cursor:pointer;white-space:nowrap" title="Morning duty +₹150">
+          <input type="checkbox" id="att-mor-${s.id}" ${att.morning_duty?'checked':''} onchange="togMorningDuty(${s.id},this.checked)" style="cursor:pointer">
+          🌅 +₹150
+        </label>
         <button id="att-tog-${s.id}" onclick="togAtt(${s.id},${att.present?0:1})"
           style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;${att.present?'background:var(--emerald);color:#fff':'background:var(--surface);color:var(--ink3);border:1px solid var(--border)'}">
-          ${att.present?'Present':'Absent'}</button>
+          ${att.present?'✓ Present':'Absent'}</button>
         <button id="att-half-${s.id}" onclick="togHalfDay(${s.id},${att.half_day?0:1})"
-          style="padding:5px 10px;border-radius:6px;font-size:10px;font-weight:600;border:none;cursor:pointer;${att.half_day?'background:var(--gold);color:#fff':'background:var(--surface);color:var(--ink3);border:1px solid var(--border)'}">
+          style="padding:5px 8px;border-radius:6px;font-size:10px;font-weight:600;border:none;cursor:pointer;${att.half_day?'background:var(--gold);color:#fff':'background:var(--surface);color:var(--ink3);border:1px solid var(--border)'}">
           ½Day</button>
       </div>`;
     } else {
@@ -3086,6 +3317,21 @@ async function togHalfDay(staffId, isHalf){
   }
   toast(`${isHalf?'Marked Half Day':'Full Day restored'}`,'var(--gold)');
   updateDash();
+}
+
+async function togMorningDuty(staffId, isMorning){
+  const togBtn=v(`att-tog-${staffId}`);
+  const halfBtn=v(`att-half-${staffId}`);
+  const isPresent=togBtn?.textContent?.includes('Present');
+  const isHalf=halfBtn?.style?.background?.includes('gold')||halfBtn?.textContent?.includes('½Day')&&halfBtn?.style?.color==='#fff';
+  const r=await apiCall('POST','/attendance/upsert',{
+    staff_id:staffId,att_date:td(),is_present:!!isPresent,
+    half_day:!!isHalf,morning_duty:!!isMorning,
+    in_time:v(`att-in-${staffId}`)?.value||null,
+    out_time:v(`att-out-${staffId}`)?.value||null
+  });
+  if(!r)return;
+  toast(isMorning?'🌅 Morning duty +₹150 added':'Morning duty removed','var(--teal)');
 }
 
 async function saveAttTime(staffId){
@@ -3308,6 +3554,7 @@ async function initApp(){
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
+  loadSavedLogo();
   const dt=v("a-date");if(dt)dt.value=td();
   const ddt=v("de-dt");if(ddt)ddt.value=td();
   const dfd=v("de-fd");if(dfd)dfd.value=td();

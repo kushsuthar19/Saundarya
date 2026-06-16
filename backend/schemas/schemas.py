@@ -118,6 +118,8 @@ class AttendanceUpsert(BaseModel):
     staff_id: int
     att_date: date
     is_present: bool
+    half_day: bool = False
+    morning_duty: bool = False   # Extra ₹150 for morning duty
     in_time: Optional[str] = None
     out_time: Optional[str] = None
 
@@ -127,6 +129,8 @@ class AttendanceOut(BaseModel):
     staff_id: int
     att_date: date
     is_present: bool
+    half_day: bool = False
+    morning_duty: bool = False   # Extra ₹150 for morning duty
     in_time: Optional[str]
     out_time: Optional[str]
     hours_worked: Optional[float]
