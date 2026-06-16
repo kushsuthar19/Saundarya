@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     ORACLE_USER: str = os.getenv("ORACLE_USER", "SAUNDARYA")
     ORACLE_PASSWORD: str = os.getenv("ORACLE_PASSWORD", "Test123")
     ORACLE_DSN: str = os.getenv("ORACLE_DSN", "localhost:1521/FREEPDB1")
+    ORACLE_WALLET_DIR: str = os.getenv("ORACLE_WALLET_DIR", "")
+    ORACLE_WALLET_PASSWORD: str = os.getenv("ORACLE_WALLET_PASSWORD", "")
     ORACLE_MIN_POOL: int = 2
     ORACLE_MAX_POOL: int = 10
     ORACLE_INCREMENT: int = 1
