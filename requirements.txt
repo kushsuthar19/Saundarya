@@ -1,0 +1,35 @@
+# Saundarya Beauty Care Backend - Python Dependencies
+# Install: pip install -r requirements.txt
+
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Oracle DB (thin mode - no Oracle client needed)
+oracledb==2.5.0
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+
+# Validation
+pydantic==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# HTTP client (WhatsApp API)
+httpx==0.28.1
+
+# PDF generation
+reportlab==4.2.5
+
+# Async utilities
+anyio==4.7.0
+python-multipart==0.0.20
+
+# Environment
+python-dotenv==1.0.1
+
+# Rate limiting (production: use Redis instead)
+# redis==5.2.1

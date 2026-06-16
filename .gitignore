@@ -1,0 +1,8 @@
+# Create file named .gitignore in your saundarya folder with this content:
+.env
+venv/
+__pycache__/
+*.pyc
+wallet/
+*.pem
+*.ppk
