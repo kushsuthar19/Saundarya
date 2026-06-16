@@ -19,14 +19,17 @@ async def init_pool() -> None:
         # Use thin mode — no Oracle Instant Client required
         oracledb.defaults.fetch_lobs = False
         _pool = oracledb.create_pool_async(
-            user=settings.ORACLE_USER,
-            password=settings.ORACLE_PASSWORD,
-            dsn=settings.ORACLE_DSN,
-            min=settings.ORACLE_MIN_POOL,
-            max=settings.ORACLE_MAX_POOL,
-            increment=settings.ORACLE_INCREMENT,
-            ping_interval=30,
-        )
+    user=settings.ORACLE_USER,
+    password=settings.ORACLE_PASSWORD,
+    dsn=settings.ORACLE_DSN,
+    min=settings.ORACLE_MIN_POOL,
+    max=settings.ORACLE_MAX_POOL,
+    increment=settings.ORACLE_INCREMENT,
+    ping_interval=30,
+    config_dir=settings.ORACLE_WALLET_DIR,
+    wallet_location=settings.ORACLE_WALLET_DIR,
+    wallet_password=settings.ORACLE_WALLET_PASSWORD,
+)
         logger.info("Oracle connection pool created.")
     except Exception as e:
         logger.error(f"Failed to create Oracle pool: {e}")
