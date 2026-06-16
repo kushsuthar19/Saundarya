@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Saundarya Beauty Care & Academy — Management System
 
 Full-stack salon management system with FastAPI backend, Oracle DB, and a production-ready frontend.
@@ -307,3 +308,6 @@ Then replace save functions (e.g. `saveDe()`, `saveAppt()`, etc.) to call `apiCa
 - Oracle APEX / SQL*Plus: https://www.oracle.com/database/technologies/appdev/sqldeveloper-landing.html
 - FastAPI docs: https://fastapi.tiangolo.com
 - UltraMsg WhatsApp API: https://ultramsg.com/resources/api
+=======
+# Saundarya
+>>>>>>> 3c4b5a440c4eed004ce5b7a5471167557be20682
