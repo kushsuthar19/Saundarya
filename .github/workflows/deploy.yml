@@ -19,7 +19,8 @@ jobs:
         key: ${{ secrets.ORACLE_SSH_KEY }}
         script: |
           cd /home/ubuntu/saundarya
-          git pull origin main
+          git config --global credential.helper store
+          git pull https://kushsuthar19:${{ secrets.GITHUB_TOKEN }}@github.com/kushsuthar19/Saundarya.git main
           source venv/bin/activate
           pip install -r requirements.txt --quiet
           sudo systemctl restart saundarya
