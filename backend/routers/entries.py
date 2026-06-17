@@ -289,10 +289,17 @@ async def delete_entry(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
-    await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
-    await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
-    await db.commit()
-    return {"deleted": entry_id}
+    try:
+        await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
+        await db.commit()
+        await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
+        await db.commit()
+        return {"deleted": entry_id}
+    except Exception as e:
+        try: await db.rollback()
+        except Exception: pass
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
 @router.patch("/{entry_id}")
