@@ -79,6 +79,57 @@ async def create_appointment(
     return dict(zip(cols, row))
 
 
+@appt_router.get("/{appt_id}")
+async def get_appt(
+    appt_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        "SELECT id,client_name,phone,service,appt_date,appt_time,staff_id,staff_name,advance,status,notes FROM appointments WHERE id=:1",
+        [appt_id]
+    )
+    row = await cursor.fetchone()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    cols = [d[0].lower() for d in cursor.description]
+    return dict(zip(cols, row))
+
+@appt_router.delete("/{appt_id}")
+async def delete_appt(
+    appt_id: int,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute("DELETE FROM appointments WHERE id=:1", [appt_id])
+    await db.commit()
+    return {"deleted": appt_id}
+
+@appt_router.patch("/{appt_id}")
+async def update_appt(
+    appt_id: int,
+    data: dict,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    fields = []
+    values = []
+    allowed = ['client_name','phone','service','appt_date','appt_time','staff_name','advance','status','notes']
+    for k,v2 in data.items():
+        if k in allowed:
+            fields.append(f"{k}=:{len(values)+1}")
+            values.append(v2)
+    if not fields:
+        return {"error": "No valid fields"}
+    values.append(appt_id)
+    await cursor.execute(f"UPDATE appointments SET {','.join(fields)},updated_at=SYSTIMESTAMP WHERE id=:{len(values)}", values)
+    await db.commit()
+    return {"updated": appt_id}
+
 @appt_router.patch("/{appt_id}/status")
 async def update_status(
     appt_id: int,
@@ -98,6 +149,7 @@ async def update_status(
         raise HTTPException(404, "Appointment not found")
     await db.commit()
     return {"id": appt_id, "status": status}
+
 
 
 # ════════════════════════════════
@@ -175,6 +227,71 @@ async def create_staff(
     row = await cursor.fetchone()
     cols = [d[0].lower() for d in cursor.description]
     return dict(zip(cols, row))
+
+
+@staff_router.get("/{staff_id}")
+async def get_staff_by_id(
+    staff_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        """SELECT id, name, role, phone, join_date, base_salary, commission_pct,
+                  days_present, total_services, comm_earned, paid_salary, av_class, is_active
+           FROM staff WHERE id=:1""",
+        [staff_id]
+    )
+    row = await cursor.fetchone()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Staff not found")
+    cols = [d[0].lower() for d in cursor.description]
+    return dict(zip(cols, row))
+
+@staff_router.put("/{staff_id}")
+async def update_staff_by_id(
+    staff_id: int,
+    data: dict,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    fields = []
+    values = []
+    allowed = ['name','role','phone','join_date','base_salary','commission_pct']
+    for k,v2 in data.items():
+        if k in allowed:
+            fields.append(f"{k}=:{len(values)+1}")
+            values.append(v2)
+    if not fields:
+        return {"error": "No valid fields"}
+    values.append(staff_id)
+    await cursor.execute(
+        f"UPDATE staff SET {','.join(fields)},updated_at=SYSTIMESTAMP WHERE id=:{len(values)}",
+        values
+    )
+    await db.commit()
+    return {"updated": staff_id}
+
+@staff_router.delete("/{staff_id}")
+async def delete_staff_by_id(
+    staff_id: int,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute("UPDATE appointments SET staff_id=NULL WHERE staff_id=:1", [staff_id])
+    await cursor.execute("UPDATE entry_items SET staff_id=NULL WHERE staff_id=:1", [staff_id])
+    await cursor.execute("DELETE FROM attendance WHERE staff_id=:1", [staff_id])
+    await cursor.execute("DELETE FROM salary_payments WHERE staff_id=:1", [staff_id])
+    await cursor.execute("SELECT user_id FROM staff WHERE id=:1", [staff_id])
+    row = await cursor.fetchone()
+    await cursor.execute("UPDATE staff SET is_active=0 WHERE id=:1", [staff_id])
+    if row and row[0]:
+        await cursor.execute("UPDATE users SET is_active=0 WHERE id=:1", [row[0]])
+    await db.commit()
+    return {"deleted": staff_id}
 
 
 # ════════════════════════════════
@@ -460,6 +577,57 @@ async def bridal_whatsapp(
         await db.commit()
     return result
 
+
+@bridal_router.patch("/{booking_id}/edit")
+async def edit_bridal(
+    booking_id: int,
+    data: dict,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    fields = []
+    values = []
+    allowed = ['client_name','phone','wedding_date','venue','reference',
+               'package_name','pkg_amount','transport','discount',
+               'advance_paid','status','notes']
+    for k, v2 in data.items():
+        if k in allowed:
+            if k == 'wedding_date' and v2:
+                fields.append(f"wedding_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+            else:
+                fields.append(f"{k}=:{len(values)+1}")
+            values.append(v2)
+    if not fields:
+        return {"error": "No valid fields"}
+    # Recalculate balance_due
+    pkg = data.get('pkg_amount', 0) or 0
+    tr = data.get('transport', 0) or 0
+    disc = data.get('discount', 0) or 0
+    adv = data.get('advance_paid', 0) or 0
+    balance = max(0, float(pkg) + float(tr) - float(disc) - float(adv))
+    fields.append(f"balance_due=:{len(values)+1}")
+    values.append(balance)
+    fields.append(f"updated_at=SYSTIMESTAMP")
+    values.append(booking_id)
+    await cursor.execute(
+        f"UPDATE bridal_bookings SET {','.join(fields)} WHERE id=:{len(values)}",
+        values
+    )
+    await db.commit()
+    return {"updated": booking_id, "balance_due": balance}
+
+@bridal_router.delete("/{booking_id}")
+async def delete_bridal(
+    booking_id: int,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute("DELETE FROM bridal_functions WHERE booking_id=:1", [booking_id])
+    await cursor.execute("DELETE FROM bridal_bookings WHERE id=:1", [booking_id])
+    await db.commit()
+    return {"deleted": booking_id}
 
 @bridal_router.patch("/{booking_id}/payment")
 async def record_advance_payment(

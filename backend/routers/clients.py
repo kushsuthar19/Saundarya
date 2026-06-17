@@ -76,6 +76,19 @@ async def get_client(
     return await _get_client(client_id, cursor)
 
 
+@router.delete("/{client_id}")
+async def delete_client(
+    client_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    # Nullify FK references before deleting client
+    await cursor.execute("UPDATE daily_entries SET client_id=NULL WHERE client_id=:1", [client_id])
+    await cursor.execute("DELETE FROM clients WHERE id=:1", [client_id])
+    await db.commit()
+    return {"deleted": client_id}
+
 @router.put("/{client_id}", response_model=ClientOut)
 async def update_client(
     client_id: int,

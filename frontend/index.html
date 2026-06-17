@@ -761,7 +761,7 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="ptitle"><i class="fas fa-calendar-check" style="color:var(--rose)"></i>Appointments</div>
   <div class="psub">Book & manage all client appointments</div>
   <div class="nline rose"></div>
-  <div class="card"><div class="card-hd rose"><div class="card-hd-t"><i class="fas fa-plus-circle"></i>New Appointment</div></div><div class="card-body">
+  <div class="card"><div class="card-hd rose" id="appt-form-hd"><div class="card-hd-t"><i class="fas fa-plus-circle" id="appt-form-icon"></i><span id="appt-form-title">New Appointment</span></div></div><div class="card-body">
     <div class="fg">
       <div class="fl"><label><i class="fas fa-user"></i>Client Name</label><input type="text" id="a-name" placeholder="Full name"></div>
       <div class="fl"><label><i class="fas fa-phone"></i>Contact</label><input type="tel" id="a-phone" placeholder="+91 XXXXX XXXXX"></div>
@@ -782,7 +782,7 @@ table tbody tr:hover td{background:var(--bg2)}
       </div>
     </div>
     <div class="fl" style="margin-top:10px"><label><i class="fas fa-sticky-note"></i>Notes</label><textarea id="a-notes" placeholder="Special requests, allergies, preferences..."></textarea></div>
-    <div class="ar"><button class="btn btn-ghost" onclick="clearAppt()"><i class="fas fa-times"></i>Clear</button><button class="btn btn-rose" onclick="saveAppt()"><i class="fas fa-check"></i>Book Appointment</button></div>
+    <div class="ar"><button class="btn btn-ghost" onclick="clearAppt()"><i class="fas fa-times"></i>Clear</button><button class="btn btn-rose" id="appt-save-btn" onclick="saveAppt()"><i class="fas fa-check"></i>Book Appointment</button></div>
   </div></div>
   <div class="sbar">
     <div class="sbar-wrap"><i class="fas fa-search"></i><input type="text" placeholder="Search appointments..." id="a-search" oninput="renderApptTbl()"></div>
@@ -1333,7 +1333,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Tag</label><select id="cl-tg"><option>Regular</option><option>VIP</option><option>New</option><option>Bridal</option></select></div>
         <div class="fl"><label>Preferences</label><input type="text" id="cl-pr"></div>
       </div>
-      <div class="ar"><button class="btn btn-ghost" onclick="v('cf').style.display='none'">Cancel</button><button class="btn btn-sky" onclick="saveClient()"><i class="fas fa-save"></i>Save Client</button></div>
+      <div class="ar"><button class="btn btn-ghost" onclick="v('cf').style.display='none'">Cancel</button><button class="btn btn-sky" id="cl-save-btn" onclick="saveClient()"><i class="fas fa-save"></i>Save Client</button></div>
     </div></div>
   </div>
   <div class="tbl-wrap"><div class="tbl-hd" style="background:var(--sky-l)"><div style="font-size:11px;font-weight:600;color:var(--sky);display:flex;align-items:center;gap:6px"><i class="fas fa-users"></i>All Clients</div></div>
@@ -2392,6 +2392,8 @@ async function renderApptTbl(){
               ${['Confirmed','Pending','Completed','Cancelled'].map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
             ${a.phone?`<button onclick="sendWaAppt('${a.phone}','${a.client_name}','${a.service||''}','${a.appt_date||''}','${a.appt_time||''}')" style="background:none;border:none;cursor:pointer;font-size:15px"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:''}
+          <button onclick="editAppt(${a.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px" title="Edit"><i class="fas fa-edit"></i></button>
+            <button onclick="deleteAppt(${a.id},'${a.client_name}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px" title="Delete"><i class="fas fa-trash"></i></button>
           </td>
         </tr>`;
       });
@@ -2399,6 +2401,238 @@ async function renderApptTbl(){
   });
 
   tb.innerHTML=html_rows;
+}
+
+// ── EDIT / DELETE FUNCTIONS ───────────────────────────
+
+// Appointment edit modal
+async function editAppt(id){
+  const a=await apiCall('GET',`/appointments/${id}`);
+  if(!a)return;
+  // Fill the appointment form with existing data
+  v('a-name').value=a.client_name||'';
+  v('a-phone').value=a.phone||'';
+  // Set service select
+  const svc=v('a-svc');
+  if(svc){
+    // Try to match option text
+    let found=false;
+    for(let i=0;i<svc.options.length;i++){
+      if(svc.options[i].text===a.service||svc.options[i].value===a.service){
+        svc.selectedIndex=i;found=true;break;
+      }
+    }
+    if(!found){svc.value='';}
+  }
+  v('a-date').value=a.appt_date||'';
+  v('a-time').value=a.appt_time||'';
+  // Set staff select
+  const staff=v('a-staff');
+  if(staff){
+    let found=false;
+    for(let i=0;i<staff.options.length;i++){
+      if(staff.options[i].text===a.staff_name){staff.selectedIndex=i;found=true;break;}
+    }
+    if(!found)staff.value='';
+  }
+  v('a-adv').value=a.advance||0;
+  const ns=v('a-notes');if(ns)ns.value=a.notes||'';
+  const ss=v('a-status');if(ss)ss.value=a.status||'Confirmed';
+  // Update form header and button
+  const title=v('appt-form-title');if(title)title.textContent='Edit Appointment';
+  const icon=v('appt-form-icon');if(icon){icon.className='fas fa-edit';}
+  const btn=v('appt-save-btn');
+  if(btn){btn.innerHTML='<i class="fas fa-save"></i> Update Appointment';btn.setAttribute('onclick',`updateAppt(${id})`);}
+  // Scroll to form
+  document.querySelector('#sec-appt .card')?.scrollIntoView({behavior:'smooth'});
+  toast('Form loaded — edit and click Update Appointment','var(--teal)');
+}
+
+async function updateAppt(id){
+  const nm=v('a-name').value.trim();if(!nm){toast('Enter client name','var(--rose)');return;}
+  const r=await apiCall('PATCH',`/appointments/${id}`,{
+    client_name:nm,
+    phone:v('a-phone').value||null,
+    service:v('a-svc').value||null,
+    appt_date:v('a-date').value||null,
+    appt_time:v('a-time').value||null,
+    staff_name:v('a-staff').value||null,
+    advance:parseFloat(v('a-adv').value)||0,
+    status:v('a-status')?.value||'Confirmed',
+    notes:v('a-notes')?.value||null
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Appointment updated!','var(--emerald)');
+  // Reset form back to Add mode
+  const title=v('appt-form-title');if(title)title.textContent='New Appointment';
+  const icon=v('appt-form-icon');if(icon)icon.className='fas fa-plus-circle';
+  const btn=v('appt-save-btn');
+  if(btn){btn.innerHTML='<i class="fas fa-check"></i> Book Appointment';btn.setAttribute('onclick','saveAppt()');}
+  clearAppt();renderApptTbl();updateDash();
+}
+
+async function deleteAppt(id,name){
+  if(!confirm(`Delete appointment for "${name}"? This cannot be undone.`))return;
+  const r=await apiCall('DELETE',`/appointments/${id}`);
+  if(r){toast(`Appointment deleted`,'var(--rose)');renderApptTbl();}
+}
+
+// Daily entry edit
+async function editEntry(id){
+  const e=await apiCall('GET',`/entries/${id}`);
+  if(!e)return;
+  const items=e.items||[];
+  const modal=v('inv-modal');if(!modal)return;
+
+  // Build service rows
+  const svcRows=items.map((it,i)=>`
+    <tr id="ee-row-${i}">
+      <td><input value="${it.service_name||''}" id="ee-svc-${i}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td><input type="number" value="${it.price||0}" id="ee-price-${i}" oninput="eeCalc()" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td><input type="number" value="${it.qty||1}" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${i}">${fmt((it.price||0)*(it.qty||1))}</td>
+      <td><button onclick="eeRemoveRow(${i})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>
+    </tr>`).join('');
+
+  modal.innerHTML=`
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:24px 28px;width:660px;max-width:96vw;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:18px;font-weight:700;margin-bottom:16px;color:var(--ink)">
+      <i class="fas fa-edit" style="color:var(--teal);margin-right:8px"></i>Edit Entry — ${e.inv_no}
+    </div>
+    <!-- Client & Payment -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Client Name</label>
+        <input id="ee-name" value="${e.client_name||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Phone</label>
+        <input id="ee-phone" value="${e.phone||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Payment Method</label>
+        <select id="ee-pay" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)">
+          <option ${e.pay_method==='Cash'?'selected':''}>Cash</option>
+          <option ${e.pay_method==='UPI'?'selected':''}>UPI</option>
+          <option ${e.pay_method==='Card'?'selected':''}>Card</option>
+          <option ${e.pay_method==='Split'?'selected':''}>Split</option>
+        </select></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Discount ₹</label>
+        <input id="ee-disc" type="number" value="${e.discount||0}" oninput="eeCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Remarks</label>
+        <textarea id="ee-rem" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical">${e.remarks||''}</textarea></div>
+    </div>
+    <!-- Services -->
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label style="font-size:12px;font-weight:700;color:var(--ink)">Services</label>
+        <button onclick="eeAddRow()" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px"><i class="fas fa-plus"></i> Add</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--ink);color:#fff">
+          <th style="padding:6px 8px;text-align:left">Service</th>
+          <th style="padding:6px 8px;text-align:left">Price ₹</th>
+          <th style="padding:6px 8px;text-align:left">Qty</th>
+          <th style="padding:6px 8px;text-align:left">Total</th>
+          <th style="padding:6px 8px"></th>
+        </tr></thead>
+        <tbody id="ee-svc-tbody">${svcRows}</tbody>
+      </table>
+    </div>
+    <!-- Totals -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;display:flex;gap:20px;justify-content:flex-end;font-size:12px">
+      <span>Gross: <b id="ee-gross">${fmt(e.gross_total||0)}</b></span>
+      <span>Discount: <b id="ee-disc-show">${fmt(e.discount||0)}</b></span>
+      <span style="color:var(--emerald)">Net: <b id="ee-net">${fmt(e.net_total||0)}</b></span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="saveEntryEdit(${id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Save Changes</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
+  // Store item count for add row
+  window._eeRowCount=items.length;
+}
+
+function eeCalc(){
+  // Recalculate totals from rows
+  let gross=0;
+  const tbody=document.getElementById('ee-svc-tbody');if(!tbody)return;
+  tbody.querySelectorAll('tr').forEach((tr,i)=>{
+    const price=parseFloat(tr.querySelector(`[id^="ee-price-"]`)?.value||0);
+    const qty=parseInt(tr.querySelector(`[id^="ee-qty-"]`)?.value||1);
+    const tot=price*qty;
+    gross+=tot;
+    const totEl=tr.querySelector(`[id^="ee-tot-"]`);
+    if(totEl)totEl.textContent=fmt(tot);
+  });
+  const disc=parseFloat(document.getElementById('ee-disc')?.value||0);
+  const net=Math.max(0,gross-disc);
+  const ge=document.getElementById('ee-gross');if(ge)ge.textContent=fmt(gross);
+  const de=document.getElementById('ee-disc-show');if(de)de.textContent=fmt(disc);
+  const ne=document.getElementById('ee-net');if(ne)ne.textContent=fmt(net);
+}
+
+function eeAddRow(){
+  const tbody=document.getElementById('ee-svc-tbody');if(!tbody)return;
+  const i=window._eeRowCount||tbody.querySelectorAll('tr').length;
+  window._eeRowCount=(window._eeRowCount||0)+1;
+  const tr=document.createElement('tr');
+  tr.id=`ee-row-${i}`;
+  tr.innerHTML=`
+    <td><input value="" id="ee-svc-${i}" placeholder="Service name" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+    <td><input type="number" value="0" id="ee-price-${i}" oninput="eeCalc()" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+    <td><input type="number" value="1" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+    <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${i}">₹0</td>
+    <td><button onclick="this.closest('tr').remove();eeCalc()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function eeRemoveRow(i){
+  document.getElementById(`ee-row-${i}`)?.remove();
+  eeCalc();
+}
+
+async function saveEntryEdit(id){
+  // Collect all service rows
+  const tbody=document.getElementById('ee-svc-tbody');
+  const items=[];
+  tbody?.querySelectorAll('tr').forEach(tr=>{
+    const svcInputs=tr.querySelectorAll('input');
+    const name=tr.querySelector('[id^="ee-svc-"]')?.value?.trim();
+    const price=parseFloat(tr.querySelector('[id^="ee-price-"]')?.value)||0;
+    const qty=parseInt(tr.querySelector('[id^="ee-qty-"]')?.value)||1;
+    if(name)items.push({service_name:name,price,qty,line_total:price*qty});
+  });
+  const disc=parseFloat(v('ee-disc')?.value)||0;
+  const gross=items.reduce((s,it)=>s+(it.price||0)*(it.qty||1),0);
+  const net=Math.max(0,gross-disc);
+  const r=await apiCall('PATCH',`/entries/${id}`,{
+    client_name:v('ee-name')?.value||'',
+    phone:v('ee-phone')?.value||null,
+    discount:disc,
+    gross_total:gross,
+    net_total:net,
+    pay_method:v('ee-pay')?.value||'Cash',
+    remarks:v('ee-rem')?.value||'',
+    items:items
+  });
+  if(r){
+    toast('<i class="fas fa-check"></i> Entry updated!','var(--emerald)');
+    closeInvModal();
+    renderRevDaily();
+    renderDailyView();
+  }
+}
+
+async function deleteEntry(id,invNo){
+  if(!confirm(`Delete invoice ${invNo}? This cannot be undone.`))return;
+  const r=await apiCall('DELETE',`/entries/${id}`);
+  if(r){toast(`Invoice ${invNo} deleted`,'var(--rose)');renderRevDaily();}
+}
+
+// Bridal delete (from detail modal)
+async function deleteBridal(id,jobNo){
+  if(!confirm(`Delete bridal booking ${jobNo}? All functions will be deleted too.`))return;
+  const r=await apiCall('DELETE',`/bridal/${id}`);
+  if(r){toast(`Booking ${jobNo} deleted`,'var(--rose)');renderBridalList('','');}
 }
 
 function toggleApptMonth(cls){
@@ -2438,13 +2672,62 @@ async function renderClients(s){
     <td>${c.birthday||'—'}</td><td>${c.skin_type||'—'}</td><td>${c.hair_type||'—'}</td>
     <td><span class="pill ${tg[c.tag]||'p-lt'}">${c.tag||'Regular'}</span></td>
     <td>${c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
-    <td>${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:16px"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:'—'}</td>
+    <td style="white-space:nowrap">
+      ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:''}
+      <button onclick="editClient(${c.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Edit"><i class="fas fa-edit"></i></button>
+      <button onclick="deleteClient(${c.id},'${c.name}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Delete"><i class="fas fa-trash"></i></button>
+    </td>
   </tr>`).join('');
 }
 function sendWaClient(phone,name){
   const ph=phone.replace(/\s/g,'').replace(/^0/,'+91').replace(/^(?!\+)/,'+91');
   const msg=`🌸 Hello *${name}*!\nThank you for visiting *Saundarya Beauty Care* ✨\n💐 Book next appointment: 📞 96621 35422`;
   window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+async function editClient(id){
+  const c=await apiCall('GET',`/clients/${id}`);
+  if(!c)return;
+  v('cl-n').value=c.name||'';
+  v('cl-ph').value=c.phone||'';
+  v('cl-em').value=c.email||'';
+  v('cl-bd').value=c.birthday||'';
+  v('cl-sk').value=c.skin_type||'Normal';
+  v('cl-hr').value=c.hair_type||'Normal';
+  v('cl-tg').value=c.tag||'Regular';
+  v('cl-pr').value=c.preferences||'';
+  // Show form — id is "cf" not "cl-form-wrap"
+  const fw=v('cf');if(fw)fw.style.display='block';
+  // Change save button to Update
+  const sb=v('cl-save-btn');
+  if(sb){sb.textContent='Update Client';sb.setAttribute('onclick',`updateClient(${id})`);}
+  fw?.scrollIntoView({behavior:'smooth'});
+  toast('Form loaded — edit and click Update Client','var(--teal)');
+}
+
+async function updateClient(id){
+  const nm=v('cl-n').value.trim();if(!nm){toast('Enter name','var(--rose)');return;}
+  const r=await apiCall('PUT',`/clients/${id}`,{
+    name:nm, phone:v('cl-ph').value||null, email:v('cl-em').value||null,
+    birthday:v('cl-bd').value||null, skin_type:v('cl-sk').value||'Normal',
+    hair_type:v('cl-hr').value||'Normal', tag:v('cl-tg').value||'Regular',
+    preferences:v('cl-pr').value||null
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check" style="color:var(--emerald)"></i> Client updated!','var(--emerald)');
+  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const sb=v('cl-save-btn');
+  if(sb){sb.textContent='Save Client';sb.setAttribute('onclick','saveClient()');}
+  v('cf').style.display='none';
+  renderClients('');
+}
+
+async function deleteClient(id,name){
+  if(!confirm(`Delete client "${name}"? This cannot be undone.`))return;
+  const r=await apiCall('DELETE',`/clients/${id}`);
+  if(!r)return;
+  toast(`Client "${name}" deleted`,'var(--rose)');
+  renderClients('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2525,6 +2808,8 @@ async function renderDailyView(){
       <span style="margin-left:auto;font-weight:600">${fmt(e.net_total||0)}</span>
       <button onclick="event.stopPropagation();apiDownload('/entries/${e.id}/pdf','Invoice_${e.inv_no}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px"><i class="fas fa-download"></i> PDF</button>
       ${e.phone?`<button onclick="event.stopPropagation();sendWAEntry(${JSON.stringify({id:e.id,inv_no:e.inv_no,phone:e.phone})})" style="background:none;border:none;cursor:pointer;font-size:16px"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:''}
+      <button onclick="event.stopPropagation();editEntry(${e.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Edit"><i class="fas fa-edit"></i></button>
+      <button onclick="event.stopPropagation();deleteEntry(${e.id},'${e.inv_no}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Delete"><i class="fas fa-trash"></i></button>
     </div>
   </div>`).join('');
 }
@@ -2746,6 +3031,79 @@ async function saveBridal(type){
   renderBridalList('','');updateDash();
 }
 
+async function editBridal(id){
+  const b=await apiCall('GET',`/bridal/${id}`);
+  if(!b)return;
+  // Open edit modal
+  const modal=v('inv-modal');if(!modal)return;
+  const wd=b.wedding_date||'';const wdFormatted=wd?wd.substring(0,10):'';
+  modal.innerHTML=`
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:24px 28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <div style="font-size:18px;font-weight:700;color:var(--ink)"><i class="fas fa-edit" style="color:var(--teal);margin-right:8px"></i>Edit Bridal Booking</div>
+      <span style="font-size:11px;color:var(--ink3);margin-left:auto">${b.job_no}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Client Name</label>
+        <input id="eb-name" value="${b.client_name||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Phone</label>
+        <input id="eb-phone" value="${b.phone||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Wedding Date</label>
+        <input id="eb-wdate" type="date" value="${wdFormatted}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Venue</label>
+        <input id="eb-venue" value="${b.venue||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Reference</label>
+        <input id="eb-ref" value="${b.reference||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Package Name</label>
+        <input id="eb-pkg" value="${b.package_name||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Package Amount ₹</label>
+        <input id="eb-amt" type="number" value="${b.pkg_amount||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Transport ₹</label>
+        <input id="eb-tr" type="number" value="${b.transport||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Discount ₹</label>
+        <input id="eb-disc" type="number" value="${b.discount||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Advance Paid ₹</label>
+        <input id="eb-adv" type="number" value="${b.advance_paid||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Status</label>
+        <select id="eb-status" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)">
+          <option ${b.status==='Active'?'selected':''}>Active</option>
+          <option ${b.status==='Completed'?'selected':''}>Completed</option>
+          <option ${b.status==='Cancelled'?'selected':''}>Cancelled</option>
+        </select></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;color:var(--ink3);font-weight:600">Notes</label>
+        <textarea id="eb-notes" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical">${b.notes||''}</textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="saveBridalEdit(${id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Save Changes</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
+}
+
+async function saveBridalEdit(id){
+  const r=await apiCall('PATCH',`/bridal/${id}/edit`,{
+    client_name:v('eb-name')?.value||'',
+    phone:v('eb-phone')?.value||null,
+    wedding_date:v('eb-wdate')?.value||null,
+    venue:v('eb-venue')?.value||null,
+    reference:v('eb-ref')?.value||null,
+    package_name:v('eb-pkg')?.value||null,
+    pkg_amount:parseFloat(v('eb-amt')?.value)||0,
+    transport:parseFloat(v('eb-tr')?.value)||0,
+    discount:parseFloat(v('eb-disc')?.value)||0,
+    advance_paid:parseFloat(v('eb-adv')?.value)||0,
+    status:v('eb-status')?.value||'Active',
+    notes:v('eb-notes')?.value||null
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Booking updated!','var(--emerald)');
+  closeInvModal();
+  renderBridalList('','');
+  renderPendingDues();
+}
+
 function clearBridal(type){
   if(!type||type==='bride'){
     ['br-n','br-wd','br-ph','br-v','br-rf','br-jn','br-pa','br-tr','br-di','br-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
@@ -2924,7 +3282,9 @@ async function renderBridalList(search, typeF){
               <button onclick="showBridalDetail(${b.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="View Details"><i class="fas fa-eye"></i></button>
               <button onclick="apiDownload('/bridal/${b.id}/pdf','${b.job_no}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="PDF"><i class="fas fa-download"></i></button>
               ${b.phone?`<button onclick="sendBridalWa(${b.id})" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>`:''}
-              ${b.balance_due>0?`<button onclick="recordPayment(${b.id},'${b.client_name}',${b.balance_due})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px" title="Record Payment"><i class="fas fa-rupee-sign"></i></button>`:''}
+              ${b.balance_due>0?`<button onclick="recordPayment(${b.id},'${b.client_name}',${b.balance_due})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px" title="Pay"><i class="fas fa-rupee-sign"></i></button>`:''}
+              <button onclick="editBridal(${b.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="Edit Booking"><i class="fas fa-edit"></i></button>
+              <button onclick="deleteBridal(${b.id},'${b.job_no}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="Delete"><i class="fas fa-trash"></i></button>
             </div>
           </td>
         </tr>`;
@@ -3167,10 +3527,56 @@ async function renderStaffGrid(){
         <div><div style="font-size:14px;font-weight:600">${s.days_present||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Days</div></div>
         <div><div style="font-size:14px;font-weight:600">${fmt(s.comm_earned||0)}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Work Done</div></div>
       </div>
-      <div style="font-size:10px;color:var(--ink3)">${fmt(s.base_salary||0)}/month base${bonusBadge}</div>
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:8px">${fmt(s.base_salary||0)}/month base${bonusBadge}</div>
+      <div style="display:flex;gap:6px;justify-content:center">
+        <button onclick="editStaff(${s.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-edit"></i> Edit</button>
+        <button onclick="deleteStaff(${s.id},'${s.name}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px"><i class="fas fa-trash"></i></button>
+      </div>
     </div>`;
   }).join('');
   updateStaffSels();
+}
+
+async function editStaff(id){
+  const s=await apiCall('GET',`/staff/${id}`);
+  if(!s)return;
+  // Populate staff form
+  v('st-n').value=s.name||'';
+  v('st-r').value=s.role||'';
+  v('st-ph').value=s.phone||'';
+  v('st-jd').value=s.join_date||'';
+  v('st-sal').value=s.base_salary||0;
+  v('st-com').value=s.commission_pct||10;
+  // Show form
+  const sf=v('sf');if(sf)sf.style.display='block';
+  // Change button to Update
+  const btn=document.querySelector('#sf button[onclick="saveStaff()"]');
+  if(btn){btn.textContent='Update Staff';btn.setAttribute('onclick',`updateStaff(${id})`);}
+  sf?.scrollIntoView({behavior:'smooth'});
+}
+
+async function updateStaff(id){
+  const nm=v('st-n').value.trim();if(!nm){toast('Enter staff name','var(--rose)');return;}
+  const r=await apiCall('PUT',`/staff/${id}`,{
+    name:nm, role:v('st-r').value||null,
+    phone:v('st-ph').value||null,
+    join_date:v('st-jd').value||null,
+    base_salary:parseFloat(v('st-sal').value)||0,
+    commission_pct:parseFloat(v('st-com').value)||10
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Staff updated!','var(--emerald)');
+  ['st-n','st-ph','st-jd','st-sal','st-com'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const sr=v('st-r');if(sr)sr.value='';
+  const btn=document.querySelector('#sf button');
+  if(btn){btn.textContent='Save Staff';btn.setAttribute('onclick','saveStaff()');}
+  toggleSF();renderStaffGrid();updateStaffSels();
+}
+
+async function deleteStaff(id,name){
+  if(!confirm(`Delete staff "${name}"? This will remove their account too.`))return;
+  const r=await apiCall('DELETE',`/staff/${id}`);
+  if(r){toast(`Staff "${name}" deleted`,'var(--rose)');renderStaffGrid();}
 }
 
 // SALARY CALCULATOR — Shows what owner needs to pay, NOT a payment button
@@ -3698,6 +4104,9 @@ async function renderPendingDues(){
         <td>${fmt(b.advance_paid||0)}</td>
         <td style="color:var(--rose);font-weight:700">${fmt(b.balance_due||0)}</td>
         <td>
+          <button onclick="deleteBridal(${b.id},'${b.job_no}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif">
+            <i class="fas fa-trash"></i> Delete
+          </button>
           <button onclick="recordPayment(${b.id},'${b.client_name}',${b.balance_due||0})"
             style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif">
             <i class="fas fa-rupee-sign"></i> Pay
@@ -3794,7 +4203,21 @@ async function renderRevDaily(){
   const rows=await apiCall('GET',path);if(!rows)return;
   if(!rows.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:16px">No entries</td></tr>';return;}
   const pmC={'Cash':'p-nd','UPI':'p-bk','Card':'p-ok','Split':'p-wa'};
-  tb.innerHTML=rows.map(e=>`<tr><td>${e.inv_no}</td><td>${e.entry_date||''}</td><td>${e.client_name}</td><td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.services||''}</td><td>${fmt(e.gross_total||0)}</td><td>${fmt(e.discount||0)}</td><td><b>${fmt(e.net_total||0)}</b></td><td><span class="pill ${pmC[e.pay_method]||'p-lt'}">${e.pay_method}</span></td><td><button onclick="apiDownload('/entries/batch/pdf?entry_date=${e.entry_date}','Report_${e.entry_date}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px"><i class="fas fa-download"></i></button></td></tr>`).join('');
+  tb.innerHTML=rows.map(e=>`<tr>
+    <td>${e.inv_no}</td>
+    <td>${e.entry_date||''}</td>
+    <td>${e.client_name}</td>
+    <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.services||''}</td>
+    <td>${fmt(e.gross_total||0)}</td>
+    <td>${fmt(e.discount||0)}</td>
+    <td><b>${fmt(e.net_total||0)}</b></td>
+    <td><span class="pill ${pmC[e.pay_method]||'p-lt'}">${e.pay_method}</span></td>
+    <td style="white-space:nowrap">
+      <button onclick="apiDownload('/entries/batch/pdf?entry_date=${e.entry_date}','Report_${e.entry_date}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="PDF"><i class="fas fa-download"></i></button>
+      <button onclick="editEntry(${e.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Edit"><i class="fas fa-edit"></i></button>
+      <button onclick="deleteEntry(${e.id},'${e.inv_no}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Delete"><i class="fas fa-trash"></i></button>
+    </td>
+  </tr>`).join('');
 }
 function buildYrSel(){const sel=v('rv-ys');if(!sel||sel.options.length>2)return;const y=new Date().getFullYear();[y,y-1,y-2].forEach(yr=>{const o=document.createElement('option');o.value=yr;o.textContent=yr;sel.appendChild(o);});}
 async function renderRevMonthly(){

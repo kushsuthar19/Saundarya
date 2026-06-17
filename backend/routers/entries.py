@@ -280,3 +280,60 @@ async def send_invoice_whatsapp(
         return {"success": True, "message": "WhatsApp sent"}
     else:
         return {"success": False, "error": result.get("error")}
+
+
+@router.delete("/{entry_id}")
+async def delete_entry(
+    entry_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
+    await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
+    await db.commit()
+    return {"deleted": entry_id}
+
+
+@router.patch("/{entry_id}")
+async def update_entry(
+    entry_id: int,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    # Update main entry fields
+    fields = []
+    values = []
+    allowed = ['client_name','phone','discount','pay_method','remarks','net_total','gross_total']
+    for k, v2 in data.items():
+        if k in allowed:
+            fields.append(f"{k}=:{len(values)+1}")
+            values.append(v2)
+    if fields:
+        values.append(entry_id)
+        await cursor.execute(
+            f"UPDATE daily_entries SET {','.join(fields)},updated_at=SYSTIMESTAMP WHERE id=:{len(values)}",
+            values
+        )
+    # Update items if provided
+    items = data.get('items')
+    if items is not None:
+        # Delete existing items and re-insert
+        await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
+        for it in items:
+            await cursor.execute(
+                """INSERT INTO entry_items (entry_id, service_name, price, qty, line_total)
+                   VALUES (:1,:2,:3,:4,:5)""",
+                [entry_id, it.get('service_name',''), it.get('price',0),
+                 it.get('qty',1), it.get('line_total',0)]
+            )
+        # Update services string in main entry
+        svc_str = ', '.join(it.get('service_name','') for it in items if it.get('service_name'))
+        await cursor.execute(
+            "UPDATE daily_entries SET services=:1 WHERE id=:2",
+            [svc_str[:2000], entry_id]
+        )
+    await db.commit()
+    return {"updated": entry_id}
