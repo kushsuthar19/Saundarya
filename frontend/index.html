@@ -2625,7 +2625,13 @@ async function saveEntryEdit(id){
 async function deleteEntry(id,invNo){
   if(!confirm(`Delete invoice ${invNo}? This cannot be undone.`))return;
   const r=await apiCall('DELETE',`/entries/${id}`);
-  if(r){toast(`Invoice ${invNo} deleted`,'var(--rose)');renderRevDaily();}
+  if(r){
+    toast(`Invoice ${invNo} deleted`,'var(--rose)');
+    renderRevDaily();
+    renderDailyView();
+    updateRevKpis();
+    updateDash();
+  }
 }
 
 // Bridal delete (from detail modal)
@@ -2728,6 +2734,8 @@ async function deleteClient(id,name){
   if(!r)return;
   toast(`Client "${name}" deleted`,'var(--rose)');
   renderClients('');
+  updateRevKpis();
+  updateDash();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4355,7 +4363,7 @@ function clearBridalFilters(){
   </div>
 </div>
 <!-- INVOICE MODAL -->
-<div id="inv-modal" style ="display:none;position:fixed;inset:0;z-index:8000;align-items:center;justify-content:center"></div>
+<div id="inv-modal" style="display:none;position:fixed;inset:0;z-index:8000;align-items:center;justify-content:center"></div>
 
 </div>
 </body>

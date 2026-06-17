@@ -351,11 +351,11 @@ async def upsert_attendance(
     )
     existing = await cursor.fetchone()
     is_present = 1 if data.is_present else 0
+    morning = 1 if getattr(data, 'morning_duty', False) else 0
+    half = 1 if getattr(data, 'half_day', False) else 0
 
     if existing:
         old_present = existing[1]
-        morning = 1 if data.morning_duty else 0
-        half = 1 if data.half_day else 0
         try:
             await cursor.execute(
                 """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3,
