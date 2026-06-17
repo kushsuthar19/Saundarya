@@ -83,11 +83,27 @@ async def delete_client(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
-    # Nullify FK references before deleting client
-    await cursor.execute("UPDATE daily_entries SET client_id=NULL WHERE client_id=:1", [client_id])
-    await cursor.execute("DELETE FROM clients WHERE id=:1", [client_id])
-    await db.commit()
-    return {"deleted": client_id}
+    try:
+        # Nullify ALL possible FK references before deleting
+        for tbl_col in [
+            ("daily_entries", "client_id"),
+            ("appointments", "client_id"),
+            ("bridal_bookings", "client_id"),
+            ("salary_payments", "client_id"),
+        ]:
+            try:
+                await cursor.execute(
+                    f"UPDATE {tbl_col[0]} SET {tbl_col[1]}=NULL WHERE {tbl_col[1]}=:1",
+                    [client_id]
+                )
+            except Exception:
+                pass  # Column may not exist in all tables
+        await cursor.execute("DELETE FROM clients WHERE id=:1", [client_id])
+        await db.commit()
+        return {"deleted": client_id}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 @router.put("/{client_id}", response_model=ClientOut)
 async def update_client(

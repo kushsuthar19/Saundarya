@@ -104,9 +104,14 @@ async def delete_appt(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
-    await cursor.execute("DELETE FROM appointments WHERE id=:1", [appt_id])
-    await db.commit()
-    return {"deleted": appt_id}
+    try:
+        await cursor.execute("DELETE FROM appointments WHERE id=:1", [appt_id])
+        await db.commit()
+        return {"deleted": appt_id}
+    except Exception as e:
+        await db.rollback()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 @appt_router.patch("/{appt_id}")
 async def update_appt(
@@ -624,10 +629,21 @@ async def delete_bridal(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
-    await cursor.execute("DELETE FROM bridal_functions WHERE booking_id=:1", [booking_id])
-    await cursor.execute("DELETE FROM bridal_bookings WHERE id=:1", [booking_id])
-    await db.commit()
-    return {"deleted": booking_id}
+    try:
+        # Delete child records first, then parent
+        await cursor.execute("DELETE FROM bridal_functions WHERE booking_id=:1", [booking_id])
+        # Nullify any FK references from other tables
+        try:
+            await cursor.execute("UPDATE clients SET bridal_booking_id=NULL WHERE bridal_booking_id=:1", [booking_id])
+        except Exception:
+            pass
+        await cursor.execute("DELETE FROM bridal_bookings WHERE id=:1", [booking_id])
+        await db.commit()
+        return {"deleted": booking_id}
+    except Exception as e:
+        await db.rollback()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 @bridal_router.patch("/{booking_id}/payment")
 async def record_advance_payment(
