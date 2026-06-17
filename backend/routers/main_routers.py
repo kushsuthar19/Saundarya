@@ -356,12 +356,21 @@ async def upsert_attendance(
         old_present = existing[1]
         morning = 1 if data.morning_duty else 0
         half = 1 if data.half_day else 0
-        await cursor.execute(
-            """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3,
-               hours_worked=:4, half_day=:5, morning_duty=:6, updated_at=SYSTIMESTAMP
-               WHERE staff_id=:7 AND att_date=TO_DATE(:8,'YYYY-MM-DD')""",
-            [is_present, data.in_time, data.out_time, hours, half, morning, data.staff_id, ad]
-        )
+        try:
+            await cursor.execute(
+                """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3,
+                   hours_worked=:4, half_day=:5, morning_duty=:6, updated_at=SYSTIMESTAMP
+                   WHERE staff_id=:7 AND att_date=TO_DATE(:8,'YYYY-MM-DD')""",
+                [is_present, data.in_time, data.out_time, hours, half, morning, data.staff_id, ad]
+            )
+        except Exception:
+            # Fallback if morning_duty column doesn't exist yet
+            await cursor.execute(
+                """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3,
+                   hours_worked=:4, half_day=:5, updated_at=SYSTIMESTAMP
+                   WHERE staff_id=:6 AND att_date=TO_DATE(:7,'YYYY-MM-DD')""",
+                [is_present, data.in_time, data.out_time, hours, half, data.staff_id, ad]
+            )
         # Update days_present count
         if old_present != is_present:
             delta = 1 if is_present else -1
@@ -370,11 +379,19 @@ async def upsert_attendance(
                 [delta, data.staff_id]
             )
     else:
-        await cursor.execute(
-            """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time, hours_worked, half_day, morning_duty)
-               VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6,:7,:8)""",
-            [data.staff_id, ad, is_present, data.in_time, data.out_time, hours, half, morning]
-        )
+        try:
+            await cursor.execute(
+                """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time, hours_worked, half_day, morning_duty)
+                   VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6,:7,:8)""",
+                [data.staff_id, ad, is_present, data.in_time, data.out_time, hours, half, morning]
+            )
+        except Exception:
+            # Fallback if morning_duty column doesn't exist yet
+            await cursor.execute(
+                """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time, hours_worked, half_day)
+                   VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6,:7)""",
+                [data.staff_id, ad, is_present, data.in_time, data.out_time, hours, half]
+            )
         if is_present:
             await cursor.execute(
                 "UPDATE staff SET days_present=days_present+1 WHERE id=:1", [data.staff_id]
@@ -630,18 +647,18 @@ async def delete_bridal(
 ):
     cursor = db.cursor()
     try:
-        # Delete child records first, then parent
+        # Delete child records first
         await cursor.execute("DELETE FROM bridal_functions WHERE booking_id=:1", [booking_id])
-        # Nullify any FK references from other tables
-        try:
-            await cursor.execute("UPDATE clients SET bridal_booking_id=NULL WHERE bridal_booking_id=:1", [booking_id])
-        except Exception:
-            pass
+        await db.commit()
+        # Then delete parent
         await cursor.execute("DELETE FROM bridal_bookings WHERE id=:1", [booking_id])
         await db.commit()
         return {"deleted": booking_id}
     except Exception as e:
-        await db.rollback()
+        try:
+            await db.rollback()
+        except Exception:
+            pass
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
