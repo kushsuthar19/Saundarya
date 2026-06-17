@@ -111,6 +111,8 @@ class StaffOut(BaseModel):
     paid_salary: float
     av_class: Optional[str]
     is_active: int
+    half_day_count: int = 0
+    morning_duty_count: int = 0
 
 
 # ── Attendance ────────────────────────────────────────────

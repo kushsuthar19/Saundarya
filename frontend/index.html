@@ -690,6 +690,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <button class="nb nc-gold" data-sec="reports" onclick="go(this,'reports')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Reports</button>
   </div>
   <div class="topbar-right" style="position:relative">
+    <div id="live-clock" style="font-size:11px;color:rgba(255,255,255,0.7);font-family:'DM Mono',monospace;padding:4px 10px;background:rgba(255,255,255,0.08);border-radius:6px;min-width:140px;text-align:center;cursor:default"></div>
     <div class="tb-icon-btn" onclick="toggleDark()" title="Toggle dark mode" id="dark-btn"><i class="fas fa-moon"></i></div>
     <div class="tb-icon-btn" onclick="toggleNotif()" title="Notifications" style="position:relative">
       <i class="fas fa-bell"></i><div class="notif-pip" id="notif-pip"></div>
@@ -1382,7 +1383,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div style="font-size:11px;font-weight:600;color:var(--emerald);display:flex;align-items:center;gap:6px"><i class="fas fa-rupee-sign"></i>Salary + Commission — <span id="sal-ml"></span></div>
         <input type="month" id="sal-month" style="border:1px solid var(--emerald-b);border-radius:var(--r6);padding:4px 8px;font-size:10px;font-family:'Inter',sans-serif;background:var(--emerald-l);color:var(--emerald)" onchange="renderSalary()">
       </div>
-      <div class="ow"><table><thead><tr><th>Staff</th><th>Role</th><th>Days Present</th><th>Per Day</th><th>Base Earned</th><th>Services</th><th>Commission</th><th>Morning Duty</th><th>Total Payable</th><th>Paid</th><th>Balance</th></tr></thead>
+      <div class="ow"><table><thead><tr><th>Staff</th><th>Role</th><th>Days Present</th><th>Per Day</th><th>Base Earned</th><th>Services</th><th>Commission</th><th>Morning Duty</th><th>Total Payable</th><th>Paid</th><th>Balance</th><th>Adjust</th></tr></thead>
         <tbody id="sal-tbody"><tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:16px">No records</td></tr></tbody>
       </table></div>
     </div>
@@ -1404,6 +1405,21 @@ table tbody tr:hover td{background:var(--bg2)}
           <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
             <button class="btn btn-ghost btn-sm" onclick="lockAtt()"><i class="fas fa-lock"></i>Lock Attendance</button>
           </div>
+          <!-- Staff Absent Search -->
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+            <input type="date" id="att-search-date" class="fsel" 
+              style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;font-size:12px;background:var(--surface)"
+              onchange="renderAttHistory()" title="Search attendance on specific date">
+            <select id="att-search-status" onchange="renderAttHistory()" style="font-size:12px;border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;background:var(--surface)">
+              <option value="">All Staff</option>
+              <option value="absent">Absent Only</option>
+              <option value="present">Present Only</option>
+              <option value="late">Late (after 10:15 AM)</option>
+            </select>
+            <button onclick="v('att-search-date').value=td();renderAttHistory()" style="font-size:11px;border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;background:var(--surface);cursor:pointer;color:var(--ink3)">Today</button>
+            <button onclick="v('att-search-date').value='';v('att-search-status').value='';renderAttHistory()" style="font-size:11px;border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;background:var(--surface);cursor:pointer;color:var(--ink3)"><i class="fas fa-times"></i> Clear</button>
+          </div>
+          <div id="att-history-result"></div>
           <div id="att-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"><div style="color:var(--ink4);font-size:12px">No staff</div></div>
         </div>
       </div>
@@ -1439,9 +1455,34 @@ table tbody tr:hover td{background:var(--bg2)}
     <div class="kpi k-violet"><i class="kpi-ico fas fa-gem"></i><div class="kpi-l">Bridal Advance</div><div class="kpi-v" id="rv-adv">₹0</div><div class="kpi-s">Collected</div></div>
     <div class="kpi k-teal"><i class="kpi-ico fas fa-chart-line"></i><div class="kpi-l">Total Profit</div><div class="kpi-v" id="rv-profit">₹0</div><div class="kpi-s">Daily + Bridal</div></div>
     </div>
+    <!-- Calendar View -->
+    <div id="rv-cv" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+        <input type="month" id="rv-cal-month" class="fsel"
+          style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;font-size:12px;background:var(--surface)"
+          onchange="renderRevCalendar()">
+        <button onclick="renderRevCalendar()" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 12px;font-size:12px;background:var(--teal);color:#fff;cursor:pointer;border-color:var(--teal)"><i class="fas fa-sync"></i> Load</button>
+      </div>
+      <div id="rv-cal-grid"></div>
+    </div>
+
     <!-- Pending Dues — Hidden from reception -->
     <div class="tbl-wrap" style="margin-bottom:14px">
-      <div class="tbl-hd" style="background:var(--rose-l)"><div style="font-size:11px;font-weight:600;color:var(--rose);display:flex;align-items:center;gap:6px"><i class="fas fa-exclamation-triangle"></i>Pending Dues — Bridal (Owner Only)</div></div>
+      <div class="tbl-hd" style="background:var(--rose-l)">
+        <div style="font-size:11px;font-weight:600;color:var(--rose);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span><i class="fas fa-exclamation-triangle"></i> Pending Dues — Bridal (Owner Only)</span>
+          <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap">
+            <select id="dues-type" onchange="renderPendingDues()" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;background:var(--surface)">
+              <option value="">All Types</option>
+              <option value="Bride">Bride</option>
+              <option value="Groom">Groom</option>
+              <option value="Sider">Sider</option>
+            </select>
+            <input type="month" id="dues-month" onchange="renderPendingDues()" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;background:var(--surface)" title="Filter by wedding month">
+            <button onclick="v('dues-type').value='';v('dues-month').value='';renderPendingDues()" style="font-size:10px;border:1px solid var(--border);border-radius:6px;padding:3px 8px;background:var(--surface);cursor:pointer">Clear</button>
+          </div>
+        </div>
+      </div>
       <div class="ow"><table><thead><tr><th>Job No</th><th>Type</th><th>Name</th><th>Phone</th><th>Wedding Date</th><th>Total</th><th>Advance Paid</th><th>Balance Due</th><th>Status</th></tr></thead>
         <tbody id="rv-dues-tb"><tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:16px">No pending dues</td></tr></tbody>
       </table></div>
@@ -1450,11 +1491,14 @@ table tbody tr:hover td{background:var(--bg2)}
       <div class="rev-tab on" onclick="revTab(this,'daily')"><i class="fas fa-calendar-day"></i>Daily</div>
       <div class="rev-tab" onclick="revTab(this,'monthly')"><i class="fas fa-calendar-alt"></i>Monthly</div>
       <div class="rev-tab" onclick="revTab(this,'yearly')"><i class="fas fa-chart-line"></i>Yearly</div>
+      <div class="rev-tab" onclick="revTab(this,'calendar')"><i class="fas fa-calendar"></i>Calendar</div>
     </div>
     <div id="rv-dv">
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        <input type="date" id="rv-df" class="fsel" onchange="renderRevDaily()">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="rv-df" class="fsel" onchange="renderRevDaily()" title="Filter by date">
+        <input type="month" id="rv-mf" class="fsel" onchange="renderRevDaily()" title="Filter by month" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;font-size:12px;background:var(--surface)">
         <select class="fsel" id="rv-pf" onchange="renderRevDaily()"><option value="">All Methods</option><option>Cash</option><option>UPI</option><option>Card</option></select>
+        <button onclick="v('rv-df').value='';v('rv-mf').value='';v('rv-pf').value='';renderRevDaily()" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 12px;font-size:12px;background:var(--surface);cursor:pointer;color:var(--ink3)"><i class="fas fa-times"></i> Clear</button>
       </div>
       <div class="tbl-wrap"><div class="ow"><table><thead><tr><th>Invoice</th><th>Date</th><th>Client</th><th>Services</th><th>Gross</th><th>Discount</th><th>Net</th><th>Method</th><th>Type</th><th>Invoice</th></tr></thead>
         <tbody id="rv-dtb"><tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:16px">No entries yet</td></tr></tbody>
@@ -1864,8 +1908,14 @@ function revTab(el,id){
   document.querySelectorAll(".rev-tab").forEach(t=>t.classList.remove("on"));
   el.classList.add("on");
   ["daily","monthly","yearly"].forEach(x=>{const dv=v("rv-"+x[0]+"v");if(dv)dv.style.display=x===id?"block":"none";});
+  const cv=v("rv-cv");if(cv)cv.style.display=id==="calendar"?"block":"none";
   if(id==="monthly"){buildYrSel();renderRevMonthly();}
   if(id==="yearly")renderRevYearly();
+  if(id==="calendar"){
+    const cm=v("rv-cal-month");
+    if(cm&&!cm.value){const n=new Date();cm.value=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");}
+    renderRevCalendar();
+  }
 }
 
 // ════════════════════════════════
@@ -3135,8 +3185,19 @@ async function renderSalary(){
   const daysInMonth=new Date(yr,mo,0).getDate();
   tb.innerHTML=rows.map(s=>{
     const perDay=daysInMonth>0?(s.base_salary||0)/daysInMonth:0;
-    const baseEarned=Math.round(perDay*(s.days_present||0));
-    // Morning duty: ₹150 per morning duty day (fetched from attendance)
+    // Half day: each half day = 0.5 day pay
+    // If days_present already counts half days as 1: effectiveDays = days_present - halfDay*0.5
+    // If days_present doesn't count half days: effectiveDays = days_present + halfDay*0.5
+    const halfDayCount=s.half_day_count||0;
+    const dp=s.days_present||0;
+    // Use whichever gives the correct effective days:
+    // If dp >= halfDayCount → half days were counted as 1 in dp → subtract 0.5 each
+    // If dp < halfDayCount  → half days were NOT counted → add 0.5 each
+    const effectiveDays = dp >= halfDayCount
+      ? dp - (halfDayCount * 0.5)                    // e.g. dp=1, half=1 → 0.5
+      : dp + (halfDayCount * 0.5);                   // e.g. dp=0, half=1 → 0.5
+    const baseEarned=Math.round(perDay*Math.max(0,effectiveDays));
+    // Morning duty: ₹150 per morning duty day
     const morningDutyPay=(s.morning_duty_count||0)*150;
     const workDone=s.comm_earned||0;
     // Commission tiers:
@@ -3162,15 +3223,35 @@ async function renderSalary(){
     return `<tr>
       <td><b>${s.name}</b><br><small style="color:var(--ink3)">${s.role||''}</small></td>
       <td>${s.role||'—'}</td>
-      <td>${s.days_present||0} / ${daysInMonth}</td>
+      <td>
+        ${s.days_present||0} / ${daysInMonth}
+        ${halfDayCount>0?`<br><small style="color:var(--gold)">½ day × ${halfDayCount}</small>`:''}
+      </td>
       <td>${fmt(perDay)}</td>
-      <td>${fmt(baseEarned)}</td>
-      <td>${s.total_services||0}</td>
-      <td>${fmt(workDone)}${tierBadge}</td>
-      <td><b style="color:var(--emerald)">${fmt(commissionAmt)}</b></td>
-      <td>${morningDutyPay>0?`<b style="color:var(--teal)">+${fmt(morningDutyPay)}</b><br><small style="color:var(--ink3)">${s.morning_duty_count||0} days×₹150</small>`:'—'}</td>
+      <td>
+        ${fmt(baseEarned)}
+        ${halfDayCount>0?`<br><small style="color:var(--ink3)">−${fmt(Math.round(perDay*halfDayCount*0.5))} half day</small>`:''}
+      </td>
+      <td>${s.total_services||0}<br><small style="color:var(--ink3)">${fmt(workDone)}</small></td>
+      <td>
+        <b style="color:var(--emerald)">${fmt(commissionAmt)}</b>
+        <br><small style="color:var(--ink3)">${tierLabel}</small>
+      </td>
+      <td>
+        ${morningDutyPay>0
+          ?`<b style="color:var(--teal)">+${fmt(morningDutyPay)}</b><br><small style="color:var(--ink3)">${s.morning_duty_count||0} day${(s.morning_duty_count||0)>1?'s':''} × ₹150</small>`
+          :'<span style="color:var(--ink4)">—</span>'}
+      </td>
       <td><b>${fmt(totalPayable)}</b></td>
       <td style="color:${balance>0?'var(--rose)':'var(--emerald)'}"><b>${fmt(balance)}</b></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px">
+          <button onclick="adjSalary(${s.id},-1)" style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border);background:var(--rose-l);color:var(--rose);cursor:pointer;font-size:14px;font-weight:700;line-height:1">−</button>
+          <input type="number" id="sal-adj-${s.id}" placeholder="₹" min="0"
+            style="width:70px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;text-align:center;background:var(--surface)">
+          <button onclick="adjSalary(${s.id},1)" style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border);background:#e8f5ee;color:var(--emerald);cursor:pointer;font-size:14px;font-weight:700;line-height:1">+</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
   // Update salary header
@@ -3250,88 +3331,142 @@ async function _renderAttList(container, showTimeInputs){
   const staffRows=await apiCall('GET','/staff');
   if(!staffRows||!staffRows.length){container.innerHTML='<div style="color:var(--ink4);padding:16px">No staff registered</div>';return;}
   const attRows=await apiCall('GET',`/attendance?att_date=${t}`)||[];
-  const attMap={};attRows.forEach(a=>attMap[a.staff_id]={present:!!a.is_present,half_day:!!a.half_day,in_time:a.in_time||'',out_time:a.out_time||'',hours:a.hours_worked});
+  const attMap={};
+  attRows.forEach(a=>attMap[a.staff_id]={
+    present:!!a.is_present,
+    half_day:!!a.half_day,
+    morning_duty:!!a.morning_duty,
+    in_time:a.in_time||'',
+    out_time:a.out_time||'',
+    hours:a.hours_worked
+  });
   const cols=['#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3','#A29BFE','#55EFC4','#FD79A8'];
-  container.innerHTML=staffRows.map((s,idx)=>{
-    const att=attMap[s.id]||{};
-    const col=cols[idx%cols.length];
-    const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-    const statusBadge=att.present
-      ?(att.half_day?'<span style="background:var(--gold);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600">½ HALF</span>'
-                   :'<span style="background:var(--emerald);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600">FULL</span>')
-      :'<span style="background:var(--rose);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600">ABSENT</span>';
-    if(showTimeInputs){
-      return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r8);background:var(--surface);margin-bottom:8px;flex-wrap:wrap">
-        <div style="width:34px;height:34px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${ini}</div>
-        <div style="min-width:90px"><div style="font-size:12px;font-weight:600">${s.name}</div><div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div></div>
-        <input type="time" id="att-in-${s.id}" value="${att.in_time||''}" title="In Time"
-          style="width:82px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface)"
-          onchange="saveAttTime(${s.id})">
-        <input type="time" id="att-out-${s.id}" value="${att.out_time||''}" title="Out Time"
-          style="width:82px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface)"
-          onchange="saveAttTime(${s.id})">
-        <div id="att-hrs-${s.id}" style="font-size:11px;color:var(--ink3);min-width:30px;text-align:center">${att.hours?att.hours+'h':''}</div>
-        <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink3);cursor:pointer;white-space:nowrap" title="Morning duty +₹150">
-          <input type="checkbox" id="att-mor-${s.id}" ${att.morning_duty?'checked':''} onchange="togMorningDuty(${s.id},this.checked)" style="cursor:pointer">
-          🌅 +₹150
-        </label>
-        <button id="att-tog-${s.id}" onclick="togAtt(${s.id},${att.present?0:1})"
-          style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;${att.present?'background:var(--emerald);color:#fff':'background:var(--surface);color:var(--ink3);border:1px solid var(--border)'}">
-          ${att.present?'✓ Present':'Absent'}</button>
-        <button id="att-half-${s.id}" onclick="togHalfDay(${s.id},${att.half_day?0:1})"
-          style="padding:5px 8px;border-radius:6px;font-size:10px;font-weight:600;border:none;cursor:pointer;${att.half_day?'background:var(--gold);color:#fff':'background:var(--surface);color:var(--ink3);border:1px solid var(--border)'}">
-          ½Day</button>
+
+  if(showTimeInputs){
+    // ── ADMIN FULL VIEW ──────────────────────────────────────
+    container.innerHTML=staffRows.map((s,idx)=>{
+      const att=attMap[s.id]||{};
+      const col=cols[idx%cols.length];
+      const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      const bgCard=att.present?(att.half_day?'background:#fffbf0;border-color:#f0c040':'background:#f0fff8;border-color:#00b894'):'background:#fff5f5;border-color:#ff7675';
+      return `<div style="border:1.5px solid;border-radius:10px;padding:12px 14px;margin-bottom:10px;${bgCard}">
+        <!-- Row 1: Name + Status -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="width:38px;height:38px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${ini}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--ink)">${s.name}</div>
+            <div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div>
+          </div>
+          <!-- Status badge -->
+          <div style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;${att.present?(att.half_day?'background:var(--gold);color:#fff':'background:var(--emerald);color:#fff'):'background:var(--rose);color:#fff'}">
+            ${att.present?(att.half_day?'½ HALF DAY':'✓ FULL DAY'):'✗ ABSENT'}
+          </div>
+        </div>
+        <!-- Row 2: Controls -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <!-- In/Out time -->
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:10px;color:var(--ink3)">In:</span>
+            <input type="time" id="att-in-${s.id}" value="${att.in_time||''}"
+              style="width:85px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:#fff"
+              onchange="saveAttTime(${s.id})">
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:10px;color:var(--ink3)">Out:</span>
+            <input type="time" id="att-out-${s.id}" value="${att.out_time||''}"
+              style="width:85px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:#fff"
+              onchange="saveAttTime(${s.id})">
+          </div>
+          <div id="att-hrs-${s.id}" style="font-size:11px;font-weight:600;color:var(--teal);min-width:35px">${att.hours?att.hours+'h':''}</div>
+          <div style="flex:1"></div>
+          <!-- Morning duty toggle -->
+          <div style="display:flex;align-items:center;gap:6px;background:${att.morning_duty?'#e8f5ff':'var(--surface)'};border:1px solid ${att.morning_duty?'var(--teal)':'var(--border)'};border-radius:8px;padding:5px 10px;cursor:pointer" onclick="togMorningDuty(${s.id},${att.morning_duty?0:1})" title="Morning duty +₹150 for today">
+            <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${att.morning_duty?'var(--teal)':'var(--border)'};background:${att.morning_duty?'var(--teal)':'#fff'};display:flex;align-items:center;justify-content:center">
+              ${att.morning_duty?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':''}
+            </div>
+            <span style="font-size:11px;font-weight:600;color:${att.morning_duty?'var(--teal)':'var(--ink3)'};white-space:nowrap">🌅 +₹150</span>
+          </div>
+          <!-- Half day toggle -->
+          <div style="display:flex;align-items:center;gap:6px;background:${att.half_day?'#fffbe6':'var(--surface)'};border:1px solid ${att.half_day?'var(--gold)':'var(--border)'};border-radius:8px;padding:5px 10px;cursor:pointer;${!att.present?'opacity:0.4;pointer-events:none':''}" onclick="togHalfDay(${s.id},${att.half_day?0:1})" title="${att.present?'Toggle half day':'Mark present first'}">
+            <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${att.half_day?'var(--gold)':'var(--border)'};background:${att.half_day?'var(--gold)':'#fff'};display:flex;align-items:center;justify-content:center">
+              ${att.half_day?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':''}
+            </div>
+            <span style="font-size:11px;font-weight:600;color:${att.half_day?'var(--gold)':'var(--ink3)'};white-space:nowrap">½ Day</span>
+          </div>
+          <!-- Present/Absent toggle -->
+          <button onclick="togAtt(${s.id},${att.present?0:1})"
+            style="padding:6px 16px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;${att.present?'background:var(--emerald);color:#fff':'background:var(--rose);color:#fff'}">
+            ${att.present?'✓ Present':'✗ Absent'}</button>
+        </div>
       </div>`;
-    } else {
-      // Compact view for dashboard
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">
+    }).join('');
+
+  } else {
+    // ── STAFF COMPACT VIEW (dashboard) ───────────────────────
+    container.innerHTML=staffRows.map((s,idx)=>{
+      const att=attMap[s.id]||{};
+      const col=cols[idx%cols.length];
+      const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
         <div style="width:32px;height:32px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${ini}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--ink)">${s.name}</div>
           <div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div>
         </div>
-        ${statusBadge}
+        <!-- Status pill -->
+        <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;${att.present?(att.half_day?'background:var(--gold);color:#fff':'background:var(--emerald);color:#fff'):'background:var(--rose);color:#fff'}">
+          ${att.present?(att.half_day?'½ HALF':'FULL'):'ABSENT'}
+        </span>
         ${att.hours?`<span style="font-size:10px;color:var(--ink3)">${att.hours}h</span>`:''}
-        ${!att.present?`<button onclick="togAtt(${s.id},1);renderDashAtt()" style="padding:4px 10px;background:var(--emerald);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">✓ Present</button>`:''}
-        ${att.present&&!att.half_day?`<button onclick="togHalfDay(${s.id},1);renderDashAtt()" style="padding:4px 8px;background:var(--gold);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:10px;font-weight:600">½ Day</button>`:''}
+        <!-- Action buttons -->
+        ${!att.present?`
+          <button onclick="togAtt(${s.id},1)" style="padding:5px 12px;background:var(--emerald);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">✓ Present</button>
+        `:`
+          <button onclick="togHalfDay(${s.id},${att.half_day?0:1})"
+            style="padding:5px 10px;border:2px solid var(--gold);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;${att.half_day?'background:var(--gold);color:#fff':'background:#fff;color:var(--gold)'}">
+            ${att.half_day?'½ ✓':'½ Day'}
+          </button>
+          <button onclick="togAtt(${s.id},0)" style="padding:5px 8px;background:var(--rose);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:10px">✗</button>
+        `}
       </div>`;
-    }
-  }).join('');
+    }).join('');
+  }
 }
 
 
 async function togHalfDay(staffId, isHalf){
-  const btn=v(`att-half-${staffId}`);
-  const togBtn=v(`att-tog-${staffId}`);
-  const isPresent=togBtn?.textContent?.includes('Present');
+  // Read current attendance from DB first to preserve ALL existing values
+  const attRows=await apiCall('GET',`/attendance?att_date=${td()}`)||[];
+  const cur=attRows.find(a=>a.staff_id===staffId)||{};
   const r=await apiCall('POST','/attendance/upsert',{
-    staff_id:staffId, att_date:td(), is_present:!!isPresent,
+    staff_id:staffId, att_date:td(),
+    is_present:cur.is_present!==undefined?!!cur.is_present:true,
     half_day:!!isHalf,
-    in_time:v(`att-in-${staffId}`)?.value||null,
-    out_time:v(`att-out-${staffId}`)?.value||null
+    morning_duty:!!cur.morning_duty,  // preserve existing morning_duty
+    in_time:cur.in_time||v(`att-in-${staffId}`)?.value||null,
+    out_time:cur.out_time||v(`att-out-${staffId}`)?.value||null
   });
   if(!r)return;
-  if(btn){
-    if(isHalf){btn.textContent='½Day';btn.style.cssText='padding:5px 10px;border-radius:6px;font-size:10px;font-weight:600;border:none;cursor:pointer;background:var(--gold);color:#fff';}
-    else{btn.textContent='½Day';btn.style.cssText='padding:5px 10px;border-radius:6px;font-size:10px;font-weight:600;border:none;cursor:pointer;background:var(--surface);color:var(--ink3);border:1px solid var(--border)';}
-  }
-  toast(`${isHalf?'Marked Half Day':'Full Day restored'}`,'var(--gold)');
+  toast(isHalf?'½ Day marked — salary will be half':'Full day restored','var(--gold)');
+  renderDashAtt();
   updateDash();
 }
 
 async function togMorningDuty(staffId, isMorning){
-  const togBtn=v(`att-tog-${staffId}`);
-  const halfBtn=v(`att-half-${staffId}`);
-  const isPresent=togBtn?.textContent?.includes('Present');
-  const isHalf=halfBtn?.style?.background?.includes('gold')||halfBtn?.textContent?.includes('½Day')&&halfBtn?.style?.color==='#fff';
+  // Read current attendance from DB first to preserve ALL existing values
+  const attRows=await apiCall('GET',`/attendance?att_date=${td()}`)||[];
+  const cur=attRows.find(a=>a.staff_id===staffId)||{};
   const r=await apiCall('POST','/attendance/upsert',{
-    staff_id:staffId,att_date:td(),is_present:!!isPresent,
-    half_day:!!isHalf,morning_duty:!!isMorning,
-    in_time:v(`att-in-${staffId}`)?.value||null,
-    out_time:v(`att-out-${staffId}`)?.value||null
+    staff_id:staffId, att_date:td(),
+    is_present:cur.is_present!==undefined?!!cur.is_present:true,
+    half_day:!!cur.half_day,          // preserve existing half_day
+    morning_duty:!!isMorning,
+    in_time:cur.in_time||v(`att-in-${staffId}`)?.value||null,
+    out_time:cur.out_time||v(`att-out-${staffId}`)?.value||null
   });
   if(!r)return;
   toast(isMorning?'🌅 Morning duty +₹150 added':'Morning duty removed','var(--teal)');
+  renderDashAtt();
 }
 
 async function saveAttTime(staffId){
@@ -3342,11 +3477,21 @@ async function saveAttTime(staffId){
 }
 function calcHours(id){const i=v(`att-in-${id}`)?.value,o=v(`att-out-${id}`)?.value;if(!i||!o)return;const[ih,im]=i.split(':').map(Number);const[oh,om]=o.split(':').map(Number);const m=(oh*60+om)-(ih*60+im);if(m>0){const el=v(`att-hrs-${id}`);if(el)el.textContent=(m/60).toFixed(1)+'h';}}
 async function togAtt(staffId,isPresent){
-  const btn=v(`att-tog-${staffId}`);
-  const r=await apiCall('POST','/attendance/upsert',{staff_id:staffId,att_date:td(),is_present:!!isPresent,in_time:v(`att-in-${staffId}`)?.value||null,out_time:v(`att-out-${staffId}`)?.value||null});
+  // Read current attendance from DB first to preserve ALL existing values
+  const attRows=await apiCall('GET',`/attendance?att_date=${td()}`)||[];
+  const cur=attRows.find(a=>a.staff_id===staffId)||{};
+  const r=await apiCall('POST','/attendance/upsert',{
+    staff_id:staffId, att_date:td(), is_present:!!isPresent,
+    // If marking absent, reset half_day and morning_duty
+    half_day:isPresent?!!cur.half_day:false,
+    morning_duty:isPresent?!!cur.morning_duty:false,
+    in_time:isPresent?(cur.in_time||v(`att-in-${staffId}`)?.value||null):null,
+    out_time:isPresent?(cur.out_time||v(`att-out-${staffId}`)?.value||null):null
+  });
   if(!r)return;
-  if(btn){if(isPresent){btn.textContent='✓ Present';btn.style.cssText='padding:6px 16px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:var(--emerald);color:#fff';}else{btn.textContent='Absent';btn.style.cssText='padding:6px 16px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--ink3);border:1px solid var(--border)';}btn.setAttribute('onclick',`togAtt(${staffId},${isPresent?0:1})`);}
-  toast(`Marked ${isPresent?'Present':'Absent'}`,'var(--teal)');updateDash();
+  toast(`Marked ${isPresent?'Present':'Absent'}`,'var(--teal)');
+  renderDashAtt();
+  updateDash();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3436,26 +3581,132 @@ async function updateRevKpis(){
   s('rv-profit',fmt(totalProfit));
   renderPendingDues();renderRevDaily();
 }
+async function renderAttHistory(){
+  const dateVal=v('att-search-date')?.value||td();
+  const statusFilter=v('att-search-status')?.value||'';
+  const res=v('att-history-result');if(!res)return;
+  res.innerHTML='<div style="font-size:12px;color:var(--ink3);padding:8px 0"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+  const staffRows=await apiCall('GET','/staff');
+  const attRows=await apiCall('GET',`/attendance?att_date=${dateVal}`)||[];
+  if(!staffRows){res.innerHTML='';return;}
+
+  const attMap={};attRows.forEach(a=>attMap[a.staff_id]={present:!!a.is_present,in_time:a.in_time||'',out_time:a.out_time||'',hours:a.hours_worked,half_day:!!a.half_day});
+
+  // Filter staff
+  let filtered=staffRows.filter(s=>s.is_active!==0);
+  if(statusFilter==='absent')filtered=filtered.filter(s=>!attMap[s.id]?.present);
+  else if(statusFilter==='present')filtered=filtered.filter(s=>!!attMap[s.id]?.present);
+  else if(statusFilter==='late')filtered=filtered.filter(s=>{
+    const att=attMap[s.id]||{};
+    if(!att.present||!att.in_time)return false;
+    const [h,m]=att.in_time.split(':').map(Number);
+    return (h*60+m)>(10*60+15); // After 10:15 AM = late
+  });
+
+  const dLabel=new Date(dateVal+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const absentCount=filtered.filter(s=>!attMap[s.id]?.present).length;
+  const presentCount=filtered.filter(s=>!!attMap[s.id]?.present).length;
+  const lateCount=filtered.filter(s=>{
+    const att=attMap[s.id]||{};
+    if(!att.present||!att.in_time)return false;
+    const [h,m]=att.in_time.split(':').map(Number);
+    return (h*60+m)>(10*60+15);
+  }).length;
+
+  const cols=['#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3','#A29BFE'];
+  res.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r8);padding:12px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px"><i class="fas fa-calendar-day" style="margin-right:6px;color:var(--teal)"></i>${dLabel}</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:11px;background:#e8f5ee;color:var(--emerald);border-radius:20px;padding:3px 10px;font-weight:600">✓ ${presentCount} Present</span>
+        <span style="font-size:11px;background:#fff0f0;color:var(--rose);border-radius:20px;padding:3px 10px;font-weight:600">✗ ${absentCount} Absent</span>
+        ${lateCount?`<span style="font-size:11px;background:#fff8e7;color:var(--amber);border-radius:20px;padding:3px 10px;font-weight:600">⏰ ${lateCount} Late</span>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${filtered.map((s,idx)=>{
+          const att=attMap[s.id]||{};
+          const col=cols[idx%cols.length];
+          const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+          const isLate=att.present&&att.in_time&&(()=>{const[h,m]=att.in_time.split(':').map(Number);return(h*60+m)>(10*60+15);})();
+          const statusColor=att.present?(isLate?'var(--amber)':'var(--emerald)'):'var(--rose)';
+          const statusText=att.present?(isLate?`⏰ Late (${att.in_time})`:`✓ Present (${att.in_time||'—'} - ${att.out_time||'—'})`):'✗ Absent';
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg);border-radius:6px;border-left:3px solid ${statusColor}">
+            <div style="width:26px;height:26px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0">${ini}</div>
+            <div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600">${s.name}</div><div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div></div>
+            <div style="font-size:11px;font-weight:600;color:${statusColor}">${statusText}</div>
+            ${att.hours?`<div style="font-size:10px;color:var(--ink3)">${att.hours}h</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+async function adjSalary(staffId, direction){
+  const inp=v(`sal-adj-${staffId}`);
+  const amt=parseFloat(inp?.value||0);
+  if(!amt||amt<=0){toast('Enter an amount first','var(--rose)');inp?.focus();return;}
+  const finalAmt=direction>0?amt:-amt;
+  const r=await apiCall('PATCH',`/staff/${staffId}/salary`,{adjustment:finalAmt});
+  if(!r)return;
+  inp.value='';
+  toast(`${direction>0?'+':'-'}₹${fmt(Math.abs(finalAmt))} salary ${direction>0?'added':'deducted'}`,'var(--emerald)');
+  renderSalary();
+}
+
 async function renderPendingDues(){
   const tb=v('rv-dues-tb');if(!tb)return;
+  const fmonth=v('dues-month')?.value||'';
+  const ftype=v('dues-type')?.value||'';
   const rows=await apiCall('GET','/revenue/pending-dues');if(!rows)return;
-  if(!rows.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:20px"><i class="fas fa-check-circle" style="color:var(--emerald)"></i> No pending dues — all clear!</td></tr>';return;}
-  tb.innerHTML=rows.map(b=>`<tr>
-    <td>${b.job_no}</td>
-    <td><span class="pill p-wa">${b.booking_type}</span></td>
-    <td><b>${b.client_name}</b></td>
-    <td>${b.phone||'—'}</td>
-    <td>${b.wedding_date||'—'}</td>
-    <td>${fmt(b.pkg_amount||0)}</td>
-    <td>${fmt(b.advance_paid||0)}</td>
-    <td style="color:var(--rose);font-weight:700">${fmt(b.balance_due||0)}</td>
-    <td>
-      <button onclick="recordPayment(${b.id},'${b.client_name}',${b.balance_due||0})"
-        style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif">
-        <i class="fas fa-rupee-sign"></i> Pay
-      </button>
-    </td>
-  </tr>`).join('');
+
+  // Filter
+  let filtered=[...rows];
+  if(ftype)filtered=filtered.filter(b=>b.booking_type===ftype);
+  if(fmonth)filtered=filtered.filter(b=>(b.wedding_date||'').startsWith(fmonth));
+
+  if(!filtered.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:20px"><i class="fas fa-check-circle" style="color:var(--emerald)"></i> No pending dues found!</td></tr>';return;}
+
+  // Group by type
+  const groups={Bride:[],Groom:[],Sider:[]};
+  filtered.forEach(b=>{if(groups[b.booking_type])groups[b.booking_type].push(b);else groups['Bride'].push(b);});
+
+  let html_rows='';
+  const typeColors={Bride:'var(--violet)',Groom:'var(--teal)',Sider:'var(--amber)'};
+  const typePills={Bride:'p-bk',Groom:'p-nd',Sider:'p-wa'};
+
+  Object.entries(groups).forEach(([type,items])=>{
+    if(!items.length)return;
+    const total=items.reduce((s,b)=>s+(b.balance_due||0),0);
+    html_rows+=`<tr style="background:var(--surface)">
+      <td colspan="9" style="padding:8px 14px;border-top:2px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;font-weight:700;color:${typeColors[type]}">${type}</span>
+          <span style="font-size:11px;color:var(--ink3)">${items.length} booking${items.length>1?'s':''}</span>
+          <span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--rose)">Total Due: ${fmt(total)}</span>
+        </div>
+      </td>
+    </tr>`;
+    items.forEach(b=>{
+      html_rows+=`<tr>
+        <td style="padding-left:24px">${b.job_no}</td>
+        <td><span class="pill ${typePills[b.booking_type]||'p-lt'}">${b.booking_type}</span></td>
+        <td><b>${b.client_name}</b></td>
+        <td>${b.phone||'—'}</td>
+        <td>${b.wedding_date||'—'}</td>
+        <td>${fmt(b.pkg_amount||0)}</td>
+        <td>${fmt(b.advance_paid||0)}</td>
+        <td style="color:var(--rose);font-weight:700">${fmt(b.balance_due||0)}</td>
+        <td>
+          <button onclick="recordPayment(${b.id},'${b.client_name}',${b.balance_due||0})"
+            style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif">
+            <i class="fas fa-rupee-sign"></i> Pay
+          </button>
+        </td>
+      </tr>`;
+    });
+  });
+  tb.innerHTML=html_rows;
 }
 
 async function recordPayment(bookingId,clientName,balanceDue){
@@ -3472,11 +3723,74 @@ async function recordPayment(bookingId,clientName,balanceDue){
   }
   renderPendingDues();updateRevKpis();updateDash();
 }
+async function renderRevCalendar(){
+  const monthVal=v('rv-cal-month')?.value;
+  const grid=v('rv-cal-grid');if(!grid)return;
+  if(!monthVal){grid.innerHTML='<div style="color:var(--ink3);padding:16px">Select a month above</div>';return;}
+  grid.innerHTML='<div style="color:var(--ink3);padding:16px"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+  const rows=await apiCall('GET',`/revenue/daily?x=1&month=${monthVal}`);
+  if(!rows){grid.innerHTML='<div style="color:var(--rose);padding:16px">Failed to load</div>';return;}
+
+  // Build date map
+  const dayMap={};
+  rows.forEach(r=>{
+    const d=String(r.entry_date||'').substring(0,10);
+    if(!dayMap[d])dayMap[d]={total:0,count:0,cash:0,upi:0};
+    dayMap[d].total+=(r.net_total||0);
+    dayMap[d].count+=1;
+    if(r.pay_method==='Cash')dayMap[d].cash+=(r.net_total||0);
+    else dayMap[d].upi+=(r.net_total||0);
+  });
+
+  // Build calendar
+  const [yr,mo]=monthVal.split('-').map(Number);
+  const firstDay=new Date(yr,mo-1,1).getDay();
+  const daysInMo=new Date(yr,mo,0).getDate();
+  const monthName=new Date(yr,mo-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+
+  // Total for month
+  const monthTotal=Object.values(dayMap).reduce((s,d)=>s+d.total,0);
+
+  let calHtml=`<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:14px;font-weight:700;color:var(--ink)">${monthName}</div>
+    <div style="font-size:13px;font-weight:700;color:var(--emerald)">Total: ${fmt(monthTotal)}</div>
+  </div>`;
+
+  calHtml+=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
+    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--ink3);padding:4px">${d}</div>`).join('')}
+  </div>`;
+
+  calHtml+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+
+  // Empty cells before first day
+  for(let i=0;i<firstDay;i++){
+    calHtml+=`<div style="min-height:60px;border-radius:6px;background:var(--surface);opacity:0.3"></div>`;
+  }
+
+  for(let day=1;day<=daysInMo;day++){
+    const dateStr=`${yr}-${String(mo).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const data=dayMap[dateStr];
+    const isToday=dateStr===td();
+    const hasSales=data&&data.total>0;
+    calHtml+=`<div style="min-height:60px;border-radius:6px;padding:6px;border:1px solid ${isToday?'var(--teal)':hasSales?'var(--border)':'var(--border)'};background:${isToday?'rgba(0,184,148,0.08)':hasSales?'var(--surface)':'var(--bg)'};cursor:${hasSales?'pointer':'default'}" ${hasSales?`onclick="v('rv-df').value='${dateStr}';v('rv-mf').value='';revTab(document.querySelector('.rev-tab'),'daily');renderRevDaily()"`:''}  title="${dateStr}">
+      <div style="font-size:11px;font-weight:${isToday?'700':'600'};color:${isToday?'var(--teal)':'var(--ink)'};">${day}</div>
+      ${hasSales?`<div style="font-size:10px;color:var(--emerald);font-weight:600;margin-top:2px">${fmt(data.total)}</div>
+      <div style="font-size:9px;color:var(--ink3)">${data.count} entry${data.count>1?'s':''}</div>`:''}
+    </div>`;
+  }
+  calHtml+='</div>';
+  grid.innerHTML=calHtml;
+}
+
 async function renderRevDaily(){
   const tb=v('rv-dtb');if(!tb)return;
   tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
-  const df=v('rv-df')?.value,pm=v('rv-pf')?.value;
-  let path='/revenue/daily?x=1';if(df)path+=`&entry_date=${df}`;if(pm&&pm!=='')path+=`&pay_method=${encodeURIComponent(pm)}`;
+  const df=v('rv-df')?.value,mf=v('rv-mf')?.value,pm=v('rv-pf')?.value;
+  let path='/revenue/daily?x=1';
+  if(df)path+=`&entry_date=${df}`;
+  else if(mf)path+=`&month=${mf}`;
+  if(pm&&pm!=='')path+=`&pay_method=${encodeURIComponent(pm)}`;
   const rows=await apiCall('GET',path);if(!rows)return;
   if(!rows.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:16px">No entries</td></tr>';return;}
   const pmC={'Cash':'p-nd','UPI':'p-bk','Card':'p-ok','Split':'p-wa'};
@@ -3555,6 +3869,14 @@ async function initApp(){
 
 document.addEventListener("DOMContentLoaded",()=>{
   loadSavedLogo();
+  // Live clock
+  function updateClock(){
+    const now=new Date();
+    const d=now.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    const t=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+    const el=v('live-clock');if(el)el.innerHTML=`<i class="fas fa-clock" style="margin-right:4px;opacity:0.6"></i>${t}<br><span style="font-size:9px;opacity:0.6">${d}</span>`;
+  }
+  updateClock();setInterval(updateClock,1000);
   const dt=v("a-date");if(dt)dt.value=td();
   const ddt=v("de-dt");if(ddt)ddt.value=td();
   const dfd=v("de-fd");if(dfd)dfd.value=td();

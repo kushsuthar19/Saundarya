@@ -112,10 +112,25 @@ async def list_staff(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
+    from datetime import date
+    today = date.today()
+    month_start = today.strftime('%Y-%m-01')
+    month_end = today.strftime('%Y-%m-') + str(today.day).zfill(2)
+
     await cursor.execute(
-        """SELECT id, name, role, phone, join_date, base_salary, commission_pct,
-                  days_present, total_services, comm_earned, paid_salary, av_class, is_active
-           FROM staff WHERE is_active=1 ORDER BY name"""
+        """SELECT s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
+                  s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active,
+                  NVL(SUM(CASE WHEN a.half_day=1 THEN 1 ELSE 0 END), 0) AS half_day_count,
+                  NVL(SUM(CASE WHEN a.morning_duty=1 THEN 1 ELSE 0 END), 0) AS morning_duty_count
+           FROM staff s
+           LEFT JOIN attendance a ON a.staff_id=s.id
+             AND a.att_date >= TO_DATE(:1,'YYYY-MM-DD')
+             AND a.att_date <= TO_DATE(:2,'YYYY-MM-DD')
+           WHERE s.is_active=1
+           GROUP BY s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
+                    s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active
+           ORDER BY s.name""",
+        [month_start, month_end]
     )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
@@ -176,7 +191,8 @@ async def get_attendance(
 ):
     cursor = db.cursor()
     await cursor.execute(
-        """SELECT id, staff_id, att_date, is_present, in_time, out_time, hours_worked
+        """SELECT id, staff_id, att_date, is_present, in_time, out_time, hours_worked,
+                  NVL(half_day,0) AS half_day, NVL(morning_duty,0) AS morning_duty
            FROM attendance WHERE att_date = TO_DATE(:1,'YYYY-MM-DD')""",
         [str(att_date)]
     )
@@ -216,11 +232,13 @@ async def upsert_attendance(
 
     if existing:
         old_present = existing[1]
+        morning = 1 if data.morning_duty else 0
+        half = 1 if data.half_day else 0
         await cursor.execute(
             """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3,
-               hours_worked=:4, updated_at=SYSTIMESTAMP
-               WHERE staff_id=:5 AND att_date=TO_DATE(:6,'YYYY-MM-DD')""",
-            [is_present, data.in_time, data.out_time, hours, data.staff_id, ad]
+               hours_worked=:4, half_day=:5, morning_duty=:6, updated_at=SYSTIMESTAMP
+               WHERE staff_id=:7 AND att_date=TO_DATE(:8,'YYYY-MM-DD')""",
+            [is_present, data.in_time, data.out_time, hours, half, morning, data.staff_id, ad]
         )
         # Update days_present count
         if old_present != is_present:
@@ -231,9 +249,9 @@ async def upsert_attendance(
             )
     else:
         await cursor.execute(
-            """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time, hours_worked)
-               VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6)""",
-            [data.staff_id, ad, is_present, data.in_time, data.out_time, hours]
+            """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time, hours_worked, half_day, morning_duty)
+               VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6,:7,:8)""",
+            [data.staff_id, ad, is_present, data.in_time, data.out_time, hours, half, morning]
         )
         if is_present:
             await cursor.execute(
@@ -242,7 +260,7 @@ async def upsert_attendance(
 
     await db.commit()
     await cursor.execute(
-        "SELECT id,staff_id,att_date,is_present,in_time,out_time,hours_worked FROM attendance WHERE staff_id=:1 AND att_date=TO_DATE(:2,'YYYY-MM-DD')",
+        "SELECT id,staff_id,att_date,is_present,in_time,out_time,hours_worked,NVL(half_day,0) AS half_day,NVL(morning_duty,0) AS morning_duty FROM attendance WHERE staff_id=:1 AND att_date=TO_DATE(:2,'YYYY-MM-DD')",
         [data.staff_id, ad]
     )
     row = await cursor.fetchone()
