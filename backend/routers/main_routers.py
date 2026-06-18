@@ -178,16 +178,24 @@ async def list_staff(
         """SELECT s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
                   s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active,
                   NVL(SUM(CASE WHEN a.half_day=1 THEN 1 ELSE 0 END), 0) AS half_day_count,
-                  NVL(SUM(CASE WHEN a.morning_duty=1 THEN 1 ELSE 0 END), 0) AS morning_duty_count
+                  NVL(SUM(CASE WHEN a.morning_duty=1 THEN 1 ELSE 0 END), 0) AS morning_duty_count,
+                  NVL(SUM(CASE WHEN a.is_present=1 THEN 1 ELSE 0 END), 0) AS monthly_days_present,
+                  NVL((SELECT SUM(ei.line_total)
+                       FROM entry_items ei
+                       JOIN daily_entries de ON de.id=ei.entry_id
+                       WHERE ei.staff_id=s.id
+                         AND de.entry_date >= TO_DATE(:1,'YYYY-MM-DD')
+                         AND de.entry_date <= TO_DATE(:2,'YYYY-MM-DD')
+                  ), 0) AS monthly_revenue
            FROM staff s
            LEFT JOIN attendance a ON a.staff_id=s.id
-             AND a.att_date >= TO_DATE(:1,'YYYY-MM-DD')
-             AND a.att_date <= TO_DATE(:2,'YYYY-MM-DD')
+             AND a.att_date >= TO_DATE(:3,'YYYY-MM-DD')
+             AND a.att_date <= TO_DATE(:4,'YYYY-MM-DD')
            WHERE s.is_active=1
            GROUP BY s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
                     s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active
            ORDER BY s.name""",
-        [month_start, month_end]
+        [month_start, month_end, month_start, month_end]
     )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]

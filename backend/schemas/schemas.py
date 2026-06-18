@@ -113,6 +113,8 @@ class StaffOut(BaseModel):
     is_active: int
     half_day_count: int = 0
     morning_duty_count: int = 0
+    monthly_revenue: float = 0
+    monthly_days_present: int = 0
 
 
 # ── Attendance ────────────────────────────────────────────

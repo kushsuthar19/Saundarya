@@ -665,7 +665,8 @@ table tbody tr:hover td{background:var(--bg2)}
   .nav-wrap{padding:3px 0}
   .page-body{padding:12px 12px 80px}
 }
-</style>
+
+.admin-only{display:none!important;}</style>
 
 <div data-theme="light">
 <!-- TOPBAR -->
@@ -1131,7 +1132,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <div style="display:flex;gap:16px">
         <div><div id="bs-bride-active" style="font-size:22px;font-weight:700;color:var(--violet)">0</div><div style="font-size:10px;color:var(--ink3)">Active</div></div>
         <div><div id="bs-bride-total" style="font-size:22px;font-weight:700;color:var(--ink)">0</div><div style="font-size:10px;color:var(--ink3)">Total</div></div>
-        <div><div id="bs-bride-revenue" style="font-size:16px;font-weight:700;color:var(--emerald)">₹0</div><div style="font-size:10px;color:var(--ink3)">Revenue</div></div>
+        <div class="admin-only"><div id="bs-bride-revenue" style="font-size:16px;font-weight:700;color:var(--emerald)">₹0</div><div style="font-size:10px;color:var(--ink3)">Revenue</div></div>
       </div>
     </div>
     <div style="background:var(--gold-l);border:1px solid var(--gold-b);border-radius:var(--r12);padding:14px 16px">
@@ -1139,7 +1140,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <div style="display:flex;gap:16px">
         <div><div id="bs-groom-active" style="font-size:22px;font-weight:700;color:var(--gold)">0</div><div style="font-size:10px;color:var(--ink3)">Active</div></div>
         <div><div id="bs-groom-total" style="font-size:22px;font-weight:700;color:var(--ink)">0</div><div style="font-size:10px;color:var(--ink3)">Total</div></div>
-        <div><div id="bs-groom-revenue" style="font-size:16px;font-weight:700;color:var(--emerald)">₹0</div><div style="font-size:10px;color:var(--ink3)">Revenue</div></div>
+        <div class="admin-only"><div id="bs-groom-revenue" style="font-size:16px;font-weight:700;color:var(--emerald)">₹0</div><div style="font-size:10px;color:var(--ink3)">Revenue</div></div>
       </div>
     </div>
     <div style="background:var(--teal-l);border:1px solid var(--teal-b);border-radius:var(--r12);padding:14px 16px">
@@ -1147,7 +1148,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <div style="display:flex;gap:16px">
         <div><div id="bs-sider-active" style="font-size:22px;font-weight:700;color:var(--teal)">0</div><div style="font-size:10px;color:var(--ink3)">Active</div></div>
         <div><div id="bs-sider-total" style="font-size:22px;font-weight:700;color:var(--ink)">0</div><div style="font-size:10px;color:var(--ink3)">Total</div></div>
-        <div><div id="bs-sider-revenue" style="font-size:16px;font-weight:700;color:var(--emerald)">₹0</div><div style="font-size:10px;color:var(--ink3)">Revenue</div></div>
+        <div class="admin-only"><div id="bs-sider-revenue" style="font-size:16px;font-weight:700;color:var(--emerald)">₹0</div><div style="font-size:10px;color:var(--ink3)">Revenue</div></div>
       </div>
     </div>
   </div>
@@ -1288,7 +1289,16 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="card"><div class="card-hd emerald"><div class="card-hd-t"><i class="fas fa-rupee-sign"></i>Billing & Payment</div></div><div class="card-body">
     <div class="fg">
       <div class="fl"><label>Discount (₹)</label><input type="number" id="de-disc" placeholder="0" oninput="deBill()"></div>
-      <div class="fl"><label>Payment Method</label><select id="de-pay"><option>Cash</option><option>UPI</option><option>Card</option><option>Split</option></select></div>
+      <div class="fl"><label>Payment Method</label><select id="de-pay" onchange="toggleSplitPay()"><option>Cash</option><option>UPI</option><option>Card</option><option>Split</option></select></div>
+      <div id="split-pay-wrap" style="display:none;grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:600;margin-bottom:8px">Split Payment</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div><label style="font-size:10px;color:var(--ink3)">Cash ₹</label><br><input type="number" id="de-split-cash" placeholder="0" min="0" oninput="calcSplitTotal()" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--ink3)">GPay/UPI ₹</label><br><input type="number" id="de-split-upi" placeholder="0" min="0" oninput="calcSplitTotal()" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--ink3)">Card ₹</label><br><input type="number" id="de-split-card" placeholder="0" min="0" oninput="calcSplitTotal()" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:4px"><span id="split-check" style="font-size:11px;font-weight:600;color:var(--teal)">₹0</span></div>
+        </div>
+      </div>
       <div class="fl"><label>Next Visit Date</label><input type="date" id="de-nv"></div>
       <div class="fl"><label>Remarks</label><input type="text" id="de-rem" placeholder="Any notes..."></div>
     </div>
@@ -2243,6 +2253,7 @@ function applyRole(){
   if(_role==='admin'){
     // Admin sees everything
     document.querySelectorAll('[data-admin="1"]').forEach(el=>{el.style.display='';});
+    document.querySelectorAll('.admin-only').forEach(el=>{el.style.removeProperty('display');});
     // Ensure admin-only sections are accessible
     ['staff-content','revenue-content','reports-content'].forEach(id=>{
       const el=v(id);if(el)el.style.display='';
@@ -2741,6 +2752,24 @@ async function deleteClient(id,name){
 // ═══════════════════════════════════════════════════════════════
 // DAILY ENTRY — with staff tracking per service
 // ═══════════════════════════════════════════════════════════════
+function toggleSplitPay(){
+  const pay=v('de-pay')?.value;
+  const wrap=v('split-pay-wrap');
+  if(wrap)wrap.style.display=pay==='Split'?'block':'none';
+  if(pay!=='Split'){
+    ['de-split-cash','de-split-upi','de-split-card'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  }
+}
+
+function calcSplitTotal(){
+  const cash=parseFloat(v('de-split-cash')?.value||0);
+  const upi=parseFloat(v('de-split-upi')?.value||0);
+  const card=parseFloat(v('de-split-card')?.value||0);
+  const total=cash+upi+card;
+  const el=v('split-check');
+  if(el)el.textContent=fmt(total);
+}
+
 async function saveDe(){
   const nm=v('de-n').value.trim();if(!nm){toast('Enter client name','var(--rose)');return;}
   if(!selectedSvcs.length){toast('Select at least one service','var(--rose)');return;}
@@ -3527,22 +3556,139 @@ async function renderStaffGrid(){
     const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
     const bonusBadge=s.comm_earned>=200000?'<span style="font-size:9px;background:#e8f5ee;color:var(--emerald);border-radius:4px;padding:2px 5px;margin-left:4px">⭐ 2% tier</span>':'';
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r12);padding:16px;text-align:center">
-      <div style="width:52px;height:52px;border-radius:50%;background:${c};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;margin:0 auto 10px">${ini}</div>
-      <div style="font-size:13px;font-weight:600;color:var(--ink)">${s.name}</div>
-      <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">${s.role||'Staff'}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
-        <div><div style="font-size:14px;font-weight:600">${s.total_services||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Services</div></div>
-        <div><div style="font-size:14px;font-weight:600">${s.days_present||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Days</div></div>
-        <div><div style="font-size:14px;font-weight:600">${fmt(s.comm_earned||0)}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Work Done</div></div>
+      <div onclick="showStaffDetail(${s.id})" style="cursor:pointer">
+        <div style="width:52px;height:52px;border-radius:50%;background:${c};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;margin:0 auto 10px">${ini}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--teal);text-decoration:underline dotted">${s.name}</div>
+        <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">${s.role||'Staff'}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+          <div><div style="font-size:14px;font-weight:600">${s.total_services||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Services</div></div>
+          <div><div style="font-size:14px;font-weight:600">${s.monthly_days_present||s.days_present||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Days</div></div>
+          <div><div style="font-size:14px;font-weight:600">${fmt(s.monthly_revenue||s.comm_earned||0)}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">This Month</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--ink3);margin-bottom:8px">${fmt(s.base_salary||0)}/month base${bonusBadge}</div>
       </div>
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:8px">${fmt(s.base_salary||0)}/month base${bonusBadge}</div>
       <div style="display:flex;gap:6px;justify-content:center">
+        <button onclick="showStaffDetail(${s.id})" style="background:var(--violet);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px"><i class="fas fa-chart-bar"></i></button>
         <button onclick="editStaff(${s.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-edit"></i> Edit</button>
         <button onclick="deleteStaff(${s.id},'${s.name}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px"><i class="fas fa-trash"></i></button>
       </div>
     </div>`;
   }).join('');
   updateStaffSels();
+}
+
+async function showStaffDetail(id){
+  const modal=v('inv-modal');if(!modal)return;
+  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:24px 28px;width:700px;max-width:96vw;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:700;color:var(--ink)"><i class="fas fa-user" style="color:var(--teal);margin-right:8px"></i>Staff Details</div>
+      <input type="month" id="sd-month" value="${tM()}" onchange="loadStaffDetail(${id})" style="margin-left:auto;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;background:var(--surface)">
+      <button onclick="closeInvModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button>
+    </div>
+    <div id="sd-content"><div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin"></i> Loading...</div></div>
+  </div>`;
+  modal.style.display='flex';
+  loadStaffDetail(id);
+}
+
+async function loadStaffDetail(staffId){
+  const month=v('sd-month')?.value||tM();
+  const [yr,mo]=month.split('-').map(Number);
+  const daysInMo=new Date(yr,mo,0).getDate();
+  const monthStart=`${yr}-${String(mo).padStart(2,'0')}-01`;
+  const monthEnd=`${yr}-${String(mo).padStart(2,'0')}-${String(daysInMo).padStart(2,'0')}`;
+
+  // Fetch staff info, their entries for month, attendance for month
+  const [staffList, attRows] = await Promise.all([
+    apiCall('GET','/staff'),
+    apiCall('GET',`/attendance?att_date=${monthStart}`)||[]
+  ]);
+  const s=staffList?.find(st=>st.id===staffId);if(!s)return;
+
+  // Fetch monthly entries for this staff
+  const entries=await apiCall('GET',`/entries?limit=500&month=${month}`)||[];
+  // Filter entries where this staff did services
+  const myEntries=[];
+  let totalRevenue=0;
+  entries.forEach(e=>{
+    const myItems=(e.items||[]).filter(it=>it.staff_id===staffId||it.staff_name===s.name);
+    if(myItems.length){
+      const myAmt=myItems.reduce((sum,it)=>sum+(it.line_total||0),0);
+      totalRevenue+=myAmt;
+      myEntries.push({...e, myItems, myAmt});
+    }
+  });
+
+  // Attendance for month
+  const attMonth=await apiCall('GET',`/attendance?att_date=${monthStart}&staff_id=${staffId}`)||[];
+
+  // Salary calculation
+  const perDay=(s.base_salary||0)/daysInMo;
+  const dp=s.monthly_days_present||s.days_present||0;
+  const halfDays=s.half_day_count||0;
+  const effectiveDays=dp>=halfDays?dp-(halfDays*0.5):dp+(halfDays*0.5);
+  const baseEarned=Math.round(perDay*Math.max(0,effectiveDays));
+  const morningPay=(s.morning_duty_count||0)*150;
+  const monthRev=s.monthly_revenue||totalRevenue||0;
+  const commPct=monthRev>=100000?0.03:0.02;
+  const commAmt=Math.round(monthRev*commPct);
+  const totalSalary=baseEarned+commAmt+morningPay;
+
+  const cols=['#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3'];
+  const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const col=cols[staffId%cols.length];
+
+  const content=v('sd-content');if(!content)return;
+  content.innerHTML=`
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px">
+    <div style="width:50px;height:50px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff">${ini}</div>
+    <div><div style="font-size:15px;font-weight:700">${s.name}</div><div style="font-size:11px;color:var(--ink3)">${s.role||'Staff'} • ₹${fmt(s.base_salary||0)}/month</div></div>
+  </div>
+  <!-- Salary Summary -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+    <div style="background:#f0fff8;border:1px solid #b2dfdb;border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Base Salary</div>
+      <div style="font-size:14px;font-weight:700;color:var(--emerald)">${fmt(baseEarned)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${effectiveDays.toFixed(1)} days × ${fmt(Math.round(perDay))}</div>
+    </div>
+    <div style="background:#f0f8ff;border:1px solid #bbdefb;border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Commission</div>
+      <div style="font-size:14px;font-weight:700;color:var(--teal)">${fmt(commAmt)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${commPct*100}% of ${fmt(monthRev)}</div>
+    </div>
+    <div style="background:#fffbf0;border:1px solid #ffe082;border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Morning Duty</div>
+      <div style="font-size:14px;font-weight:700;color:var(--gold)">${fmt(morningPay)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${s.morning_duty_count||0} days × ₹150</div>
+    </div>
+    <div style="background:var(--violet-l,#f5f0ff);border:1px solid #ce93d8;border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Total Salary</div>
+      <div style="font-size:16px;font-weight:700;color:var(--violet)">${fmt(totalSalary)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${month}</div>
+    </div>
+  </div>
+  <!-- Services this month -->
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--ink)"><i class="fas fa-scissors" style="margin-right:6px;color:var(--teal)"></i>Services This Month (${myEntries.length} entries • ${fmt(totalRevenue)} total)</div>
+  ${myEntries.length?`
+  <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px">
+    <thead><tr style="background:var(--ink);color:#fff">
+      <th style="padding:6px 8px;text-align:left">Date</th>
+      <th style="padding:6px 8px;text-align:left">Client</th>
+      <th style="padding:6px 8px;text-align:left">Services</th>
+      <th style="padding:6px 8px;text-align:right">Amount</th>
+    </tr></thead>
+    <tbody>
+      ${myEntries.map(e=>`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 8px">${e.entry_date||''}</td>
+        <td style="padding:5px 8px">${e.client_name||''}</td>
+        <td style="padding:5px 8px;color:var(--ink3)">${e.myItems.map(it=>it.service_name).join(', ')}</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.myAmt)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`:'<div style="text-align:center;color:var(--ink4);padding:16px;font-size:12px">No services recorded this month</div>'}
+  `;
 }
 
 async function editStaff(id){
@@ -3599,35 +3745,27 @@ async function renderSalary(){
   const daysInMonth=new Date(yr,mo,0).getDate();
   tb.innerHTML=rows.map(s=>{
     const perDay=daysInMonth>0?(s.base_salary||0)/daysInMonth:0;
-    // Half day: each half day = 0.5 day pay
-    // If days_present already counts half days as 1: effectiveDays = days_present - halfDay*0.5
-    // If days_present doesn't count half days: effectiveDays = days_present + halfDay*0.5
+    // Half day deduction
     const halfDayCount=s.half_day_count||0;
-    const dp=s.days_present||0;
-    // Use whichever gives the correct effective days:
-    // If dp >= halfDayCount → half days were counted as 1 in dp → subtract 0.5 each
-    // If dp < halfDayCount  → half days were NOT counted → add 0.5 each
+    const dp=s.monthly_days_present||s.days_present||0;
     const effectiveDays = dp >= halfDayCount
-      ? dp - (halfDayCount * 0.5)                    // e.g. dp=1, half=1 → 0.5
-      : dp + (halfDayCount * 0.5);                   // e.g. dp=0, half=1 → 0.5
+      ? dp - (halfDayCount * 0.5)
+      : dp + (halfDayCount * 0.5);
     const baseEarned=Math.round(perDay*Math.max(0,effectiveDays));
     // Morning duty: ₹150 per morning duty day
     const morningDutyPay=(s.morning_duty_count||0)*150;
-    const workDone=s.comm_earned||0;
-    // Commission tiers:
-    // Under ₹1L  → 2% of work done
-    // ₹1L - ₹2L  → 2% of work done
-    // Above ₹2L  → 3% (max cap — not more than 3%)
+    // Commission based on MONTHLY revenue (not all-time)
+    const workDone=s.monthly_revenue||s.comm_earned||0;
+    // Commission tiers based on monthly revenue:
+    // Under ₹1L  → 2%
+    // ₹1L+       → 3%
     let commissionAmt=0;
     let tierLabel='';
-    if(workDone>200000){
-      commissionAmt=Math.round(workDone*0.03);  // 3% max
-      tierLabel='3% (above ₹2L)';
-    } else if(workDone>100000){
-      commissionAmt=Math.round(workDone*0.02);  // 2%
-      tierLabel='2% (₹1L-₹2L)';
+    if(workDone>=100000){
+      commissionAmt=Math.round(workDone*0.03);
+      tierLabel='3% (above ₹1L)';
     } else {
-      commissionAmt=Math.round(workDone*0.02);  // 2% under 1L
+      commissionAmt=Math.round(workDone*0.02);
       tierLabel='2% (under ₹1L)';
     }
     const totalPayable=baseEarned+commissionAmt+morningDutyPay;
@@ -3982,7 +4120,7 @@ function dateDash(){const el=v('d-date');if(el)el.textContent=new Date().toLocal
 // REVENUE
 // ═══════════════════════════════════════════════════════════════
 async function updateRevKpis(){
-  if(_role!=='admin')return;
+  // Payment split visible to all roles (today only)
   const r=await apiCall('GET','/revenue/stats');if(!r)return;
   const s=(id,val)=>{const e=v(id);if(e)e.textContent=val;};
   s('rv-today',fmt(r.today||0));s('rv-month',fmt(r.this_month||0));s('rv-year',fmt(r.this_year||0));
