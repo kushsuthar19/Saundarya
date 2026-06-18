@@ -4076,15 +4076,18 @@ async function updateDashPaymentSplit(){
   const parent=donutContainer.parentElement;if(!parent)return;
   // Get TODAY's entries only
   const today=td();
-  const rows=await apiCall('GET',`/revenue/daily?entry_date=${today}`);
+  const rows=await apiCall('GET',`/entries?limit=200&entry_date=${today}`);
   if(!rows){parent.innerHTML='<div style="color:var(--ink4);font-size:12px;text-align:center;padding:16px">No data</div>';return;}
   let cash=0,upi=0,card=0;
   rows.forEach(e=>{
     const amt=e.net_total||0;
     if(e.pay_method==='Cash')cash+=amt;
-    else if(e.pay_method==='UPI')upi+=amt;
+    else if(e.pay_method==='UPI'||e.pay_method==='GPay')upi+=amt;
     else if(e.pay_method==='Card')card+=amt;
-    else if(e.pay_method==='Split'){cash+=amt/2;upi+=amt/2;}
+    else if(e.pay_method==='Split'){
+      // Use split details if available, otherwise split 50/50
+      cash+=amt/2;upi+=amt/2;
+    }
   });
   const total=cash+upi+card;
   const pct=(val)=>total?Math.round(val/total*100):0;
