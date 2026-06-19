@@ -242,6 +242,135 @@ async def create_staff(
     return dict(zip(cols, row))
 
 
+@staff_router.get("/{staff_id}/month-detail")
+async def staff_month_detail(
+    staff_id: int,
+    month: Optional[str] = Query(None, description="YYYY-MM, defaults to current month"),
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    from datetime import date as _date
+    import calendar
+    if not month:
+        month = _date.today().strftime('%Y-%m')
+    yr, mo = int(month[:4]), int(month[5:7])
+    days_in_month = calendar.monthrange(yr, mo)[1]
+    month_start = f"{yr}-{mo:02d}-01"
+    month_end = f"{yr}-{mo:02d}-{days_in_month:02d}"
+
+    # Staff base info
+    await cursor.execute(
+        "SELECT id, name, role, base_salary FROM staff WHERE id=:1",
+        [staff_id]
+    )
+    srow = await cursor.fetchone()
+    if not srow:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Staff not found")
+    staff_info = {"id": srow[0], "name": srow[1], "role": srow[2], "base_salary": srow[3] or 0}
+
+    # Day-by-day attendance for the month
+    await cursor.execute(
+        """SELECT TO_CHAR(att_date,'YYYY-MM-DD') as d, is_present, in_time, out_time,
+                  hours_worked, NVL(half_day,0) as half_day, NVL(morning_duty,0) as morning_duty,
+                  id
+           FROM attendance
+           WHERE staff_id=:1 AND att_date>=TO_DATE(:2,'YYYY-MM-DD') AND att_date<=TO_DATE(:3,'YYYY-MM-DD')
+           ORDER BY att_date""",
+        [staff_id, month_start, month_end]
+    )
+    att_rows = await cursor.fetchall()
+    att_cols = [d[0].lower() for d in cursor.description]
+    attendance_by_day = {r[0]: dict(zip(att_cols, r)) for r in att_rows}
+
+    # Services done each day this month by this staff
+    await cursor.execute(
+        """SELECT TO_CHAR(de.entry_date,'YYYY-MM-DD') as d, de.client_name, ei.service_name,
+                  ei.price, ei.qty, ei.line_total, de.inv_no, de.id as entry_id
+           FROM entry_items ei
+           JOIN daily_entries de ON de.id=ei.entry_id
+           WHERE ei.staff_id=:1
+             AND de.entry_date>=TO_DATE(:2,'YYYY-MM-DD') AND de.entry_date<=TO_DATE(:3,'YYYY-MM-DD')
+           ORDER BY de.entry_date, de.id""",
+        [staff_id, month_start, month_end]
+    )
+    svc_rows = await cursor.fetchall()
+    svc_cols = [d[0].lower() for d in cursor.description]
+    services_by_day = {}
+    monthly_revenue = 0.0
+    for r in svc_rows:
+        rec = dict(zip(svc_cols, r))
+        d = rec['d']
+        services_by_day.setdefault(d, []).append(rec)
+        monthly_revenue += float(rec['line_total'] or 0)
+
+    # Build full day list
+    days = []
+    present_count = 0
+    half_day_count = 0
+    morning_duty_count = 0
+    for day in range(1, days_in_month + 1):
+        d_str = f"{yr}-{mo:02d}-{day:02d}"
+        att = attendance_by_day.get(d_str)
+        svcs = services_by_day.get(d_str, [])
+        is_present = bool(att and att.get('is_present'))
+        is_half = bool(att and att.get('half_day'))
+        is_morning = bool(att and att.get('morning_duty'))
+        if is_present:
+            present_count += 1
+        if is_half:
+            half_day_count += 1
+        if is_morning:
+            morning_duty_count += 1
+        day_revenue = sum(float(s['line_total'] or 0) for s in svcs)
+        days.append({
+            "date": d_str,
+            "is_present": is_present,
+            "half_day": is_half,
+            "morning_duty": is_morning,
+            "in_time": att.get('in_time') if att else None,
+            "out_time": att.get('out_time') if att else None,
+            "hours_worked": float(att['hours_worked']) if att and att.get('hours_worked') else None,
+            "attendance_id": att.get('id') if att else None,
+            "services": svcs,
+            "day_revenue": day_revenue,
+        })
+
+    # Salary calculation — SAME formula as frontend
+    per_day = (staff_info['base_salary'] or 0) / days_in_month if days_in_month else 0
+    dp = present_count
+    if dp >= half_day_count:
+        effective_days = dp - (half_day_count * 0.5)
+    else:
+        effective_days = dp + (half_day_count * 0.5)
+    base_earned = round(per_day * max(0, effective_days))
+    morning_pay = morning_duty_count * 150
+    comm_pct = 0.03 if monthly_revenue >= 100000 else 0.02
+    commission = round(monthly_revenue * comm_pct)
+    total_salary = base_earned + commission + morning_pay
+
+    return {
+        "staff": staff_info,
+        "month": month,
+        "days_in_month": days_in_month,
+        "days": days,
+        "summary": {
+            "present_days": present_count,
+            "half_day_count": half_day_count,
+            "morning_duty_count": morning_duty_count,
+            "effective_days": effective_days,
+            "per_day_salary": round(per_day),
+            "base_earned": base_earned,
+            "monthly_revenue": monthly_revenue,
+            "commission_pct": comm_pct,
+            "commission_amt": commission,
+            "morning_duty_pay": morning_pay,
+            "total_salary": total_salary,
+        }
+    }
+
+
 @staff_router.get("/{staff_id}")
 async def get_staff_by_id(
     staff_id: int,
@@ -971,22 +1100,57 @@ async def service_revenue(
 
 @reports_router.get("/staff-performance")
 async def staff_performance(
+    month: Optional[str] = Query(None, description="YYYY-MM, defaults to current month"),
     current_user: dict = Depends(require_admin),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
+    from datetime import date as _date
+    if month:
+        yr, mo = month.split('-')
+        month_start = f"{yr}-{mo}-01"
+    else:
+        today = _date.today()
+        month_start = today.strftime('%Y-%m-01')
+        month = today.strftime('%Y-%m')
+    yr_i, mo_i = int(month_start[:4]), int(month_start[5:7])
+    import calendar
+    days_in_month = calendar.monthrange(yr_i, mo_i)[1]
+    month_end = f"{yr_i}-{mo_i:02d}-{days_in_month:02d}"
+
     await cursor.execute(
-        """SELECT s.id, s.name, s.role, s.total_services, s.base_salary, s.comm_earned,
-                  COUNT(DISTINCT CASE WHEN a.is_present=1 THEN a.att_date END) as present_days
+        """SELECT s.id, s.name, s.role, s.base_salary,
+                  COUNT(DISTINCT CASE WHEN a.is_present=1 THEN a.att_date END) as present_days,
+                  NVL(SUM(CASE WHEN a.half_day=1 THEN 1 ELSE 0 END), 0) as half_day_count,
+                  NVL(SUM(CASE WHEN a.morning_duty=1 THEN 1 ELSE 0 END), 0) as morning_duty_count,
+                  NVL((SELECT COUNT(*) FROM entry_items ei
+                       JOIN daily_entries de ON de.id=ei.entry_id
+                       WHERE ei.staff_id=s.id
+                         AND de.entry_date >= TO_DATE(:1,'YYYY-MM-DD')
+                         AND de.entry_date <= TO_DATE(:2,'YYYY-MM-DD')
+                  ), 0) AS services_count,
+                  NVL((SELECT SUM(ei.line_total) FROM entry_items ei
+                       JOIN daily_entries de ON de.id=ei.entry_id
+                       WHERE ei.staff_id=s.id
+                         AND de.entry_date >= TO_DATE(:3,'YYYY-MM-DD')
+                         AND de.entry_date <= TO_DATE(:4,'YYYY-MM-DD')
+                  ), 0) AS monthly_revenue
            FROM staff s
            LEFT JOIN attendance a ON a.staff_id=s.id
+             AND a.att_date >= TO_DATE(:5,'YYYY-MM-DD')
+             AND a.att_date <= TO_DATE(:6,'YYYY-MM-DD')
            WHERE s.is_active=1
-           GROUP BY s.id, s.name, s.role, s.total_services, s.base_salary, s.comm_earned
-           ORDER BY s.comm_earned DESC"""
+           GROUP BY s.id, s.name, s.role, s.base_salary
+           ORDER BY monthly_revenue DESC""",
+        [month_start, month_end, month_start, month_end, month_start, month_end]
     )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
-    return [dict(zip(cols, r)) for r in rows]
+    result = [dict(zip(cols, r)) for r in rows]
+    for r in result:
+        r['month'] = month
+        r['days_in_month'] = days_in_month
+    return result
 
 
 # ════════════════════════════════

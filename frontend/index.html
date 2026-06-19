@@ -1415,6 +1415,11 @@ table tbody tr:hover td{background:var(--bg2)}
           <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
             <button class="btn btn-ghost btn-sm" onclick="lockAtt()"><i class="fas fa-lock"></i>Lock Attendance</button>
           </div>
+          <!-- Auto-lock banner (after 7:45 PM) -->
+          <div id="att-lock-banner" style="display:none;align-items:center;gap:8px;background:#fff3e0;border:1px solid #ffb74d;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#e65100">
+            <i class="fas fa-lock"></i>
+            <span>Today's attendance is auto-locked after 7:45 PM. Use <b>Staff Detail</b> (click a staff card) to correct any entry if needed.</span>
+          </div>
           <!-- Staff Absent Search -->
           <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
             <input type="date" id="att-search-date" class="fsel" 
@@ -3580,8 +3585,8 @@ async function renderStaffGrid(){
 async function showStaffDetail(id){
   const modal=v('inv-modal');if(!modal)return;
   modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
-  <div style="background:var(--surface);border-radius:var(--r12);padding:24px 28px;width:700px;max-width:96vw;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:880px;max-width:97vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <div style="font-size:16px;font-weight:700;color:var(--ink)"><i class="fas fa-user" style="color:var(--teal);margin-right:8px"></i>Staff Details</div>
       <input type="month" id="sd-month" value="${tM()}" onchange="loadStaffDetail(${id})" style="margin-left:auto;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;background:var(--surface)">
       <button onclick="closeInvModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button>
@@ -3589,52 +3594,18 @@ async function showStaffDetail(id){
     <div id="sd-content"><div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin"></i> Loading...</div></div>
   </div>`;
   modal.style.display='flex';
+  window._sdStaffId=id;
   loadStaffDetail(id);
 }
 
 async function loadStaffDetail(staffId){
   const month=v('sd-month')?.value||tM();
-  const [yr,mo]=month.split('-').map(Number);
-  const daysInMo=new Date(yr,mo,0).getDate();
-  const monthStart=`${yr}-${String(mo).padStart(2,'0')}-01`;
-  const monthEnd=`${yr}-${String(mo).padStart(2,'0')}-${String(daysInMo).padStart(2,'0')}`;
+  const data=await apiCall('GET',`/staff/${staffId}/month-detail?month=${month}`);
+  if(!data)return;
+  window._sdData=data;
+  window._sdStaffId=staffId;
 
-  // Fetch staff info, their entries for month, attendance for month
-  const [staffList, attRows] = await Promise.all([
-    apiCall('GET','/staff'),
-    apiCall('GET',`/attendance?att_date=${monthStart}`)||[]
-  ]);
-  const s=staffList?.find(st=>st.id===staffId);if(!s)return;
-
-  // Fetch monthly entries for this staff
-  const entries=await apiCall('GET',`/entries?limit=500&month=${month}`)||[];
-  // Filter entries where this staff did services
-  const myEntries=[];
-  let totalRevenue=0;
-  entries.forEach(e=>{
-    const myItems=(e.items||[]).filter(it=>it.staff_id===staffId||it.staff_name===s.name);
-    if(myItems.length){
-      const myAmt=myItems.reduce((sum,it)=>sum+(it.line_total||0),0);
-      totalRevenue+=myAmt;
-      myEntries.push({...e, myItems, myAmt});
-    }
-  });
-
-  // Attendance for month
-  const attMonth=await apiCall('GET',`/attendance?att_date=${monthStart}&staff_id=${staffId}`)||[];
-
-  // Salary calculation
-  const perDay=(s.base_salary||0)/daysInMo;
-  const dp=s.monthly_days_present||s.days_present||0;
-  const halfDays=s.half_day_count||0;
-  const effectiveDays=dp>=halfDays?dp-(halfDays*0.5):dp+(halfDays*0.5);
-  const baseEarned=Math.round(perDay*Math.max(0,effectiveDays));
-  const morningPay=(s.morning_duty_count||0)*150;
-  const monthRev=s.monthly_revenue||totalRevenue||0;
-  const commPct=monthRev>=100000?0.03:0.02;
-  const commAmt=Math.round(monthRev*commPct);
-  const totalSalary=baseEarned+commAmt+morningPay;
-
+  const s=data.staff, sum=data.summary, days=data.days;
   const cols=['#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3'];
   const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
   const col=cols[staffId%cols.length];
@@ -3642,53 +3613,151 @@ async function loadStaffDetail(staffId){
   const content=v('sd-content');if(!content)return;
   content.innerHTML=`
   <!-- Header -->
-  <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px">
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding:14px;background:var(--bg);border-radius:10px">
     <div style="width:50px;height:50px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff">${ini}</div>
-    <div><div style="font-size:15px;font-weight:700">${s.name}</div><div style="font-size:11px;color:var(--ink3)">${s.role||'Staff'} • ₹${fmt(s.base_salary||0)}/month</div></div>
+    <div><div style="font-size:15px;font-weight:700">${s.name}</div><div style="font-size:11px;color:var(--ink3)">${s.role||'Staff'} • ₹${fmt(s.base_salary||0)}/month base</div></div>
   </div>
   <!-- Salary Summary -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
     <div style="background:#f0fff8;border:1px solid #b2dfdb;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Base Salary</div>
-      <div style="font-size:14px;font-weight:700;color:var(--emerald)">${fmt(baseEarned)}</div>
-      <div style="font-size:10px;color:var(--ink3)">${effectiveDays.toFixed(1)} days × ${fmt(Math.round(perDay))}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--emerald)">${fmt(sum.base_earned)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${sum.effective_days} days × ${fmt(sum.per_day_salary)}</div>
     </div>
     <div style="background:#f0f8ff;border:1px solid #bbdefb;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Commission</div>
-      <div style="font-size:14px;font-weight:700;color:var(--teal)">${fmt(commAmt)}</div>
-      <div style="font-size:10px;color:var(--ink3)">${commPct*100}% of ${fmt(monthRev)}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--teal)">${fmt(sum.commission_amt)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${(sum.commission_pct*100).toFixed(0)}% of ${fmt(sum.monthly_revenue)}</div>
     </div>
     <div style="background:#fffbf0;border:1px solid #ffe082;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Morning Duty</div>
-      <div style="font-size:14px;font-weight:700;color:var(--gold)">${fmt(morningPay)}</div>
-      <div style="font-size:10px;color:var(--ink3)">${s.morning_duty_count||0} days × ₹150</div>
+      <div style="font-size:14px;font-weight:700;color:var(--gold)">${fmt(sum.morning_duty_pay)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${sum.morning_duty_count} days × ₹150</div>
     </div>
-    <div style="background:var(--violet-l,#f5f0ff);border:1px solid #ce93d8;border-radius:8px;padding:10px;text-align:center">
+    <div style="background:#f5f0ff;border:1px solid #ce93d8;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Total Salary</div>
-      <div style="font-size:16px;font-weight:700;color:var(--violet)">${fmt(totalSalary)}</div>
-      <div style="font-size:10px;color:var(--ink3)">${month}</div>
+      <div style="font-size:16px;font-weight:700;color:var(--violet)">${fmt(sum.total_salary)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${data.month}</div>
     </div>
   </div>
-  <!-- Services this month -->
-  <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--ink)"><i class="fas fa-scissors" style="margin-right:6px;color:var(--teal)"></i>Services This Month (${myEntries.length} entries • ${fmt(totalRevenue)} total)</div>
-  ${myEntries.length?`
-  <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px">
-    <thead><tr style="background:var(--ink);color:#fff">
-      <th style="padding:6px 8px;text-align:left">Date</th>
-      <th style="padding:6px 8px;text-align:left">Client</th>
-      <th style="padding:6px 8px;text-align:left">Services</th>
-      <th style="padding:6px 8px;text-align:right">Amount</th>
-    </tr></thead>
-    <tbody>
-      ${myEntries.map(e=>`<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:5px 8px">${e.entry_date||''}</td>
-        <td style="padding:5px 8px">${e.client_name||''}</td>
-        <td style="padding:5px 8px;color:var(--ink3)">${e.myItems.map(it=>it.service_name).join(', ')}</td>
-        <td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.myAmt)}</td>
-      </tr>`).join('')}
-    </tbody>
-  </table>`:'<div style="text-align:center;color:var(--ink4);padding:16px;font-size:12px">No services recorded this month</div>'}
+  <!-- Attendance summary strip -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:11px">
+    <span style="background:#e8f5ee;color:var(--emerald);border-radius:20px;padding:3px 10px;font-weight:600">✓ ${sum.present_days} Present</span>
+    <span style="background:#fff8e7;color:var(--amber);border-radius:20px;padding:3px 10px;font-weight:600">½ ${sum.half_day_count} Half Day</span>
+    <span style="background:#e8f4ff;color:var(--teal);border-radius:20px;padding:3px 10px;font-weight:600">🌅 ${sum.morning_duty_count} Morning Duty</span>
+    <span style="background:#fff0f0;color:var(--rose);border-radius:20px;padding:3px 10px;font-weight:600">✗ ${data.days_in_month-sum.present_days} Absent</span>
+  </div>
+  <!-- Calendar -->
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--ink)"><i class="fas fa-calendar" style="margin-right:6px;color:var(--teal)"></i>Day-wise Attendance & Services (click any day to edit)</div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
+    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div style="text-align:center;font-size:9px;font-weight:600;color:var(--ink3);padding:3px">${d}</div>`).join('')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px">
+    ${(()=>{
+      const [yr,mo]=data.month.split('-').map(Number);
+      const firstDay=new Date(yr,mo-1,1).getDay();
+      let cells='';
+      for(let i=0;i<firstDay;i++)cells+=`<div style="min-height:54px"></div>`;
+      days.forEach(d=>{
+        const dayNum=parseInt(d.date.split('-')[2]);
+        const isToday=d.date===td();
+        let bg='var(--bg)',border='var(--border)';
+        if(d.is_present&&d.half_day){bg='#fffbe6';border='var(--gold)';}
+        else if(d.is_present){bg='#f0fff8';border='var(--emerald)';}
+        else if(d.date<=td()){bg='#fff5f5';border='#ffcdd2';}
+        cells+=`<div onclick="editAttDay('${d.date}')" style="min-height:54px;border-radius:6px;padding:4px;border:1.5px solid ${isToday?'var(--teal)':border};background:${bg};cursor:pointer;font-size:9px;position:relative" title="Click to edit">
+          <div style="font-weight:${isToday?'700':'600'};color:${isToday?'var(--teal)':'var(--ink)'}">${dayNum}</div>
+          ${d.is_present?`<div style="color:var(--emerald);font-size:8px">${d.half_day?'½ day':'✓'}${d.morning_duty?' 🌅':''}</div>`:(d.date<=td()?'<div style="color:var(--rose);font-size:8px">✗</div>':'')}
+          ${d.day_revenue>0?`<div style="color:var(--teal);font-weight:600;font-size:8px">${fmt(d.day_revenue)}</div>`:''}
+        </div>`;
+      });
+      return cells;
+    })()}
+  </div>
+  <!-- Services list -->
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--ink)"><i class="fas fa-scissors" style="margin-right:6px;color:var(--teal)"></i>All Services This Month (${fmt(sum.monthly_revenue)} total)</div>
+  ${(()=>{
+    const allSvcs=[];
+    days.forEach(d=>{(d.services||[]).forEach(s2=>allSvcs.push({...s2,date:d.date}));});
+    if(!allSvcs.length)return '<div style="text-align:center;color:var(--ink4);padding:16px;font-size:12px">No services recorded this month</div>';
+    return `<div style="max-height:220px;overflow-y:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:var(--ink);color:#fff;position:sticky;top:0">
+        <th style="padding:6px 8px;text-align:left">Date</th>
+        <th style="padding:6px 8px;text-align:left">Client</th>
+        <th style="padding:6px 8px;text-align:left">Service</th>
+        <th style="padding:6px 8px;text-align:right">Price</th>
+        <th style="padding:6px 8px;text-align:right">Qty</th>
+        <th style="padding:6px 8px;text-align:right">Total</th>
+      </tr></thead>
+      <tbody>
+        ${allSvcs.map(s2=>`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px">${s2.date}</td>
+          <td style="padding:5px 8px">${s2.client_name||''}</td>
+          <td style="padding:5px 8px;color:var(--ink3)">${s2.service_name||''}</td>
+          <td style="padding:5px 8px;text-align:right">${fmt(s2.price||0)}</td>
+          <td style="padding:5px 8px;text-align:right">${s2.qty||1}</td>
+          <td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(s2.line_total||0)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  })()}
   `;
+}
+
+// ── Edit a specific day's attendance from the staff detail calendar ──
+function editAttDay(dateStr){
+  const data=window._sdData;if(!data)return;
+  const d=data.days.find(x=>x.date===dateStr);if(!d)return;
+  const staffId=window._sdStaffId;
+  const modal=v('inv-modal');if(!modal)return;
+  const dLabel=new Date(dateStr+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="showStaffDetail(${staffId})"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:420px;max-width:95vw;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;color:var(--ink)"><i class="fas fa-edit" style="color:var(--teal);margin-right:8px"></i>Edit Attendance</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:16px">${dLabel}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;flex:1">Status</label>
+      <select id="ead-present" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;background:var(--surface)">
+        <option value="1" ${d.is_present?'selected':''}>Present</option>
+        <option value="0" ${!d.is_present?'selected':''}>Absent</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div style="flex:1"><label style="font-size:11px;color:var(--ink3)">In Time</label>
+        <input type="time" id="ead-in" value="${d.in_time||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+      <div style="flex:1"><label style="font-size:11px;color:var(--ink3)">Out Time</label>
+        <input type="time" id="ead-out" value="${d.out_time||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;font-size:12px">
+      <input type="checkbox" id="ead-half" ${d.half_day?'checked':''}> ½ Day (half salary for this day)
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px;cursor:pointer;font-size:12px">
+      <input type="checkbox" id="ead-morning" ${d.morning_duty?'checked':''}> 🌅 Morning Duty (+₹150)
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="showStaffDetail(${staffId})" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="saveAttDay('${dateStr}',${staffId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
+}
+
+async function saveAttDay(dateStr, staffId){
+  const isPresent=v('ead-present')?.value==='1';
+  const r=await apiCall('POST','/attendance/upsert',{
+    staff_id:staffId,
+    att_date:dateStr,
+    is_present:isPresent,
+    half_day:isPresent?(v('ead-half')?.checked||false):false,
+    morning_duty:isPresent?(v('ead-morning')?.checked||false):false,
+    in_time:isPresent?(v('ead-in')?.value||null):null,
+    out_time:isPresent?(v('ead-out')?.value||null):null
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Attendance corrected!','var(--emerald)');
+  showStaffDetail(staffId);
+  renderAtt();renderDashAtt();renderSalary();
 }
 
 async function editStaff(id){
@@ -3829,9 +3898,26 @@ async function updateStaffSels(){
 // ═══════════════════════════════════════════════════════════════
 // ATTENDANCE
 // ═══════════════════════════════════════════════════════════════
+function isAttendanceLocked(){
+  // Auto-lock daily attendance marking after 7:45 PM for TODAY only
+  const now=new Date();
+  const lockTime=new Date();
+  lockTime.setHours(19,45,0,0); // 7:45 PM
+  return now>=lockTime;
+}
+
 async function renderAtt(){
   const list=v('att-list');if(!list)return;
   await _renderAttList(list, true);  // admin view - full controls
+  // Show lock banner if past 7:45 PM
+  const banner=v('att-lock-banner');
+  if(banner){
+    if(isAttendanceLocked()){
+      banner.style.display='flex';
+    } else {
+      banner.style.display='none';
+    }
+  }
 }
 
 async function renderDashAtt(){
@@ -3987,6 +4073,7 @@ async function _renderAttList(container, showTimeInputs){
 
 
 async function togHalfDay(staffId, isHalf){
+  if(isAttendanceLocked()){toast('🔒 Attendance locked after 7:45 PM. Use Staff Detail to correct.','var(--amber)');renderAtt();return;}
   // Read current attendance from DB first to preserve ALL existing values
   const attRows=await apiCall('GET',`/attendance?att_date=${td()}`)||[];
   const cur=attRows.find(a=>a.staff_id===staffId)||{};
@@ -4005,6 +4092,7 @@ async function togHalfDay(staffId, isHalf){
 }
 
 async function togMorningDuty(staffId, isMorning){
+  if(isAttendanceLocked()){toast('🔒 Attendance locked after 7:45 PM. Use Staff Detail to correct.','var(--amber)');renderAtt();return;}
   // Read current attendance from DB first to preserve ALL existing values
   const attRows=await apiCall('GET',`/attendance?att_date=${td()}`)||[];
   const cur=attRows.find(a=>a.staff_id===staffId)||{};
@@ -4029,6 +4117,7 @@ async function saveAttTime(staffId){
 }
 function calcHours(id){const i=v(`att-in-${id}`)?.value,o=v(`att-out-${id}`)?.value;if(!i||!o)return;const[ih,im]=i.split(':').map(Number);const[oh,om]=o.split(':').map(Number);const m=(oh*60+om)-(ih*60+im);if(m>0){const el=v(`att-hrs-${id}`);if(el)el.textContent=(m/60).toFixed(1)+'h';}}
 async function togAtt(staffId,isPresent){
+  if(isAttendanceLocked()){toast('🔒 Attendance locked after 7:45 PM. Use Staff Detail to correct.','var(--amber)');renderAtt();return;}
   // Read current attendance from DB first to preserve ALL existing values
   const attRows=await apiCall('GET',`/attendance?att_date=${td()}`)||[];
   const cur=attRows.find(a=>a.staff_id===staffId)||{};
@@ -4419,12 +4508,26 @@ async function renderStaffPerfReport(){
   const tb=v('perf-tb');if(!tb)return;
   const rows=await apiCall('GET','/reports/staff-performance');if(!rows)return;
   if(!rows.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--ink4);padding:16px">No staff data</td></tr>';return;}
-  tb.innerHTML=rows.map(s=>`<tr>
+  tb.innerHTML=rows.map(s=>{
+    const daysInMo=s.days_in_month||30;
+    const perDay=(s.base_salary||0)/daysInMo;
+    const dp=s.present_days||0;
+    const halfDays=s.half_day_count||0;
+    const effDays=dp>=halfDays?dp-(halfDays*0.5):dp+(halfDays*0.5);
+    const baseEarned=Math.round(perDay*Math.max(0,effDays));
+    const morningPay=(s.morning_duty_count||0)*150;
+    const monthRev=s.monthly_revenue||0;
+    const commPct=monthRev>=100000?0.03:0.02;
+    const commAmt=Math.round(monthRev*commPct);
+    const totalSalary=baseEarned+commAmt+morningPay;
+    const tierTxt=monthRev>=100000?'3% (≥₹1L)':'2% (<₹1L)';
+    return `<tr>
     <td><b>${s.name}</b><br><small style="color:var(--ink3)">${s.role||''}</small></td>
-    <td style="text-align:center">${s.total_services||0}<br><small style="color:var(--ink3)">${s.present_days||0} days</small></td>
-    <td style="text-align:right">${fmt((s.comm_earned||0)*10)}</td>
-    <td style="text-align:right;font-weight:600;color:var(--emerald)">${fmt(s.comm_earned||0)}${s.comm_earned>=200000?'<br><small style="color:var(--emerald)">⭐ 2% tier</small>':''}</td>
-  </tr>`).join('');
+    <td style="text-align:center">${s.services_count||0}<br><small style="color:var(--ink3)">${dp} days${halfDays?` (½×${halfDays})`:''}</small></td>
+    <td style="text-align:right">${fmt(monthRev)}<br><small style="color:var(--ink3)">${tierTxt}</small></td>
+    <td style="text-align:right;font-weight:600;color:var(--emerald)">${fmt(totalSalary)}<br><small style="color:var(--ink3)">base ${fmt(baseEarned)} + comm ${fmt(commAmt)}${morningPay?` + ${fmt(morningPay)} morning`:''}</small></td>
+  </tr>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
