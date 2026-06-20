@@ -289,10 +289,17 @@ async def delete_entry(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
-    await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
-    await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
-    await db.commit()
-    return {"deleted": entry_id}
+    try:
+        await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
+        await db.commit()
+        await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
+        await db.commit()
+        return {"deleted": entry_id}
+    except Exception as e:
+        try: await db.rollback()
+        except Exception: pass
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
 @router.patch("/{entry_id}")
@@ -320,15 +327,14 @@ async def update_entry(
     # Update items if provided
     items = data.get('items')
     if items is not None:
-        # Delete existing items and re-insert (now includes staff assignment)
+        # Delete existing items and re-insert
         await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
         for it in items:
             await cursor.execute(
-                """INSERT INTO entry_items (entry_id, service_name, price, qty, staff_id, staff_name, line_total)
-                   VALUES (:1,:2,:3,:4,:5,:6,:7)""",
+                """INSERT INTO entry_items (entry_id, service_name, price, qty, line_total)
+                   VALUES (:1,:2,:3,:4,:5)""",
                 [entry_id, it.get('service_name',''), it.get('price',0),
-                 it.get('qty',1), it.get('staff_id'), it.get('staff_name'),
-                 it.get('line_total',0)]
+                 it.get('qty',1), it.get('line_total',0)]
             )
         # Update services string in main entry
         svc_str = ', '.join(it.get('service_name','') for it in items if it.get('service_name'))
