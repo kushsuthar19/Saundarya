@@ -750,10 +750,16 @@ table tbody tr:hover td{background:var(--bg2)}
 
   <!-- Schedule + Payment Split side by side -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
-    <div class="card"><div class="card-hd ink"><div class="card-hd-t"><i class="fas fa-calendar-day"></i>Today's Schedule</div></div>
+    <div class="card"><div class="card-hd ink"><div class="card-hd-t"><i class="fas fa-calendar-day"></i>Today's Schedule</div><button id="sched-collapse-btn" onclick="toggleCardCollapse('dash-list','sched-collapse-btn')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;margin-left:auto"><i class="fas fa-chevron-up"></i></button></div>
       <div class="card-body" id="dash-list" style="min-height:80px"></div></div>
-    <div class="card"><div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-chart-pie"></i>Today's Payment Split</div></div>
-      <div class="card-body"><div style="position:relative;height:150px"><canvas id="dashDonut"></canvas></div></div></div>
+    <div class="card"><div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-chart-pie"></i>Today's Payment Split <span data-admin="1" style="margin-left:8px"><button onclick="toggleDashPaySplitView()" id="dash-pay-toggle-btn" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:5px;padding:3px 9px;font-size:10px;cursor:pointer"><i class="fas fa-calendar-alt"></i> Calendar</button></span><button id="pay-collapse-btn" onclick="toggleCardCollapse('pay-split-body','pay-collapse-btn')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;margin-left:auto"><i class="fas fa-chevron-up"></i></button></div></div>
+      <div class="card-body" id="pay-split-body">
+        <div id="dash-pay-donut-view"><div style="position:relative;height:150px"><canvas id="dashDonut"></canvas></div></div>
+        <div id="dash-pay-cal-view" style="display:none">
+          <input type="month" id="dash-pay-cal-month" class="fsel" style="border:1px solid var(--border);border-radius:var(--r8);padding:6px 8px;font-size:11px;background:var(--surface);margin-bottom:8px" onchange="renderDashPaySplitCalendar()">
+          <div id="dash-pay-cal-grid" style="max-height:240px;overflow-y:auto"></div>
+        </div>
+      </div></div>
   </div>
 </div>
 
@@ -1324,9 +1330,9 @@ table tbody tr:hover td{background:var(--bg2)}
 
 <!-- ═══ CLIENTS ═══ -->
 <div id="sec-clients" class="sec">
-  <div class="ptitle"><i class="fas fa-users" style="color:var(--sky)"></i>Client CRM</div>
-  <div class="psub">Auto-populated from Daily Entry — full profiles, history & preferences</div>
-  <div class="nline sky"></div>
+  <div class="ptitle"><i class="fas fa-users" style="color:var(--sky)"></i>Client CRM<button id="clients-min-btn" onclick="toggleClientsInfoCollapse()" title="Minimize" style="margin-left:auto;background:var(--surface);border:1px solid var(--border);color:var(--ink3);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer"><i class="fas fa-chevron-up"></i></button></div>
+  <div class="psub" id="clients-psub">Auto-populated from Daily Entry — full profiles, history & preferences</div>
+  <div class="nline sky" id="clients-nline"></div>
   <div style="display:flex;gap:8px;margin-bottom:12px">
     <div class="sbar-wrap" style="flex:1"><i class="fas fa-search"></i><input type="text" placeholder="Search clients by name or phone..." oninput="renderClients(this.value)"></div>
     <button class="btn btn-sky btn-sm" onclick="toggleCF()"><i class="fas fa-plus"></i>Add Client</button>
@@ -1378,11 +1384,11 @@ table tbody tr:hover td{background:var(--bg2)}
       <div class="card"><div class="card-hd emerald"><div class="card-hd-t"><i class="fas fa-user-plus"></i>Add Staff Member</div></div><div class="card-body">
         <div class="fg">
           <div class="fl"><label>Name</label><input type="text" id="st-n"></div>
-          <div class="fl"><label>Role</label><select id="st-r"><option>Senior Artist</option><option>Junior Artist</option><option>Hair Specialist</option><option>Nail Technician</option><option>Receptionist</option><option>Manager</option></select></div>
+          <div class="fl"><label>Role</label><select id="st-r" onchange="toggleOwnerFields()"><option>Senior Artist</option><option>Junior Artist</option><option>Hair Specialist</option><option>Nail Technician</option><option>Receptionist</option><option>Manager</option><option>Owner</option></select></div>
           <div class="fl"><label>Phone</label><input type="tel" id="st-ph"></div>
           <div class="fl"><label>Join Date</label><input type="date" id="st-jd"></div>
-          <div class="fl"><label>Base Salary (₹/month)</label><input type="number" id="st-sal" placeholder="0"></div>
-          <div class="fl"><label>Commission %</label><input type="number" id="st-com" placeholder="10" min="0" max="100"></div>
+          <div class="fl" id="st-sal-wrap"><label>Base Salary (₹/month)</label><input type="number" id="st-sal" placeholder="0"></div>
+          <div class="fl" id="st-com-wrap"><label>Commission %</label><input type="number" id="st-com" placeholder="10" min="0" max="100"></div>
         </div>
         <div class="ar"><button class="btn btn-ghost" onclick="v('sf').style.display='none'">Cancel</button><button class="btn btn-emerald" onclick="saveStaff()"><i class="fas fa-save"></i>Save Staff</button></div>
       </div></div>
@@ -1399,8 +1405,8 @@ table tbody tr:hover td{background:var(--bg2)}
     </div>
     <!-- ATTENDANCE — unlockable separately -->
     <div class="card" style="margin-top:14px">
-      <div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-clipboard-check"></i>Attendance — <span id="att-lbl" style="opacity:0.7;font-weight:400;text-transform:none;letter-spacing:0;font-size:11px"></span></div></div>
-      <div class="card-body">
+      <div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-clipboard-check"></i>Attendance — <span id="att-lbl" style="opacity:0.7;font-weight:400;text-transform:none;letter-spacing:0;font-size:11px"></span></div><button id="att-collapse-btn" onclick="toggleCardCollapse('att-card-body','att-collapse-btn')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;margin-left:auto"><i class="fas fa-chevron-up"></i></button></div>
+      <div class="card-body" id="att-card-body">
         <div id="att-pw-gate" style="">
           <div style="text-align:center;padding:16px">
             <p style="font-size:12px;color:var(--ink4);margin-bottom:12px"><i class="fas fa-lock" style="color:var(--amber)"></i> Staff mark their own attendance here. Unlock with Attendance PIN:</p>
@@ -2494,9 +2500,20 @@ async function deleteAppt(id,name){
 }
 
 // Daily entry edit
+function eeStaffOpts(selectedId){
+  const list=_staffCache||[];
+  let opts='<option value="">— No staff —</option>';
+  for(let i=0;i<list.length;i++){
+    const sel=String(list[i].id)===String(selectedId)?' selected':'';
+    opts+='<option value="'+list[i].id+'"'+sel+'>'+list[i].name+'</option>';
+  }
+  return opts;
+}
+
 async function editEntry(id){
   const e=await apiCall('GET',`/entries/${id}`);
   if(!e)return;
+  if(!_staffCache||!_staffCache.length){await updateStaffSels();}
   const items=e.items||[];
   const modal=v('inv-modal');if(!modal)return;
 
@@ -2504,8 +2521,9 @@ async function editEntry(id){
   const svcRows=items.map((it,i)=>`
     <tr id="ee-row-${i}">
       <td><input value="${it.service_name||''}" id="ee-svc-${i}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
-      <td><input type="number" value="${it.price||0}" id="ee-price-${i}" oninput="eeCalc()" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
-      <td><input type="number" value="${it.qty||1}" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td><select id="ee-staff-${i}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)">${eeStaffOpts(it.staff_id)}</select></td>
+      <td><input type="number" value="${it.price||0}" id="ee-price-${i}" oninput="eeCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td><input type="number" value="${it.qty||1}" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:50px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
       <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${i}">${fmt((it.price||0)*(it.qty||1))}</td>
       <td><button onclick="eeRemoveRow(${i})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>
     </tr>`).join('');
@@ -2543,6 +2561,7 @@ async function editEntry(id){
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:var(--ink);color:#fff">
           <th style="padding:6px 8px;text-align:left">Service</th>
+          <th style="padding:6px 8px;text-align:left">Staff</th>
           <th style="padding:6px 8px;text-align:left">Price ₹</th>
           <th style="padding:6px 8px;text-align:left">Qty</th>
           <th style="padding:6px 8px;text-align:left">Total</th>
@@ -2594,8 +2613,9 @@ function eeAddRow(){
   tr.id=`ee-row-${i}`;
   tr.innerHTML=`
     <td><input value="" id="ee-svc-${i}" placeholder="Service name" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
-    <td><input type="number" value="0" id="ee-price-${i}" oninput="eeCalc()" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
-    <td><input type="number" value="1" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+    <td><select id="ee-staff-${i}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)">${eeStaffOpts(null)}</select></td>
+    <td><input type="number" value="0" id="ee-price-${i}" oninput="eeCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+    <td><input type="number" value="1" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:50px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
     <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${i}">₹0</td>
     <td><button onclick="this.closest('tr').remove();eeCalc()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>`;
   tbody.appendChild(tr);
@@ -2611,11 +2631,18 @@ async function saveEntryEdit(id){
   const tbody=document.getElementById('ee-svc-tbody');
   const items=[];
   tbody?.querySelectorAll('tr').forEach(tr=>{
-    const svcInputs=tr.querySelectorAll('input');
     const name=tr.querySelector('[id^="ee-svc-"]')?.value?.trim();
     const price=parseFloat(tr.querySelector('[id^="ee-price-"]')?.value)||0;
     const qty=parseInt(tr.querySelector('[id^="ee-qty-"]')?.value)||1;
-    if(name)items.push({service_name:name,price,qty,line_total:price*qty});
+    const staffSel=tr.querySelector('[id^="ee-staff-"]');
+    const staffId=staffSel&&staffSel.value?staffSel.value:null;
+    let staffName=null;
+    if(staffId&&_staffCache){
+      for(let k=0;k<_staffCache.length;k++){
+        if(String(_staffCache[k].id)===String(staffId)){staffName=_staffCache[k].name;break;}
+      }
+    }
+    if(name)items.push({service_name:name,price,qty,line_total:price*qty,staff_id:staffId?parseInt(staffId):null,staff_name:staffName});
   });
   const disc=parseFloat(v('ee-disc')?.value)||0;
   const gross=items.reduce((s,it)=>s+(it.price||0)*(it.qty||1),0);
@@ -3536,17 +3563,27 @@ function rmRow(btn){if(btn){btn.closest('tr').remove();sdBill();}}
 // ═══════════════════════════════════════════════════════════════
 // STAFF — No password gate, salary calculator only
 // ═══════════════════════════════════════════════════════════════
+function toggleOwnerFields(){
+  const isOwner=v('st-r')?.value==='Owner';
+  const salWrap=v('st-sal-wrap'),comWrap=v('st-com-wrap');
+  if(salWrap)salWrap.style.display=isOwner?'none':'';
+  if(comWrap)comWrap.style.display=isOwner?'none':'';
+}
+
 async function saveStaff(){
   const nm=v('st-n').value.trim();if(!nm){toast('Enter staff name','var(--rose)');return;}
+  const isOwner=v('st-r')?.value==='Owner';
   const r=await apiCall('POST','/staff',{
     name:nm,role:v('st-r').value||null,phone:v('st-ph').value||null,
-    join_date:v('st-jd').value||null,base_salary:parseFloat(v('st-sal').value)||0,
-    commission_pct:parseFloat(v('st-com').value)||10
+    join_date:v('st-jd').value||null,
+    base_salary:isOwner?0:(parseFloat(v('st-sal').value)||0),
+    commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10)
   });
   if(!r)return;
   toast('<i class="fas fa-user-plus" style="color:var(--emerald)"></i> Staff saved!','var(--emerald)');
   ['st-n','st-ph','st-jd','st-sal','st-com'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const sr=v('st-r');if(sr)sr.value='';
+  toggleOwnerFields();
   toggleSF();renderStaffGrid();updateStaffSels();
 }
 function toggleSF(){const f=v('sf');if(f)f.style.display=f.style.display==='none'?'block':'none';}
@@ -3560,17 +3597,28 @@ async function renderStaffGrid(){
     const c=cols[i%cols.length];
     const ini=s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
     const bonusBadge=s.comm_earned>=200000?'<span style="font-size:9px;background:#e8f5ee;color:var(--emerald);border-radius:4px;padding:2px 5px;margin-left:4px">⭐ 2% tier</span>':'';
+    const isOwner=s.role==='Owner';
+    let statsBlock;
+    if(isOwner){
+      statsBlock='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
+        +'<div><div style="font-size:14px;font-weight:600">'+(s.total_services||0)+'</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Services</div></div>'
+        +'<div><div style="font-size:14px;font-weight:600;color:var(--emerald)">'+fmt(s.monthly_revenue||s.comm_earned||0)+'</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Business (Month)</div></div>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--violet);margin-bottom:8px;font-weight:600"><i class="fas fa-crown"></i> Owner — No Salary</div>';
+    } else {
+      statsBlock='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">'
+        +'<div><div style="font-size:14px;font-weight:600">'+(s.total_services||0)+'</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Services</div></div>'
+        +'<div><div style="font-size:14px;font-weight:600">'+(s.monthly_days_present||s.days_present||0)+'</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Days</div></div>'
+        +'<div><div style="font-size:14px;font-weight:600">'+fmt(s.monthly_revenue||s.comm_earned||0)+'</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">This Month</div></div>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--ink3);margin-bottom:8px">'+fmt(s.base_salary||0)+'/month base'+bonusBadge+'</div>';
+    }
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r12);padding:16px;text-align:center">
       <div onclick="showStaffDetail(${s.id})" style="cursor:pointer">
         <div style="width:52px;height:52px;border-radius:50%;background:${c};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;margin:0 auto 10px">${ini}</div>
         <div style="font-size:13px;font-weight:600;color:var(--teal);text-decoration:underline dotted">${s.name}</div>
         <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">${s.role||'Staff'}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
-          <div><div style="font-size:14px;font-weight:600">${s.total_services||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Services</div></div>
-          <div><div style="font-size:14px;font-weight:600">${s.monthly_days_present||s.days_present||0}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">Days</div></div>
-          <div><div style="font-size:14px;font-weight:600">${fmt(s.monthly_revenue||s.comm_earned||0)}</div><div style="font-size:9px;color:var(--ink3);text-transform:uppercase">This Month</div></div>
-        </div>
-        <div style="font-size:10px;color:var(--ink3);margin-bottom:8px">${fmt(s.base_salary||0)}/month base${bonusBadge}</div>
+        ${statsBlock}
       </div>
       <div style="display:flex;gap:6px;justify-content:center">
         <button onclick="showStaffDetail(${s.id})" style="background:var(--violet);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px"><i class="fas fa-chart-bar"></i></button>
@@ -3580,6 +3628,23 @@ async function renderStaffGrid(){
     </div>`;
   }).join('');
   updateStaffSels();
+}
+
+function toggleCardCollapse(bodyId, btnId){
+  const body=v(bodyId);if(!body)return;
+  const btn=v(btnId);
+  const collapsed=body.style.display==='none';
+  body.style.display=collapsed?'':'none';
+  if(btn)btn.innerHTML=collapsed?'<i class="fas fa-chevron-up"></i>':'<i class="fas fa-chevron-down"></i>';
+}
+
+function toggleClientsInfoCollapse(){
+  const psub=v('clients-psub'),nline=v('clients-nline'),btn=v('clients-min-btn');
+  if(!psub)return;
+  const collapsed=psub.style.display==='none';
+  psub.style.display=collapsed?'':'none';
+  if(nline)nline.style.display=collapsed?'':'none';
+  if(btn)btn.innerHTML=collapsed?'<i class="fas fa-chevron-up"></i>':'<i class="fas fa-chevron-down"></i>';
 }
 
 async function showStaffDetail(id){
@@ -3770,6 +3835,7 @@ async function editStaff(id){
   v('st-jd').value=s.join_date||'';
   v('st-sal').value=s.base_salary||0;
   v('st-com').value=s.commission_pct||10;
+  toggleOwnerFields();
   // Show form
   const sf=v('sf');if(sf)sf.style.display='block';
   // Change button to Update
@@ -3780,12 +3846,13 @@ async function editStaff(id){
 
 async function updateStaff(id){
   const nm=v('st-n').value.trim();if(!nm){toast('Enter staff name','var(--rose)');return;}
+  const isOwner=v('st-r')?.value==='Owner';
   const r=await apiCall('PUT',`/staff/${id}`,{
     name:nm, role:v('st-r').value||null,
     phone:v('st-ph').value||null,
     join_date:v('st-jd').value||null,
-    base_salary:parseFloat(v('st-sal').value)||0,
-    commission_pct:parseFloat(v('st-com').value)||10
+    base_salary:isOwner?0:(parseFloat(v('st-sal').value)||0),
+    commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10)
   });
   if(!r)return;
   toast('<i class="fas fa-check"></i> Staff updated!','var(--emerald)');
@@ -3806,7 +3873,8 @@ async function deleteStaff(id,name){
 async function renderSalary(){
   const tb=v('sal-tbody');if(!tb)return;
   tb.innerHTML='<tr><td colspan="11" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
-  const rows=await apiCall('GET','/staff');
+  const rowsRaw=await apiCall('GET','/staff');
+  const rows=rowsRaw?rowsRaw.filter(s=>s.role!=='Owner'):rowsRaw;
   if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
   if(!rows.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
   const month=v('sal-month')?.value||tM();
@@ -4206,6 +4274,56 @@ async function updateDashPaymentSplit(){
   </div>`;
 }
 
+function toggleDashPaySplitView(){
+  if(_role!=='admin')return;
+  const donutV=v('dash-pay-donut-view'),calV=v('dash-pay-cal-view'),btn=v('dash-pay-toggle-btn');
+  const showingCal=calV&&calV.style.display!=='none';
+  if(showingCal){
+    calV.style.display='none';donutV.style.display='block';
+    if(btn)btn.innerHTML='<i class="fas fa-calendar-alt"></i> Calendar';
+  } else {
+    donutV.style.display='none';calV.style.display='block';
+    if(btn)btn.innerHTML='<i class="fas fa-chart-pie"></i> Today';
+    const mEl=v('dash-pay-cal-month');
+    if(mEl&&!mEl.value)mEl.value=tM();
+    renderDashPaySplitCalendar();
+  }
+}
+
+async function renderDashPaySplitCalendar(){
+  if(_role!=='admin')return;
+  const monthVal=v('dash-pay-cal-month')?.value||tM();
+  const grid=v('dash-pay-cal-grid');if(!grid)return;
+  grid.innerHTML='<div style="color:var(--ink3);padding:10px;font-size:11px"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+  const rows=await apiCall('GET',`/revenue/daily?x=1&month=${monthVal}`);
+  if(!rows){grid.innerHTML='<div style="color:var(--rose);padding:10px;font-size:11px">Failed to load</div>';return;}
+  const dayMap={};
+  rows.forEach(r=>{
+    const d=String(r.entry_date||'').substring(0,10);
+    if(!dayMap[d])dayMap[d]={cash:0,upi:0,card:0};
+    const amt=r.net_total||0;
+    if(r.pay_method==='Cash')dayMap[d].cash+=amt;
+    else if(r.pay_method==='UPI'||r.pay_method==='GPay')dayMap[d].upi+=amt;
+    else if(r.pay_method==='Card')dayMap[d].card+=amt;
+    else if(r.pay_method==='Split'){dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;}
+  });
+  const days=Object.keys(dayMap).sort().reverse();
+  if(!days.length){grid.innerHTML='<div style="color:var(--ink4);padding:10px;font-size:11px;text-align:center">No payments this month</div>';return;}
+  grid.innerHTML=days.map(d=>{
+    const dd=dayMap[d];
+    const dLabel=new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 4px;border-bottom:1px solid var(--border);font-size:10px">
+      <div style="width:46px;font-weight:600;color:var(--ink)">${dLabel}</div>
+      <div style="flex:1;display:flex;gap:8px">
+        <span style="color:#4CAF50">💵${fmt(dd.cash)}</span>
+        <span style="color:#2196F3">📱${fmt(dd.upi)}</span>
+        <span style="color:#9C27B0">💳${fmt(dd.card)}</span>
+      </div>
+      <div style="font-weight:700;color:var(--emerald)">${fmt(dd.cash+dd.upi+dd.card)}</div>
+    </div>`;
+  }).join('');
+}
+
 function dateDash(){const el=v('d-date');if(el)el.textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}
 
 // ═══════════════════════════════════════════════════════════════
@@ -4383,11 +4501,14 @@ async function renderRevCalendar(){
   const dayMap={};
   rows.forEach(r=>{
     const d=String(r.entry_date||'').substring(0,10);
-    if(!dayMap[d])dayMap[d]={total:0,count:0,cash:0,upi:0};
-    dayMap[d].total+=(r.net_total||0);
+    if(!dayMap[d])dayMap[d]={total:0,count:0,cash:0,upi:0,card:0};
+    const amt=r.net_total||0;
+    dayMap[d].total+=amt;
     dayMap[d].count+=1;
-    if(r.pay_method==='Cash')dayMap[d].cash+=(r.net_total||0);
-    else dayMap[d].upi+=(r.net_total||0);
+    if(r.pay_method==='Cash')dayMap[d].cash+=amt;
+    else if(r.pay_method==='UPI'||r.pay_method==='GPay')dayMap[d].upi+=amt;
+    else if(r.pay_method==='Card')dayMap[d].card+=amt;
+    else if(r.pay_method==='Split'){dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;}
   });
 
   // Build calendar
@@ -4420,10 +4541,15 @@ async function renderRevCalendar(){
     const data=dayMap[dateStr];
     const isToday=dateStr===td();
     const hasSales=data&&data.total>0;
-    calHtml+=`<div style="min-height:60px;border-radius:6px;padding:6px;border:1px solid ${isToday?'var(--teal)':hasSales?'var(--border)':'var(--border)'};background:${isToday?'rgba(0,184,148,0.08)':hasSales?'var(--surface)':'var(--bg)'};cursor:${hasSales?'pointer':'default'}" ${hasSales?`onclick="v('rv-df').value='${dateStr}';v('rv-mf').value='';revTab(document.querySelector('.rev-tab'),'daily');renderRevDaily()"`:''}  title="${dateStr}">
+    const titleTxt=hasSales?`${dateStr} — Cash:₹${Math.round(data.cash)} UPI:₹${Math.round(data.upi)} Card:₹${Math.round(data.card)}`:dateStr;
+    calHtml+=`<div style="min-height:68px;border-radius:6px;padding:6px;border:1px solid ${isToday?'var(--teal)':hasSales?'var(--border)':'var(--border)'};background:${isToday?'rgba(0,184,148,0.08)':hasSales?'var(--surface)':'var(--bg)'};cursor:${hasSales?'pointer':'default'}" ${hasSales?`onclick="v('rv-df').value='${dateStr}';v('rv-mf').value='';revTab(document.querySelector('.rev-tab'),'daily');renderRevDaily()"`:''}  title="${titleTxt}">
       <div style="font-size:11px;font-weight:${isToday?'700':'600'};color:${isToday?'var(--teal)':'var(--ink)'};">${day}</div>
       ${hasSales?`<div style="font-size:10px;color:var(--emerald);font-weight:600;margin-top:2px">${fmt(data.total)}</div>
-      <div style="font-size:9px;color:var(--ink3)">${data.count} entry${data.count>1?'s':''}</div>`:''}
+      <div style="font-size:8px;color:var(--ink3);display:flex;gap:4px;flex-wrap:wrap">
+        ${data.cash>0?`<span style="color:#4CAF50">💵${Math.round(data.cash)}</span>`:''}
+        ${data.upi>0?`<span style="color:#2196F3">📱${Math.round(data.upi)}</span>`:''}
+        ${data.card>0?`<span style="color:#9C27B0">💳${Math.round(data.card)}</span>`:''}
+      </div>`:''}
     </div>`;
   }
   calHtml+='</div>';
