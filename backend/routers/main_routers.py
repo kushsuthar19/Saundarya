@@ -1202,3 +1202,89 @@ async def list_services(
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
     return [dict(zip(cols, r)) for r in rows]
+
+
+# ════════════════════════════════════════════════
+# INQUIRY ROUTER
+# ════════════════════════════════════════════════
+
+inquiry_router = APIRouter(prefix="/inquiries", tags=["inquiries"])
+
+@inquiry_router.get("")
+async def list_inquiries(
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    sql = """SELECT id, name, phone, service, event_date, budget, source,
+                    status, notes, created_at
+             FROM inquiries WHERE 1=1"""
+    params = []
+    if search:
+        sql += " AND (LOWER(name) LIKE :1 OR phone LIKE :2)"
+        params += [f"%{search.lower()}%", f"%{search}%"]
+    if status:
+        sql += f" AND status=:{len(params)+1}"
+        params.append(status)
+    sql += " ORDER BY created_at DESC"
+    await cursor.execute(sql, params)
+    rows = await cursor.fetchall()
+    cols = [d[0].lower() for d in cursor.description]
+    return [dict(zip(cols, r)) for r in rows]
+
+@inquiry_router.post("")
+async def create_inquiry(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        """INSERT INTO inquiries (name, phone, service, event_date, budget, source, status, notes)
+           VALUES (:1, :2, :3, TO_DATE(:4,'YYYY-MM-DD'), :5, :6, :7, :8)""",
+        [data.get('name'), data.get('phone'), data.get('service'),
+         data.get('date') or None, data.get('budget') or 0,
+         data.get('source','Walk-in'), data.get('status','New'), data.get('notes')]
+    )
+    await db.commit()
+    return {"created": True}
+
+@inquiry_router.put("/{inquiry_id}")
+async def update_inquiry(
+    inquiry_id: int,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    fields, values = [], []
+    allowed = ['name','phone','service','budget','source','status','notes']
+    for k, v2 in data.items():
+        if k in allowed:
+            fields.append(f"{k}=:{len(values)+1}")
+            values.append(v2)
+    if data.get('date'):
+        fields.append(f"event_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+        values.append(data['date'])
+    if not fields:
+        return {"error": "No valid fields"}
+    values.append(inquiry_id)
+    await cursor.execute(
+        f"UPDATE inquiries SET {','.join(fields)},updated_at=SYSTIMESTAMP WHERE id=:{len(values)}",
+        values
+    )
+    await db.commit()
+    return {"updated": inquiry_id}
+
+@inquiry_router.delete("/{inquiry_id}")
+async def delete_inquiry(
+    inquiry_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute("DELETE FROM inquiries WHERE id=:1", [inquiry_id])
+    await db.commit()
+    return {"deleted": inquiry_id}

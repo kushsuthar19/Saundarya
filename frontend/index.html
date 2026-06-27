@@ -686,6 +686,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <button class="nb nc-violet" data-sec="bridal" onclick="go(this,'bridal')"><i class="fas fa-gem nb-ico"></i>Bridal</button>
     <button class="nb nc-teal" data-sec="daily" onclick="go(this,'daily')"><i class="fas fa-pen-ruler nb-ico"></i>Daily Entry</button>
     <button class="nb nc-sky" data-sec="clients" onclick="go(this,'clients')"><i class="fas fa-users nb-ico"></i>Clients</button>
+    <button class="nb nc-emerald" data-sec="inquiry" onclick="go(this,'inquiry')"><i class="fas fa-phone-alt nb-ico"></i>Inquiry</button>
     <button class="nb nc-emerald" data-sec="staff" onclick="go(this,'staff')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Staff</button>
     <button class="nb nc-amber" data-sec="revenue" onclick="go(this,'revenue')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Revenue</button>
     <button class="nb nc-gold" data-sec="reports" onclick="go(this,'reports')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Reports</button>
@@ -1003,8 +1004,28 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Transport (₹)</label><input type="number" id="br-tr" placeholder="0" oninput="brBill()"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="br-di" placeholder="0" oninput="brBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="br-ad" placeholder="0" oninput="brBill()"></div>
+        <div class="fl"><label>Payment Method</label>
+          <select id="br-pay-method" onchange="toggleBridalSplit('br')" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px">
+            <option>Cash</option><option>GPay/UPI</option><option>Card</option><option>Split</option>
+          </select>
+        </div>
+        <div id="br-split-wrap" style="display:none;grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:8px">Split Advance Payment</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div><label style="font-size:10px;color:var(--ink3)">Cash ₹</label><br><input type="number" id="br-split-cash" placeholder="0" oninput="calcBridalSplit('br')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div><label style="font-size:10px;color:var(--ink3)">GPay/UPI ₹</label><br><input type="number" id="br-split-upi" placeholder="0" oninput="calcBridalSplit('br')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div><label style="font-size:10px;color:var(--ink3)">Card ₹</label><br><input type="number" id="br-split-card" placeholder="0" oninput="calcBridalSplit('br')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:4px"><span id="br-split-total" style="font-size:11px;font-weight:600;color:var(--teal)">₹0</span></div>
+          </div>
+        </div>
       </div>
-      <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="bb-p">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="bb-t">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="bb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="bb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="bb-due">₹0</span></div></div>
+      <!-- Add-on services (e.g. Sider package for Sangeet) -->
+      <div style="margin-bottom:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px"><i class="fas fa-plus-circle" style="color:var(--teal)"></i> Add-on Services (optional)</div>
+        <div id="bride-addons-list"></div>
+        <button onclick="addBrideAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal)"><i class="fas fa-plus"></i> Add Service / Package</button>
+      </div>
+      <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="bb-p">₹0</span></div><div class="bill-row"><span class="bl">Add-ons</span><span class="br" id="bb-addons">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="bb-t">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="bb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="bb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="bb-due">₹0</span></div></div>
       <div class="ar">
         <button class="btn btn-ghost" onclick="clearBridal()"><i class="fas fa-times"></i>Clear</button>
         <button class="btn btn-violet" onclick="saveBridal('bride')"><i class="fas fa-save"></i>Save Booking</button>
@@ -1066,8 +1087,17 @@ table tbody tr:hover td{background:var(--bg2)}
       </table></div>
       <div style="background:var(--amber-l);border:1px solid var(--amber-b);border-radius:var(--r8);padding:9px 12px;font-size:10.5px;color:var(--amber);margin-top:12px"><i class="fas fa-info-circle"></i> <strong>NOTE:</strong> We do not provide haircut, beard services or any salon services. We only provide makeup, hairstyling & draping for your special functions.</div>
       <div class="fl" style="margin-top:14px"><label>Selected Package</label><input type="text" id="gr-pkg-sel" readonly placeholder="Select a package above" style="background:var(--gold-l);font-weight:600;color:var(--gold)"></div>
-      <div class="ow" style="margin-top:12px"><table class="ptable"><thead><tr><th>Function</th><th>Date</th><th>Timing</th><th>Artist</th><th>Notes</th></tr></thead>
-        <tbody id="gr-fb"><tr><td><select style="width:100%"><option>Wedding Day</option><option>Reception</option><option>Engagement</option><option>Sangeet</option><option>Haldi</option><option>Ring Ceremony</option><option>Other Function</option></select></td><td><input type="date" style="width:100%"></td><td><input type="time" style="width:80px"></td><td><input type="text" placeholder="Notes" style="width:100%"></td><td><select style="width:100%;font-size:11px" id="gr-fb-staff-0"><option value="">— Assign Staff —</option></select></td><td><input type="number" placeholder="Staff fee ₹" style="width:90px" min="0"></td></tr></tbody>
+      <div class="ow" style="margin-top:12px"><table class="ptable"><thead><tr><th>Function</th><th>Package</th><th>Amount ₹</th><th>Date</th><th>Timing</th><th>Notes</th><th>Staff</th><th>Staff Fee</th><th></th></tr></thead>
+        <tbody id="gr-fb"><tr>
+  <td><select style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px"><option>Wedding Day</option><option>Reception</option><option>Engagement</option><option>Sangeet</option><option>Haldi</option><option>Ring Ceremony</option><option>Other Function</option></select></td>
+  <td><select style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px" onchange="grFuncPkgChange(this)"><option value="">Select Package</option><option value="3500">Basic Groom (₹3,500)</option><option value="6000">Advance Groom (₹6,000)</option><option value="8000">Premium Groom (₹8,000)</option><option value="0">Custom</option></select></td>
+  <td><input type="number" placeholder="₹" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" oninput="grBillFuncs()"></td>
+  <td><input type="date" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+  <td><input type="time" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+  <td><input type="text" placeholder="Notes" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+  <td><select style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:4px" id="gr-fb-staff-0"><option value="">— Assign Staff —</option></select></td>
+  <td><input type="number" placeholder="Staff fee ₹" style="width:90px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" min="0"></td>
+</tr></tbody>
       </table></div>
       <button class="add-r" onclick="addGrFuncRow()"><i class="fas fa-plus"></i>Add Function</button>
     </div></div>
@@ -1077,6 +1107,20 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Transport (₹)</label><input type="number" id="gr-tr" placeholder="0" oninput="grBill()"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="gr-di" placeholder="0" oninput="grBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="gr-ad" placeholder="0" oninput="grBill()"></div>
+        <div class="fl"><label>Payment Method</label>
+          <select id="gr-pay-method" onchange="toggleBridalSplit('gr')" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px">
+            <option>Cash</option><option>GPay/UPI</option><option>Card</option><option>Split</option>
+          </select>
+        </div>
+        <div id="gr-split-wrap" style="display:none;grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:8px">Split Advance Payment</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div><label style="font-size:10px;color:var(--ink3)">Cash ₹</label><br><input type="number" id="gr-split-cash" placeholder="0" oninput="calcBridalSplit('gr')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div><label style="font-size:10px;color:var(--ink3)">GPay/UPI ₹</label><br><input type="number" id="gr-split-upi" placeholder="0" oninput="calcBridalSplit('gr')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div><label style="font-size:10px;color:var(--ink3)">Card ₹</label><br><input type="number" id="gr-split-card" placeholder="0" oninput="calcBridalSplit('gr')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:4px"><span id="gr-split-total" style="font-size:11px;font-weight:600;color:var(--teal)">₹0</span></div>
+          </div>
+        </div>
       </div>
       <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="gb-t">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="gb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="gb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="gb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="gb-due">₹0</span></div></div>
       <div class="ar">
@@ -1578,6 +1622,66 @@ table tbody tr:hover td{background:var(--bg2)}
 
 </div><!-- end page-body -->
 
+<!-- ═══ INQUIRY ═══ -->
+<div id="sec-inquiry" class="sec">
+  <div class="ptitle"><i class="fas fa-phone-alt" style="color:var(--emerald)"></i>Inquiry</div>
+  <div class="psub">Track potential clients — store inquiry details and follow up via WhatsApp</div>
+  <div class="nline emerald"></div>
+  <!-- Add Inquiry Form -->
+  <div id="inq-form" style="display:none;margin-bottom:16px">
+    <div class="card"><div class="card-hd emerald"><div class="card-hd-t"><i class="fas fa-plus"></i>New Inquiry</div></div>
+    <div class="card-body">
+      <div class="fg">
+        <div class="fl"><label>Name *</label><input type="text" id="inq-name" placeholder="Client name"></div>
+        <div class="fl"><label>Phone *</label><input type="tel" id="inq-phone" placeholder="WhatsApp number"></div>
+        <div class="fl"><label>Service Interested</label>
+          <select id="inq-service">
+            <option value="">Select service</option>
+            <option>Bridal Makeup</option>
+            <option>Party Makeup</option>
+            <option>Hair</option>
+            <option>Skin Treatment</option>
+            <option>Nail Art</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="fl"><label>Event Date</label><input type="date" id="inq-date"></div>
+        <div class="fl"><label>Budget (₹)</label><input type="number" id="inq-budget" placeholder="0"></div>
+        <div class="fl"><label>Source</label>
+          <select id="inq-source">
+            <option>Walk-in</option><option>Instagram</option><option>WhatsApp</option><option>Reference</option><option>Google</option><option>Other</option>
+          </select>
+        </div>
+        <div class="fl" style="grid-column:1/-1"><label>Notes</label><input type="text" id="inq-notes" placeholder="Any details..."></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-emerald" onclick="saveInquiry()"><i class="fas fa-save"></i>Save Inquiry</button>
+        <button class="btn btn-ghost" onclick="v('inq-form').style.display='none'">Cancel</button>
+      </div>
+    </div></div>
+  </div>
+  <!-- Filters + Add button -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <div class="sbar-wrap" style="flex:1"><i class="fas fa-search"></i><input type="text" placeholder="Search by name or phone..." oninput="renderInquiries(this.value)"></div>
+    <select id="inq-status-filter" onchange="renderInquiries('')" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px;font-size:12px;background:var(--surface)">
+      <option value="">All Status</option>
+      <option value="New">New</option>
+      <option value="Followed Up">Followed Up</option>
+      <option value="Converted">Converted</option>
+      <option value="Not Interested">Not Interested</option>
+    </select>
+    <button class="btn btn-emerald btn-sm" onclick="v('inq-form').style.display='block'"><i class="fas fa-plus"></i>Add Inquiry</button>
+  </div>
+  <!-- Inquiry List -->
+  <div class="tbl-wrap">
+    <div class="ow"><table><thead><tr>
+      <th>Name</th><th>Phone</th><th>Service</th><th>Event Date</th><th>Budget</th><th>Source</th><th>Status</th><th>Notes</th><th>Actions</th>
+    </tr></thead>
+    <tbody id="inq-tbody"><tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:20px">No inquiries yet</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
 <!-- ═══ INVOICE MODAL ═══ -->
 <div class="modal-ov" id="inv-modal">
   <div class="modal-box"><button class="modal-close" onclick="closeInvModal()"><i class="fas fa-times"></i></button><div id="inv-modal-content"></div></div>
@@ -1743,7 +1847,7 @@ function toggleDark(){
 // ════════════════════════════════
 // NAV & BREADCRUMB
 // ════════════════════════════════
-const PAGE_NAMES={dash:"Dashboard",appt:"Appointments",bridal:"Bridal Management",daily:"Daily Entry",clients:"Client CRM",staff:"Staff Management",revenue:"Revenue",reports:"Reports & Analytics"};
+const PAGE_NAMES={dash:"Dashboard",appt:"Appointments",bridal:"Bridal Management",daily:"Daily Entry",clients:"Client CRM",inquiry:"Inquiry",staff:"Staff Management",revenue:"Revenue",reports:"Reports & Analytics"};
 
 function go(btn,id){
   document.querySelectorAll(".sec").forEach(s=>s.classList.remove("on"));
@@ -1760,6 +1864,7 @@ function go(btn,id){
   if(id==="appt")renderApptTbl();
   if(id==="daily"){renderDailyView();updateStaffSels();}
   if(id==="clients")renderClients('');
+  if(id==="inquiry")renderInquiries('');
 }
 
 function goPw(btn,id){
@@ -2948,14 +3053,63 @@ async function downloadBatchPdf(){
 // ═══════════════════════════════════════════════════════════════
 // BRIDAL — Bride/Groom/Sider, no assign artist
 // ═══════════════════════════════════════════════════════════════
+function toggleBridalSplit(prefix){
+  const method=v(prefix+'-pay-method')?.value;
+  const wrap=v(prefix+'-split-wrap');
+  if(wrap)wrap.style.display=method==='Split'?'block':'none';
+}
+
+function calcBridalSplit(prefix){
+  const cash=parseFloat(v(prefix+'-split-cash')?.value||0);
+  const upi=parseFloat(v(prefix+'-split-upi')?.value||0);
+  const card=parseFloat(v(prefix+'-split-card')?.value||0);
+  const total=cash+upi+card;
+  const el=v(prefix+'-split-total');if(el)el.textContent=fmt(total);
+  // Auto-fill advance with split total
+  const adv=v(prefix+'-ad');if(adv&&total>0){adv.value=total;adv.dispatchEvent(new Event('input'));}
+}
+
 function brBill(){
   const pa=parseFloat(v('br-pa')?.value)||0,tr=parseFloat(v('br-tr')?.value)||0;
   const di=parseFloat(v('br-di')?.value)||0,ad=parseFloat(v('br-ad')?.value)||0;
-  const due=Math.max(0,pa+tr-di-ad);
-  document.querySelectorAll('#bt-bride .bill-row').forEach((row,i)=>{
-    const span=row.querySelector('.br');if(!span)return;
-    [fmt(pa),fmt(tr),'—'+fmt(di),fmt(ad),fmt(due)][i]!==undefined&&(span.textContent=[fmt(pa),fmt(tr),'—'+fmt(di),fmt(ad),fmt(due)][i]);
-  });
+  // Sum add-ons
+  let addons=0;
+  document.querySelectorAll('#bride-addons-list .bride-addon-amt').forEach(inp=>{addons+=parseFloat(inp.value)||0;});
+  const due=Math.max(0,pa+addons+tr-di-ad);
+  const pEl=v('bb-p');if(pEl)pEl.textContent=fmt(pa);
+  const aEl=v('bb-addons');if(aEl)aEl.textContent=fmt(addons);
+  const tEl=v('bb-t');if(tEl)tEl.textContent=fmt(tr);
+  const dEl=v('bb-d');if(dEl)dEl.textContent='—'+fmt(di);
+  const adEl=v('bb-a');if(adEl)adEl.textContent=fmt(ad);
+  const dueEl=v('bb-due');if(dueEl)dueEl.textContent=fmt(due);
+}
+
+function addBrideAddon(){
+  const list=v('bride-addons-list');if(!list)return;
+  const idx=list.querySelectorAll('.bride-addon-row').length;
+  const row=document.createElement('div');
+  row.className='bride-addon-row';
+  row.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML=`
+    <select style="flex:1;border:1px solid var(--border);border-radius:5px;padding:5px 6px;font-size:11px;background:var(--surface)" onchange="brideAddonSelect(this)">
+      <option value="">Select add-on type</option>
+      <option value="8000">Sider Package — Sangeet (₹8,000)</option>
+      <option value="6000">Sider Package — Reception (₹6,000)</option>
+      <option value="5000">Sider Package — Engagement (₹5,000)</option>
+      <option value="3500">Sider Package — Basic (₹3,500)</option>
+      <option value="0">Custom Amount</option>
+    </select>
+    <input type="number" placeholder="₹" class="bride-addon-amt" style="width:90px;border:1px solid var(--border);border-radius:5px;padding:5px;font-size:11px" oninput="brBill()">
+    <input type="text" placeholder="Description" style="flex:1;border:1px solid var(--border);border-radius:5px;padding:5px;font-size:11px">
+    <button onclick="this.closest('.bride-addon-row').remove();brBill()" style="background:none;border:none;color:var(--rose);font-size:18px;cursor:pointer">×</button>`;
+  list.appendChild(row);
+}
+
+function brideAddonSelect(sel){
+  const val=parseFloat(sel.value)||0;
+  const amtInp=sel.closest('.bride-addon-row')?.querySelector('.bride-addon-amt');
+  if(amtInp&&val>0)amtInp.value=val;
+  brBill();
 }
 function brPkgChange(){
   const sel=v('br-pkg');if(!sel)return;
@@ -3488,9 +3642,37 @@ function selGroomPkg(el,pkgName,price){
 }
 function addGrFuncRow(){
   const tb=v('gr-fb');if(!tb)return;
+  const idx=tb.querySelectorAll('tr').length;
+  const staffOpts=getStaffOpts();
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><select style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px"><option>Wedding Day</option><option>Reception</option><option>Engagement</option><option>Sangeet</option><option>Haldi</option><option>Ring Ceremony</option><option>Other Function</option></select></td><td><input type="date" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td><td><input type="time" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td><td><input type="text" placeholder="Notes" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td><td><button onclick="this.closest('tr').remove()" style="background:none;border:none;color:var(--rose);font-size:18px;cursor:pointer">×</button></td>`;
+  tr.innerHTML=`<td><select style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px"><option>Wedding Day</option><option>Reception</option><option>Engagement</option><option>Sangeet</option><option>Haldi</option><option>Ring Ceremony</option><option>Other Function</option></select></td>
+    <td><select style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px" onchange="grFuncPkgChange(this)"><option value="">Select Package</option><option value="3500">Basic Groom (₹3,500)</option><option value="6000">Advance Groom (₹6,000)</option><option value="8000">Premium Groom (₹8,000)</option><option value="0">Custom</option></select></td>
+    <td><input type="number" placeholder="₹" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" oninput="grBillFuncs()"></td>
+    <td><input type="date" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input type="time" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><select style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:4px" id="gr-fb-staff-${idx}">${staffOpts}</select></td>
+    <td><input type="number" placeholder="Staff fee ₹" style="width:90px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px" min="0"></td>
+    <td><button onclick="this.closest('tr').remove();grBillFuncs()" style="background:none;border:none;color:var(--rose);font-size:18px;cursor:pointer">×</button></td>`;
   tb.appendChild(tr);
+}
+
+function grFuncPkgChange(sel){
+  const val=parseFloat(sel.value)||0;
+  const priceInput=sel.closest('tr')?.querySelector('input[type="number"]');
+  if(priceInput&&val>0)priceInput.value=val;
+  grBillFuncs();
+}
+
+function grBillFuncs(){
+  // Sum all function package amounts for total
+  let total=0;
+  v('gr-fb')?.querySelectorAll('tr').forEach(tr=>{
+    const inp=tr.querySelector('input[type="number"]');
+    total+=parseFloat(inp?.value||0);
+  });
+  const pa=v('gr-pa');
+  if(pa){pa.value=total;pa.dispatchEvent(new Event('input'));}
+  grBill();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3955,10 +4137,15 @@ async function updateStaffSels(){
   ['a-staff'].forEach(id=>{const el=v(id);if(el){const cur=el.value;el.innerHTML=opts;el.value=cur;}});
   // Daily entry staff
   if(selectedSvcs.length)renderSelSvcs();
-  // Populate ALL staff selects in bridal/groom/sider forms
+  // Populate ONLY staff selects (not package dropdowns) in bridal/groom/sider forms
   const bridalOpts='<option value="">— Assign Staff —</option>'+rows.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-  document.querySelectorAll('#gr-fb select, #sd-body select[id^="sd-staff"], #sd-body select:not([onchange])').forEach(sel=>{
-    sel.innerHTML=bridalOpts;
+  // Groom: only selects with id starting with gr-fb-staff-
+  document.querySelectorAll('[id^="gr-fb-staff-"]').forEach(sel=>{
+    const cur=sel.value;sel.innerHTML=bridalOpts;sel.value=cur;
+  });
+  // Sider: only staff-designated selects
+  document.querySelectorAll('[id^="sd-staff-"]').forEach(sel=>{
+    const cur=sel.value;sel.innerHTML=bridalOpts;sel.value=cur;
   });
   // Also update getStaffOpts for future rows
 }
@@ -4666,6 +4853,119 @@ async function initApp(){
   renderStaffGrid();renderSalary();renderAtt();
   buildYrSel();updateStaffSels();
   if(_role==='admin'){updateRevKpis();updateReports();}
+}
+
+// ════════════════════════════════════════════
+// INQUIRY MANAGEMENT — Oracle DB via API
+// ════════════════════════════════════════════
+
+async function saveInquiry(){
+  const name=v('inq-name')?.value.trim();
+  const phone=v('inq-phone')?.value.trim();
+  if(!name){toast('Enter client name','var(--rose)');return;}
+  if(!phone){toast('Enter phone number','var(--rose)');return;}
+  const r=await apiCall('POST','/inquiries',{
+    name,phone,
+    service:v('inq-service')?.value||'',
+    date:v('inq-date')?.value||null,
+    budget:parseFloat(v('inq-budget')?.value)||0,
+    source:v('inq-source')?.value||'Walk-in',
+    status:'New',
+    notes:v('inq-notes')?.value||''
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Inquiry saved!','var(--emerald)');
+  ['inq-name','inq-phone','inq-date','inq-budget','inq-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const sf=v('inq-service');if(sf)sf.value='';
+  v('inq-form').style.display='none';
+  renderInquiries('');
+}
+
+async function renderInquiries(search){
+  const tb=v('inq-tbody');if(!tb)return;
+  tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  const sf=v('inq-status-filter')?.value||'';
+  let path='/inquiries?x=1';
+  if(search)path+=`&search=${encodeURIComponent(search)}`;
+  if(sf)path+=`&status=${encodeURIComponent(sf)}`;
+  const list=await apiCall('GET',path);
+  if(!list){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
+  if(!list.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:20px">No inquiries found</td></tr>';return;}
+  const sc={'New':'var(--teal)','Followed Up':'var(--amber)','Converted':'var(--emerald)','Not Interested':'var(--rose)'};
+  tb.innerHTML=list.map(inq=>{
+    const created=String(inq.created_at||'').substring(0,10);
+    const dateShow=String(inq.event_date||'').substring(0,10)||'—';
+    return `<tr>
+    <td><b>${inq.name}</b><br><small style="color:var(--ink3)">${created}</small></td>
+    <td>${inq.phone||'—'}</td><td>${inq.service||'—'}</td><td>${dateShow}</td>
+    <td>${inq.budget?fmt(inq.budget):'—'}</td><td>${inq.source||'—'}</td>
+    <td><select onchange="updateInqStatus(${inq.id},this.value)" style="border:1px solid var(--border);border-radius:5px;padding:3px 6px;font-size:11px;color:${sc[inq.status]||'var(--ink)'}">
+      ${['New','Followed Up','Converted','Not Interested'].map(s=>`<option ${inq.status===s?'selected':''}>${s}</option>`).join('')}
+    </select></td>
+    <td style="max-width:120px;font-size:11px;color:var(--ink3)">${inq.notes||'—'}</td>
+    <td style="white-space:nowrap">
+      <button onclick="sendInquiryWa(${inq.id},'${inq.phone||''}','${inq.name.replace(/'/g,'')}','${inq.service||''}')" style="background:none;border:none;cursor:pointer;font-size:16px" title="Send WhatsApp"><i class="fab fa-whatsapp" style="color:#128C7E"></i></button>
+      <button onclick="editInquiry(${inq.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px"><i class="fas fa-edit"></i></button>
+      <button onclick="deleteInquiry(${inq.id},'${inq.name.replace(/'/g,'')}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px"><i class="fas fa-trash"></i></button>
+    </td>
+  </tr>`;
+  }).join('');
+}
+
+async function updateInqStatus(id,status){
+  await apiCall('PUT',`/inquiries/${id}`,{status});
+  renderInquiries('');
+}
+
+async function deleteInquiry(id,name){
+  if(!confirm(`Delete inquiry for "${name}"?`))return;
+  const r=await apiCall('DELETE',`/inquiries/${id}`);
+  if(r){toast('Inquiry deleted','var(--rose)');renderInquiries('');}
+}
+
+async function editInquiry(id){
+  const list=await apiCall('GET','/inquiries?x=1');
+  const inq=list?.find(i=>i.id===id);if(!inq)return;
+  v('inq-name').value=inq.name||'';
+  v('inq-phone').value=inq.phone||'';
+  v('inq-service').value=inq.service||'';
+  v('inq-date').value=String(inq.event_date||'').substring(0,10);
+  v('inq-budget').value=inq.budget||'';
+  v('inq-source').value=inq.source||'Walk-in';
+  v('inq-notes').value=inq.notes||'';
+  v('inq-form').style.display='block';
+  // Change save to update
+  const btn=document.querySelector('#inq-form .btn-emerald');
+  if(btn){btn.textContent='Update Inquiry';btn.setAttribute('onclick',`updateInquiry(${id})`);}
+  v('inq-form')?.scrollIntoView({behavior:'smooth'});
+}
+
+async function updateInquiry(id){
+  const name=v('inq-name')?.value.trim();
+  if(!name){toast('Enter name','var(--rose)');return;}
+  const r=await apiCall('PUT',`/inquiries/${id}`,{
+    name,phone:v('inq-phone')?.value||'',
+    service:v('inq-service')?.value||'',
+    date:v('inq-date')?.value||null,
+    budget:parseFloat(v('inq-budget')?.value)||0,
+    source:v('inq-source')?.value||'Walk-in',
+    notes:v('inq-notes')?.value||''
+  });
+  if(!r)return;
+  toast('Inquiry updated','var(--teal)');
+  ['inq-name','inq-phone','inq-date','inq-budget','inq-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  v('inq-form').style.display='none';
+  const btn=document.querySelector('#inq-form .btn-emerald');
+  if(btn){btn.textContent='Save Inquiry';btn.setAttribute('onclick','saveInquiry()');}
+  renderInquiries('');
+}
+
+function sendInquiryWa(id,phone,name,service){
+  if(!phone){toast('No phone number for this inquiry','var(--rose)');return;}
+  const ph=phone.replace(/[^0-9]/g,'');
+  const phoneWithCode=ph.startsWith('91')?ph:'91'+ph;
+  const msg=encodeURIComponent('Namaste, '+name+'! Thank you for your inquiry at Saundarya Beauty Care, Vadodara. We would love to help with '+(service||'our services')+'. Reply to book your appointment. - Saundarya Beauty Care & Academy');
+  window.open('https://wa.me/'+phoneWithCode+'?text='+msg,'_blank');
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
