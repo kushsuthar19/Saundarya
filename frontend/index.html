@@ -2919,7 +2919,16 @@ async function saveDe(){
   const r=await apiCall('POST','/entries',{
     client_name:nm,phone:v('de-ph').value||null,
     entry_date:v('de-dt').value,visit_type:v('de-type').value||'Walk-in',
-    items,discount:disc,pay_method:v('de-pay').value||'Cash',
+    items,discount:disc,pay_method:(()=>{
+      const pm=v('de-pay').value||'Cash';
+      if(pm==='Split'){
+        const sc=parseFloat(v('de-split-cash')?.value||0);
+        const su=parseFloat(v('de-split-upi')?.value||0);
+        const scard=parseFloat(v('de-split-card')?.value||0);
+        return 'Split|Cash:'+sc+'|UPI:'+su+'|Card:'+scard;
+      }
+      return pm;
+    })(),
     next_visit:v('de-nv').value||null,remarks:v('de-rem').value||null
   });
   if(!r)return;
@@ -4428,9 +4437,12 @@ async function updateDashPaymentSplit(){
     if(e.pay_method==='Cash')cash+=amt;
     else if(e.pay_method==='UPI'||e.pay_method==='GPay')upi+=amt;
     else if(e.pay_method==='Card')card+=amt;
-    else if(e.pay_method==='Split'){
-      // Use split details if available, otherwise split 50/50
-      cash+=amt/2;upi+=amt/2;
+    else if(e.pay_method&&e.pay_method.startsWith('Split')){
+      const parts=e.pay_method.split('|');
+      let sc=0,su=0,scard=0;
+      parts.forEach(p=>{if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;});
+      const st=sc+su+scard;
+      if(st>0){cash+=sc;upi+=su;card+=scard;}else{cash+=amt/2;upi+=amt/2;}
     }
   });
   const total=cash+upi+card;
@@ -4492,7 +4504,15 @@ async function renderDashPaySplitCalendar(){
     if(r.pay_method==='Cash')dayMap[d].cash+=amt;
     else if(r.pay_method==='UPI'||r.pay_method==='GPay')dayMap[d].upi+=amt;
     else if(r.pay_method==='Card')dayMap[d].card+=amt;
-    else if(r.pay_method==='Split'){dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;}
+    else if(r.pay_method&&r.pay_method.startsWith('Split')){
+        // Parse "Split|Cash:750|UPI:250|Card:0" format
+        const parts=r.pay_method.split('|');
+        let sc=0,su=0,scard=0;
+        parts.forEach(p=>{if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;});
+        const splitTotal=sc+su+scard;
+        if(splitTotal>0){dayMap[d].cash+=sc;dayMap[d].upi+=su;dayMap[d].card+=scard;}
+        else{dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;} // fallback for old records
+      }
   });
   const days=Object.keys(dayMap).sort().reverse();
   if(!days.length){grid.innerHTML='<div style="color:var(--ink4);padding:10px;font-size:11px;text-align:center">No payments this month</div>';return;}
@@ -4695,7 +4715,15 @@ async function renderRevCalendar(){
     if(r.pay_method==='Cash')dayMap[d].cash+=amt;
     else if(r.pay_method==='UPI'||r.pay_method==='GPay')dayMap[d].upi+=amt;
     else if(r.pay_method==='Card')dayMap[d].card+=amt;
-    else if(r.pay_method==='Split'){dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;}
+    else if(r.pay_method&&r.pay_method.startsWith('Split')){
+        // Parse "Split|Cash:750|UPI:250|Card:0" format
+        const parts=r.pay_method.split('|');
+        let sc=0,su=0,scard=0;
+        parts.forEach(p=>{if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;});
+        const splitTotal=sc+su+scard;
+        if(splitTotal>0){dayMap[d].cash+=sc;dayMap[d].upi+=su;dayMap[d].card+=scard;}
+        else{dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;} // fallback for old records
+      }
   });
 
   // Build calendar
@@ -4762,7 +4790,21 @@ async function renderRevDaily(){
     <td>${fmt(e.gross_total||0)}</td>
     <td>${fmt(e.discount||0)}</td>
     <td><b>${fmt(e.net_total||0)}</b></td>
-    <td><span class="pill ${pmC[e.pay_method]||'p-lt'}">${e.pay_method}</span></td>
+    <td>${(()=>{
+      const pm=e.pay_method||'Cash';
+      if(pm.startsWith('Split|')){
+        const parts=pm.split('|');
+        let sc=0,su=0,scard=0;
+        parts.forEach(p=>{
+          if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;
+          else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;
+          else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;
+        });
+        const tip=`Cash:₹${sc} UPI:₹${su} Card:₹${scard}`;
+        return `<span class="pill p-wa" title="${tip}" style="cursor:help">Split</span><br><span style="font-size:9px;color:var(--ink3)">${sc?'💵'+Math.round(sc)+' ':''}${su?'📱'+Math.round(su)+' ':''}${scard?'💳'+Math.round(scard):''}` +'</span>';
+      }
+      return `<span class="pill ${pmC[pm]||'p-lt'}">${pm}</span>`;
+    })()}</td>
     <td style="white-space:nowrap">
       <button onclick="apiDownload('/entries/batch/pdf?entry_date=${e.entry_date}','Report_${e.entry_date}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="PDF"><i class="fas fa-download"></i></button>
       <button onclick="editEntry(${e.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Edit"><i class="fas fa-edit"></i></button>

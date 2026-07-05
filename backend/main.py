@@ -24,7 +24,8 @@ from backend.routers.clients import router as clients_router
 from backend.routers.entries import router as entries_router
 from backend.routers.main_routers import (
     appt_router, staff_router, att_router, bridal_router,
-    dash_router, revenue_router, reports_router, salary_router, svc_router
+    dash_router, revenue_router, reports_router, salary_router,
+    svc_router, inquiry_router    # ← add inquiry_router here
 )
 
 # ── Logging ───────────────────────────────────────────────
@@ -91,6 +92,7 @@ app.include_router(revenue_router,  prefix=API_PREFIX)
 app.include_router(reports_router,  prefix=API_PREFIX)
 app.include_router(salary_router,   prefix=API_PREFIX)
 app.include_router(svc_router,      prefix=API_PREFIX)
+app.include_router(inquiry_router, prefix=API_PREFIX)
 
 # ── Health check ──────────────────────────────────────────
 @app.get("/api/health")
