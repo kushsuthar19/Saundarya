@@ -186,7 +186,14 @@ async def list_staff(
                        WHERE ei.staff_id=s.id
                          AND de.entry_date >= TO_DATE(:1,'YYYY-MM-DD')
                          AND de.entry_date <= TO_DATE(:2,'YYYY-MM-DD')
-                  ), 0) AS monthly_revenue
+                  ), 0) AS monthly_revenue,
+                  NVL((SELECT COUNT(*)
+                       FROM entry_items ei
+                       JOIN daily_entries de ON de.id=ei.entry_id
+                       WHERE ei.staff_id=s.id
+                         AND de.entry_date >= TO_DATE(:3,'YYYY-MM-DD')
+                         AND de.entry_date <= TO_DATE(:4,'YYYY-MM-DD')
+                  ), 0) AS monthly_services
            FROM staff s
            LEFT JOIN attendance a ON a.staff_id=s.id
              AND a.att_date >= TO_DATE(:3,'YYYY-MM-DD')
@@ -195,7 +202,7 @@ async def list_staff(
            GROUP BY s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
                     s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active
            ORDER BY s.name""",
-        [month_start, month_end, month_start, month_end]
+        [month_start, month_end, month_start, month_end, month_start, month_end]
     )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
@@ -964,6 +971,7 @@ async def revenue_stats(
 @revenue_router.get("/daily")
 async def revenue_daily(
     entry_date: Optional[date] = Query(None),
+    month: Optional[str] = Query(None, description="YYYY-MM format"),
     pay_method: Optional[str] = Query(None),
     current_user: dict = Depends(require_admin),
     db: oracledb.AsyncConnection = Depends(get_db),
@@ -975,8 +983,10 @@ async def revenue_daily(
     params = []
     if entry_date:
         sql += " AND entry_date=TO_DATE(:1,'YYYY-MM-DD')"; params.append(str(entry_date))
+    elif month:
+        sql += " AND TO_CHAR(entry_date,'YYYY-MM')=:1"; params.append(month)
     if pay_method:
-        sql += " AND pay_method=:2"; params.append(pay_method)
+        sql += f" AND pay_method=:{len(params)+1}"; params.append(pay_method)
     sql += " ORDER BY entry_date DESC, id DESC"
     await cursor.execute(sql, params)
     rows = await cursor.fetchall()

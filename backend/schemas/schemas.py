@@ -115,6 +115,7 @@ class StaffOut(BaseModel):
     morning_duty_count: int = 0
     monthly_revenue: float = 0
     monthly_days_present: int = 0
+    monthly_services: int = 0
 
 
 # ── Attendance ────────────────────────────────────────────
