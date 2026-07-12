@@ -2833,10 +2833,39 @@ async function renderClients(s){
     </td>
   </tr>`).join('');
 }
+function openWaModal(phone,name,defaultMsg){
+  const modal=v('inv-modal');if(!modal)return;
+  const cleanPhone=(phone||'').replace(/[^0-9]/g,'');
+  const withCode=cleanPhone.startsWith('91')?cleanPhone:'91'+cleanPhone;
+  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:24px;width:460px;max-width:95vw;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:16px"><i class="fab fa-whatsapp" style="color:#128C7E;margin-right:8px"></i>Send WhatsApp to ${name||''}</div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Phone Number</label>
+      <input id="wa-modal-phone" value="${withCode}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;background:var(--surface)">
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Message (editable)</label>
+      <textarea id="wa-modal-msg" rows="5" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical">${defaultMsg||''}</textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="sendWaFromModal()" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fab fa-whatsapp"></i> Send via WhatsApp</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
+}
+
+function sendWaFromModal(){
+  const phone=v('wa-modal-phone')?.value?.replace(/[^0-9]/g,'')||'';
+  const msg=v('wa-modal-msg')?.value||'';
+  if(!phone){toast('Enter phone number','var(--rose)');return;}
+  window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg),'_blank');
+  closeInvModal();
+}
+
 function sendWaClient(phone,name){
-  const ph=phone.replace(/\s/g,'').replace(/^0/,'+91').replace(/^(?!\+)/,'+91');
-  const msg=`🌸 Hello *${name}*!\nThank you for visiting *Saundarya Beauty Care* ✨\n💐 Book next appointment: 📞 96621 35422`;
-  window.open(`https://wa.me/${ph}?text=${encodeURIComponent(msg)}`,'_blank');
+  openWaModal(phone,name,'Hello '+name+'! Thank you for visiting Saundarya Beauty Care. Book your next appointment: 96621 35422 - Saundarya Beauty Care & Academy, Vadodara');
 }
 
 async function editClient(id){
@@ -2929,7 +2958,8 @@ async function saveDe(){
       }
       return pm;
     })(),
-    next_visit:v('de-nv').value||null,remarks:v('de-rem').value||null
+    next_visit:v('de-nv')?.value?.trim()||null,
+    remarks:v('de-rem')?.value?.trim()||null
   });
   if(!r)return;
   toast(`<i class="fas fa-check-circle" style="color:var(--emerald)"></i> Saved — ${r.inv_no}`,'var(--emerald)');
@@ -2937,7 +2967,8 @@ async function saveDe(){
 }
 function clearDe(){
   selectedSvcs=[];
-  ['de-n','de-ph','de-nv','de-rem','de-disc'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['de-n','de-ph','de-nv','de-rem','de-disc','de-split-cash','de-split-upi','de-split-card'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const spw=v('split-pay-wrap');if(spw)spw.style.display='none';
   v('de-dt').value=td();
   const tp=v('de-type');if(tp)tp.value='Walk-in';
   const py=v('de-pay');if(py)py.value='Cash';
@@ -3618,9 +3649,10 @@ async function showBridalDetail(id){
 async function previewBridalInvFromList(id){await apiDownload(`/bridal/${id}/pdf`,`BridalInv_${id}.pdf`);}
 function previewBridalInv(type){toast('Save booking first — then download from list','var(--gold)');}
 async function sendBridalWa(id){
-  const r=await apiCall('POST',`/bridal/${id}/whatsapp`);
-  if(r?.success)toast('<i class="fab fa-whatsapp"></i> Sent!','#128C7E');
-  else toast('WhatsApp API not configured in .env','var(--rose)');
+  const b=await apiCall('GET',`/bridal/${id}`);
+  if(!b){return;}
+  if(!b.phone){toast('No phone number for this booking','var(--rose)');return;}
+  openWaModal(b.phone,b.client_name,'Hello '+b.client_name+'! Thank you for booking with Saundarya Beauty Care. Your bridal booking ('+b.job_no+') is confirmed. For any queries, please contact us. - Saundarya Beauty Care & Academy, Vadodara');
 }
 function sendBridalWaFromList(id){sendBridalWa(id);}
 
@@ -5004,10 +5036,7 @@ async function updateInquiry(id){
 
 function sendInquiryWa(id,phone,name,service){
   if(!phone){toast('No phone number for this inquiry','var(--rose)');return;}
-  const ph=phone.replace(/[^0-9]/g,'');
-  const phoneWithCode=ph.startsWith('91')?ph:'91'+ph;
-  const msg=encodeURIComponent('Namaste, '+name+'! Thank you for your inquiry at Saundarya Beauty Care, Vadodara. We would love to help with '+(service||'our services')+'. Reply to book your appointment. - Saundarya Beauty Care & Academy');
-  window.open('https://wa.me/'+phoneWithCode+'?text='+msg,'_blank');
+  openWaModal(phone,name,'Namaste, '+name+'! Thank you for your inquiry at Saundarya Beauty Care, Vadodara. We would love to help with '+(service||'our services')+'. Please reply to book your appointment. - Saundarya Beauty Care & Academy');
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
