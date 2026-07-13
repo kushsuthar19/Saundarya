@@ -1239,7 +1239,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <table class="ptable">
       <thead>
         <tr>
-          <th>Job No</th><th>Type</th><th>Name</th><th>Phone</th>
+          <th>Job No</th><th>Type</th><th>Booked On</th><th>Name</th><th>Phone</th>
           <th>Wedding Date</th><th>Package</th><th>Total</th>
           <th>Advance</th><th>Due</th><th>Status</th><th>Action</th>
         </tr>
@@ -2817,7 +2817,7 @@ async function saveClient(){
   ['cl-n','cl-ph','cl-em','cl-bd','cl-pr'].forEach(id=>{const el=v(id);if(el)el.value='';});
   toggleCF();renderClients('');
 }
-function toggleCF(){const f=v('cl-form-wrap');if(f)f.style.display=f.style.display==='none'?'block':'none';}
+function toggleCF(){const f=v('cf');if(f)f.style.display=f.style.display==='none'?'block':'none';}
 async function renderClients(s){
   const tb=v('cl-tbody');if(!tb)return;
   const rows=await apiCall('GET',`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`);
@@ -3550,6 +3550,7 @@ async function renderBridalList(search, typeF){
         html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')} br-row" style="transition:background .1s" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
           <td style="padding:8px 14px 8px 32px"><span style="font-size:10px;color:var(--ink3)">${b.job_no}</span></td>
           <td><span class="pill ${tc[b.booking_type]||'p-lt'}" style="font-size:10px">${b.booking_type}</span></td>
+          <td style="font-size:10px;color:var(--ink3)">${String(b.created_at||'—').substring(0,10)}</td>
           <td><b style="font-size:12px">${b.client_name}</b></td>
           <td style="font-size:11px;color:var(--ink3)">${b.phone||'—'}</td>
           <td style="font-size:11px">${b.wedding_date||'—'}</td>
@@ -4361,10 +4362,12 @@ async function _renderAttList(container, showTimeInputs){
             </div>
             <span style="font-size:11px;font-weight:600;color:${att.half_day?'var(--gold)':'var(--ink3)'};white-space:nowrap">½ Day</span>
           </div>
-          <!-- Present/Absent toggle -->
-          <button onclick="togAtt(${s.id},${att.present?0:1})"
-            style="padding:6px 16px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;${att.present?'background:var(--emerald);color:#fff':'background:var(--rose);color:#fff'}">
-            ${att.present?'✓ Present':'✗ Absent'}</button>
+          <!-- Attendance dropdown -->
+          <select onchange="togAtt(${s.id},this.value==='1'?1:0)"
+            style="padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid ${att.present?'var(--emerald)':'var(--rose)'};background:${att.present?'var(--emerald)':'var(--rose)'};color:#fff;cursor:pointer;min-width:110px">
+            <option value="1" ${att.present?'selected':''}>✓ Present</option>
+            <option value="0" ${!att.present?'selected':''}>✗ Absent</option>
+          </select>
         </div>
       </div>`;
     }).join('');

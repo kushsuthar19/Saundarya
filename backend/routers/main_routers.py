@@ -196,8 +196,8 @@ async def list_staff(
                   ), 0) AS monthly_services
            FROM staff s
            LEFT JOIN attendance a ON a.staff_id=s.id
-             AND a.att_date >= TO_DATE(:3,'YYYY-MM-DD')
-             AND a.att_date <= TO_DATE(:4,'YYYY-MM-DD')
+             AND a.att_date >= TO_DATE(:5,'YYYY-MM-DD')
+             AND a.att_date <= TO_DATE(:6,'YYYY-MM-DD')
            WHERE s.is_active=1
            GROUP BY s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
                     s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active
