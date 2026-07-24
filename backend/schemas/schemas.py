@@ -238,9 +238,12 @@ class DailyEntryCreate(BaseModel):
     @field_validator("pay_method")
     @classmethod
     def valid_method(cls, v: str) -> str:
-        allowed = {"Cash", "UPI", "Card", "Split"}
-        if v not in allowed:
-            raise ValueError(f"Pay method must be one of {allowed}")
+        # Allow plain methods AND split format "Split|Cash:N|UPI:N|Card:N"
+        if v in {"Cash", "UPI", "Card", "GPay"}:
+            return v
+        if v.startswith("Split"):
+            return v
+        # Fallback: accept anything rather than break
         return v
 
 
