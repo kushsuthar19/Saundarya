@@ -137,7 +137,8 @@ async def create_entry(
     if not client_id:
         # Auto-create client
         await cursor.execute(
-            """INSERT INTO clients (name, phone, source) VALUES (:1,:2,'Daily Entry')
+            """INSERT INTO clients (name, phone, source, client_type, visit_count, total_spent)
+               VALUES (:1,:2,'Daily Entry','New',0,0)
                RETURNING id INTO :3""",
             [data.client_name, data.phone, cursor.var(oracledb.NUMBER)]
         )
@@ -145,16 +146,17 @@ async def create_entry(
         cid_val = cid_var.getvalue()
         client_id = int(cid_val[0] if isinstance(cid_val, list) else cid_val)
 
-    # Update client stats + visit_count + last_visit + auto-promote New→Regular
+    # Update client stats + visit_count + last_visit + auto-promote New→Regular after 2nd visit
     await cursor.execute(
         """UPDATE clients
-           SET visits = visits + 1,
+           SET visits = NVL(visits,0) + 1,
                total_spent = NVL(total_spent,0) + :1,
                visit_count = NVL(visit_count,0) + 1,
                last_visit = SYSDATE,
                client_type = CASE
-                   WHEN NVL(client_type,'New') = 'New' AND NVL(visit_count,0) >= 1 THEN 'Regular'
-                   ELSE NVL(client_type,'New')
+                   WHEN NVL(client_type,'New') = 'Exclusive' THEN 'Exclusive'
+                   WHEN NVL(visit_count,0) >= 1 THEN 'Regular'
+                   ELSE 'New'
                END,
                updated_at = SYSTIMESTAMP
            WHERE id = :2""",
