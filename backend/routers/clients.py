@@ -49,24 +49,27 @@ async def list_clients(
 ):
     cursor = db.cursor()
     sql = """SELECT id, name, phone, email, birthday, skin_type, hair_type,
-                    tag, preferences, visits, total_spent, source, created_at,
+                    tag, preferences, NVL(visits,0) as visits,
+                    NVL(total_spent,0) as total_spent, source, created_at,
                     NVL(client_type,'New') as client_type,
                     anniversary, preferred_staff,
                     NVL(visit_count,0) as visit_count,
                     last_visit
              FROM clients WHERE 1=1"""
     params = []
+    def P():
+        return f":{len(params)+1}"
     if search:
-        sql += " AND (UPPER(name) LIKE :s1 OR phone LIKE :s2)"
         s = f"%{search.upper()}%"
+        sql += f" AND (UPPER(name) LIKE {P()} OR phone LIKE {P()})"
         params += [s, f"%{search}%"]
     if tag:
-        sql += " AND tag = :t"
+        sql += f" AND tag = {P()}"
         params.append(tag)
     if client_type:
-        sql += " AND NVL(client_type,'New') = :ct"
+        sql += f" AND NVL(client_type,'New') = {P()}"
         params.append(client_type)
-    sql += " ORDER BY created_at DESC OFFSET :skip ROWS FETCH NEXT :lim ROWS ONLY"
+    sql += f" ORDER BY created_at DESC OFFSET {P()} ROWS FETCH NEXT {P()} ROWS ONLY"
     params += [skip, limit]
     await cursor.execute(sql, params)
     rows = await cursor.fetchall()
