@@ -744,20 +744,16 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="card">
     <div class="card-hd emerald" style="display:flex;align-items:center">
       <div class="card-hd-t"><i class="fas fa-user-clock"></i> Today's Attendance</div>
-      <div id="att-dash-date" style="font-size:10px;opacity:.7;margin-left:auto"></div>
+      <div id="att-dash-date" style="font-size:10px;opacity:.7;margin-left:8px"></div>
+      <button onclick="toggleDashAtt()" id="att-dash-toggle" title="Toggle attendance view"
+        style="margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">
+        <i class="fas fa-chevron-down" id="att-dash-chevron"></i>
+      </button>
     </div>
-    <div class="card-body" id="att-dash-list" style="min-height:60px;padding:0"></div>
+    <div class="card-body" id="att-dash-list" style="min-height:0;padding:0;max-height:320px;overflow-y:auto;transition:max-height .3s"></div>
   </div>
 
-  <!-- Membership Expiry Notifications (admin only) -->
-  <div id="mem-notif-wrap" data-admin="1" style="display:none;margin-bottom:14px">
-    <div class="card">
-      <div class="card-hd amber"><div class="card-hd-t"><i class="fas fa-crown"></i> Membership Expiry Alerts</div></div>
-      <div class="card-body" id="mem-notif-body">
-        <div style="color:var(--ink4);font-size:12px;text-align:center;padding:10px">Checking...</div>
-      </div>
-    </div>
-  </div>
+
   <!-- Schedule + Payment Split side by side -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
     <div class="card"><div class="card-hd ink"><div class="card-hd-t"><i class="fas fa-calendar-day"></i>Today's Schedule</div><button id="sched-collapse-btn" onclick="toggleCardCollapse('dash-list','sched-collapse-btn')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;margin-left:auto"><i class="fas fa-chevron-up"></i></button></div>
@@ -840,6 +836,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <div class="card"><div class="card-hd violet"><div class="card-hd-t"><i class="fas fa-female"></i>Bride Details</div></div><div class="card-body">
       <div class="fg">
         <div class="fl"><label><i class="fas fa-user"></i>Name</label><input type="text" id="br-n"></div>
+        <div class="fl"><label><i class="fas fa-calendar-check"></i>Booking Date</label><input type="date" id="br-bkd"></div>
         <div class="fl"><label><i class="fas fa-calendar-heart"></i>Wedding Date</label><input type="date" id="br-wd"></div>
         <div class="fl"><label><i class="fas fa-phone"></i>Contact</label><input type="tel" id="br-ph"></div>
         <div class="fl"><label><i class="fas fa-map-marker-alt"></i>Venue</label><input type="text" id="br-v"></div>
@@ -1048,6 +1045,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <div class="card"><div class="card-hd ink"><div class="card-hd-t"><i class="fas fa-male"></i>Groom Details</div></div><div class="card-body">
       <div class="fg">
         <div class="fl"><label><i class="fas fa-user"></i>Name</label><input type="text" id="gr-n"></div>
+        <div class="fl"><label><i class="fas fa-calendar-check"></i>Booking Date</label><input type="date" id="gr-bkd"></div>
         <div class="fl"><label><i class="fas fa-calendar-heart"></i>Wedding Date</label><input type="date" id="gr-wd"></div>
         <div class="fl"><label><i class="fas fa-phone"></i>Contact</label><input type="tel" id="gr-ph"></div>
         <div class="fl"><label><i class="fas fa-map-marker-alt"></i>Venue</label><input type="text" id="gr-v"></div>
@@ -1398,21 +1396,86 @@ table tbody tr:hover td{background:var(--bg2)}
     <button class="btn btn-sky btn-sm" onclick="toggleCF()"><i class="fas fa-plus"></i>Add Client</button>
   </div>
   <div id="cf" style="display:none;margin-bottom:12px">
-    <div class="card"><div class="card-hd sky"><div class="card-hd-t"><i class="fas fa-user-plus"></i>Add New Client</div></div><div class="card-body">
-      <div class="fg">
-        <div class="fl"><label>Full Name</label><input type="text" id="cl-n"></div>
-        <div class="fl"><label>Phone</label><input type="tel" id="cl-ph"></div>
-        <div class="fl"><label>Email</label><input type="email" id="cl-em"></div>
-        <div class="fl"><label>Birthday</label><input type="date" id="cl-bd"></div>
-        <div class="fl"><label>Skin Type</label><select id="cl-sk"><option>Normal</option><option>Oily</option><option>Dry</option><option>Combination</option><option>Sensitive</option></select></div>
-        <div class="fl"><label>Hair Type</label><select id="cl-hr"><option>Normal</option><option>Oily</option><option>Dry</option><option>Curly</option><option>Straight</option><option>Wavy</option></select></div>
-        <div class="fl"><label>Tag</label><select id="cl-tg"><option>Regular</option><option>VIP</option><option>New</option><option>Bridal</option></select></div>
-        <div class="fl"><label>Preferences / Notes</label><input type="text" id="cl-pr"></div>
-        <div class="fl"><label>Anniversary Date</label><input type="date" id="cl-ann"></div>
-        <div class="fl"><label>Preferred Staff</label><input type="text" id="cl-pst" placeholder="Staff name"></div>
-      </div>
-      <div class="ar"><button class="btn btn-ghost" onclick="v('cf').style.display='none'">Cancel</button><button class="btn btn-sky" id="cl-save-btn" onclick="saveClient()"><i class="fas fa-save"></i>Save Client</button></div>
-    </div></div>
+    <!-- Step 0: Choose client type -->
+    <div id="cf-choose" style="display:block">
+      <div class="card"><div class="card-hd sky"><div class="card-hd-t"><i class="fas fa-user-plus"></i>Add Client — Choose Type</div></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div onclick="showCfRegular()" style="border:2px solid var(--sky);border-radius:var(--r12);padding:20px;text-align:center;cursor:pointer;background:var(--bg);transition:all .2s" onmouseover="this.style.background='#e8f4ff'" onmouseout="this.style.background='var(--bg)'">
+            <div style="font-size:28px;margin-bottom:8px">🔵</div>
+            <div style="font-weight:700;color:var(--sky);font-size:14px">Regular / New Client</div>
+            <div style="font-size:11px;color:var(--ink3);margin-top:4px">Quick add — name, phone, notes</div>
+          </div>
+          <div onclick="showCfExclusive()" style="border:2px solid var(--gold);border-radius:var(--r12);padding:20px;text-align:center;cursor:pointer;background:var(--bg);transition:all .2s" onmouseover="this.style.background='#fff8e7'" onmouseout="this.style.background='var(--bg)'">
+            <div style="font-size:28px;margin-bottom:8px">⭐</div>
+            <div style="font-weight:700;color:var(--amber);font-size:14px">Exclusive Member</div>
+            <div style="font-size:11px;color:var(--ink3);margin-top:4px">Full details + membership enrollment</div>
+          </div>
+        </div>
+        <div style="text-align:right;margin-top:10px"><button class="btn btn-ghost" onclick="v('cf').style.display='none'">Cancel</button></div>
+      </div></div>
+    </div>
+
+    <!-- Regular Client Form -->
+    <div id="cf-regular" style="display:none">
+      <div class="card"><div class="card-hd sky"><div class="card-hd-t"><i class="fas fa-user-plus"></i>Add Regular / New Client</div></div>
+      <div class="card-body">
+        <div class="fg">
+          <div class="fl"><label>Full Name *</label><input type="text" id="cl-n" placeholder="Client full name"></div>
+          <div class="fl"><label>Phone *</label><input type="tel" id="cl-ph" placeholder="+91 XXXXX XXXXX"></div>
+          <div class="fl" style="grid-column:1/-1"><label>Notes</label><input type="text" id="cl-pr" placeholder="Any notes about this client"></div>
+        </div>
+        <div class="ar">
+          <button class="btn btn-ghost" onclick="showCfChoose()">← Back</button>
+          <button class="btn btn-sky" id="cl-save-btn" onclick="saveClient()"><i class="fas fa-save"></i>Save Client</button>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- Exclusive Member Form -->
+    <div id="cf-exclusive" style="display:none">
+      <div class="card"><div class="card-hd amber" style="background:linear-gradient(135deg,var(--gold),var(--amber))"><div class="card-hd-t"><i class="fas fa-crown"></i>Register Exclusive Member — SBC</div></div>
+      <div class="card-body">
+        <!-- Personal Details -->
+        <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">👤 Personal Details</div>
+        <div class="fg" style="margin-bottom:14px">
+          <div class="fl"><label>Full Name *</label><input type="text" id="em-name" placeholder="Client full name"></div>
+          <div class="fl"><label>Mobile Number *</label><input type="tel" id="em-phone" placeholder="+91 XXXXX XXXXX"></div>
+          <div class="fl"><label>Gender</label>
+            <select id="em-gender">
+              <option value="">Select</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="fl"><label>Date of Birth 🎂</label><input type="date" id="em-dob"></div>
+          <div class="fl"><label>Anniversary 💍</label><input type="date" id="em-ann"></div>
+          <div class="fl" style="grid-column:1/-1"><label>Address 🏠</label><input type="text" id="em-addr" placeholder="Client address"></div>
+        </div>
+        <!-- Membership Details -->
+        <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">⭐ Membership</div>
+        <div class="fg" style="margin-bottom:14px;background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid rgba(201,168,76,.3);border-radius:var(--r8);padding:12px">
+          <div class="fl"><label>Membership Fee (₹)</label><input type="number" id="em-fee" value="1000" placeholder="1000"></div>
+          <div class="fl"><label>Payment Method</label>
+            <select id="em-pay">
+              <option>Cash</option><option>GPay/UPI</option><option>Card</option>
+            </select>
+          </div>
+          <div class="fl"><label>Start Date</label><input type="date" id="em-start"></div>
+          <div class="fl"><label>Expiry Date (auto)</label><input type="date" id="em-expiry" readonly style="background:var(--bg);color:var(--ink3)"></div>
+        </div>
+        <!-- Staff & Notes -->
+        <div class="fg" style="margin-bottom:14px">
+          <div class="fl"><label>Preferred Staff 👩‍🎨</label><input type="text" id="em-pstaff" placeholder="Staff name"></div>
+          <div class="fl" style="grid-column:1/-1"><label>Notes 📝</label><textarea id="em-notes" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;font-family:'Inter',sans-serif;resize:vertical" placeholder="Any notes about this member"></textarea></div>
+        </div>
+        <div class="ar">
+          <button class="btn btn-ghost" onclick="showCfChoose()">← Back</button>
+          <button class="btn btn-gold" onclick="saveExclusiveMember()"><i class="fas fa-crown"></i>Save & Enroll Member</button>
+        </div>
+      </div></div>
+    </div>
   </div>
   <div class="tbl-wrap"><div class="tbl-hd" style="background:var(--sky-l)"><div style="font-size:11px;font-weight:600;color:var(--sky);display:flex;align-items:center;gap:6px"><i class="fas fa-users"></i>All Clients</div></div>
     <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Birthday</th><th>Skin</th><th>Hair</th><th>Tag</th><th>Bridal / Notes</th><th>Visits</th><th>Total Spent</th><th>Action</th></tr></thead>
@@ -2830,18 +2893,99 @@ function sendWaAppt(phone,name,svc,date,time){
 async function saveClient(){
   const nm=v('cl-n').value.trim();if(!nm){toast('Enter name','var(--rose)');return;}
   const r=await apiCall('POST','/clients',{
-    name:nm,phone:v('cl-ph').value||null,email:v('cl-em').value||null,
-    birthday:v('cl-bd').value||null,skin_type:v('cl-sk').value||'Normal',
-    hair_type:v('cl-hr').value||'Normal',tag:v('cl-tg').value||'Regular',
-    preferences:v('cl-pr').value||null,anniversary:v('cl-ann')?.value||null,
-    preferred_staff:v('cl-pst')?.value||null
+    name:nm,phone:v('cl-ph').value||null,
+    preferences:v('cl-pr').value||null,
+    client_type:'New'
   });
   if(!r)return;
   toast('<i class="fas fa-user-plus" style="color:var(--emerald)"></i> Client saved!','var(--emerald)');
-  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr','cl-ann','cl-pst'].forEach(id=>{const el=v(id);if(el)el.value='';});
-  toggleCF();renderClients('');
+  ['cl-n','cl-ph','cl-pr'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  v('cf').style.display='none';
+  renderClients('');
 }
-function toggleCF(){const f=v('cf');if(f)f.style.display=f.style.display==='none'?'block':'none';}
+
+async function saveExclusiveMember(){
+  const nm=v('em-name').value.trim();
+  const ph=v('em-phone').value.trim();
+  if(!nm){toast('Enter client name','var(--rose)');return;}
+  if(!ph){toast('Enter phone number','var(--rose)');return;}
+  const payMethod=v('em-pay')?.value||'Cash';
+  const fee=parseFloat(v('em-fee')?.value||1000);
+
+  // Step 1: Create client
+  const client=await apiCall('POST','/clients',{
+    name:nm, phone:ph,
+    birthday:v('em-dob')?.value||null,
+    anniversary:v('em-ann')?.value||null,
+    preferred_staff:v('em-pstaff')?.value||null,
+    preferences:v('em-notes')?.value||null,
+    client_type:'Exclusive',
+    gender:v('em-gender')?.value||null,
+    address:v('em-addr')?.value||null
+  });
+  if(!client){return;}
+
+  // Step 2: Enroll membership
+  const startDate=v('em-start')?.value||td();
+  const mem=await apiCall('POST',`/clients/${client.id}/membership`,{
+    fee_paid:fee,
+    start_date:startDate
+  });
+  if(!mem){toast('Client saved but membership enrollment failed','var(--amber)');renderClients('');return;}
+
+  // Step 3: Auto Daily Entry for membership fee
+  await apiCall('POST','/entries',{
+    client_name:nm+' (Membership - '+mem.membership_id+')',
+    phone:ph,
+    entry_date:td(),
+    visit_type:'Membership',
+    items:[{service_name:'Saundarya Exclusive Membership',price:fee,qty:1,line_total:fee,staff_id:null,staff_name:null}],
+    discount:0,
+    pay_method:payMethod,
+    remarks:'Membership ID: '+mem.membership_id
+  });
+
+  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${nm} enrolled as ⭐ Exclusive Member! ID: ${mem.membership_id}`,'var(--gold)');
+  // Clear form
+  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const ef=v('em-fee');if(ef)ef.value='1000';
+  v('cf').style.display='none';
+  renderClients('');
+  renderDailyView();
+  updateDash();
+}
+function toggleCF(){
+  const f=v('cf');if(!f)return;
+  if(f.style.display==='none'||f.style.display===''){
+    f.style.display='block';
+    showCfChoose();
+  } else {
+    f.style.display='none';
+  }
+}
+function showCfChoose(){
+  v('cf-choose').style.display='block';
+  v('cf-regular').style.display='none';
+  v('cf-exclusive').style.display='none';
+}
+function showCfRegular(){
+  v('cf-choose').style.display='none';
+  v('cf-regular').style.display='block';
+  v('cf-exclusive').style.display='none';
+}
+function showCfExclusive(){
+  v('cf-choose').style.display='none';
+  v('cf-regular').style.display='none';
+  v('cf-exclusive').style.display='block';
+  // Set start date to today, expiry to +12 months
+  const today=td();
+  const emStart=v('em-start');if(emStart)emStart.value=today;
+  const emExp=v('em-expiry');
+  if(emExp){
+    const d=new Date();d.setFullYear(d.getFullYear()+1);
+    emExp.value=d.toISOString().split('T')[0];
+  }
+}
 async function renderClients(s){
   const tb=v('cl-tbody');if(!tb)return;
   // Build URL with tab filter
@@ -3450,9 +3594,20 @@ async function saveBridal(type){
       }
     });
   }
+  // Get booking date + advance payment method
+  let bookingDate=null, advPayMethod='Cash';
+  if(type==='bride'){
+    bookingDate=v('br-bkd')?.value||td();
+    advPayMethod=v('br-pay-method')?.value||'Cash';
+  } else if(type==='groom'){
+    bookingDate=v('gr-bkd')?.value||td();
+    advPayMethod=v('gr-pay-method')?.value||'Cash';
+  }
   const payload={
     booking_type:type==='bride'?'Bride':type==='groom'?'Groom':'Sider',
     client_name:name,phone:phone||null,wedding_date:wdate||null,
+    booking_date:bookingDate||td(),
+    advance_pay_method:advPayMethod,
     venue:venue||null,reference:(type==='bride'?v('br-rf')?.value||null:type==='groom'?v('gr-rf')?.value||null:null),package_name:pkgName||null,
     pkg_amount:total||0,transport:transport||0,discount:discount||0,advance_paid:advance||0,
     notes:null,functions:funcs
@@ -3552,7 +3707,7 @@ async function saveBridalEdit(id){
 
 function clearBridal(type){
   if(!type||type==='bride'){
-    ['br-n','br-wd','br-ph','br-v','br-rf','br-jn','br-pa','br-tr','br-di','br-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['br-n','br-wd','br-bkd','br-ph','br-v','br-rf','br-jn','br-pa','br-tr','br-di','br-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
     const sel=v('br-pkg');if(sel)sel.value='';
     const fb=v('br-fb');if(fb)fb.innerHTML='';
     const d=v('br-sel-display');if(d)d.style.display='none';
@@ -3561,7 +3716,7 @@ function clearBridal(type){
     brBill();
   }
   if(!type||type==='groom'){
-    ['gr-n','gr-ph','gr-wd','gr-pa','gr-tr','gr-di','gr-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['gr-n','gr-ph','gr-wd','gr-bkd','gr-pa','gr-tr','gr-di','gr-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
     const ps=v('gr-pkg-sel');if(ps)ps.value='';
     const fb=v('gr-fb');if(fb)fb.innerHTML='';
     document.querySelectorAll('.gpkg').forEach(c=>c.classList.remove('sel-pkg'));
@@ -5290,63 +5445,50 @@ async function detectClientByPhone(phone){
 // ═══════════════════════════════════════════
 // MEMBERSHIP DASHBOARD NOTIFICATIONS
 // ═══════════════════════════════════════════
-async function loadMemNotifications(){
-  if(_role!=='admin')return;
-  const wrap=v('mem-notif-wrap');
-  if(wrap)wrap.style.display='block';
-  const body=v('mem-notif-body');if(!body)return;
-  const alerts=await apiCall('GET','/dashboard/membership-expiry');
-  if(!alerts||!alerts.length){
-    wrap.style.display='none';
-    return;
+function toggleDashAtt(){
+  const list=v('att-dash-list');
+  const chevron=v('att-dash-chevron');
+  if(!list)return;
+  const isCollapsed=list.style.maxHeight==='0px';
+  list.style.maxHeight=isCollapsed?'320px':'0px';
+  list.style.overflow=isCollapsed?'auto':'hidden';
+  if(chevron){
+    chevron.className=isCollapsed?'fas fa-chevron-up':'fas fa-chevron-down';
   }
-  wrap.style.display='block';
-  body.innerHTML=alerts.map(a=>{
-    const days=Math.round(a.days_remaining||0);
-    const isExp=days<=0;
-    const colorClass=isExp?'var(--rose)':days<=3?'var(--rose)':days<=7?'var(--amber)':'var(--teal)';
-    const label=isExp?'EXPIRED':`${days} day${days!==1?'s':''} left`;
-    const msg=`Hello ${a.name}! Your Saundarya Exclusive Membership (${a.membership_id}) ${isExp?'has expired':'will expire on '+a.expiry_date}. Renew today to continue enjoying your exclusive benefits including Beauty Points, Discounts and Priority Booking. Contact us for quick renewal. - Team Saundarya Beauty Care`;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap">
-      <span style="color:${colorClass};font-weight:700;min-width:80px">${label}</span>
-      <span style="font-weight:600">${a.name}</span>
-      <span style="color:var(--gold);font-weight:700">${a.membership_id}</span>
-      <span style="color:var(--ink3)">${a.phone||'—'}</span>
-      <span style="color:var(--ink3)">Exp: ${a.expiry_date}</span>
-      <div style="display:flex;gap:6px;margin-left:auto">
-        <button onclick="renewMembership(${a.client_id})" style="background:var(--teal);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:600">Renew</button>
-        <button onclick="openWaModal('${a.phone||''}','${a.name}',${JSON.stringify(msg)})" style="background:#128C7E;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px">WA</button>
-      </div>
-    </div>`;
-  }).join('');
 }
 
-// ═══════════════════════════════════════════
-// MEMBERSHIP FUNCTIONS
-// ═══════════════════════════════════════════
-async function giveMembership(clientId, clientName){
-  const payMethod=prompt(`Membership Fee: ₹1,000
-Payment method for ${clientName}?
-(Cash / GPay / Card)`,'Cash');
-  if(!payMethod)return;
-  // Enroll membership
-  const r=await apiCall('POST',`/clients/${clientId}/membership`,{fee_paid:1000,pay_method:payMethod});
-  if(!r)return;
-  // Auto-create Daily Entry for membership fee
-  const today=td();
-  await apiCall('POST','/entries',{
-    client_name:clientName+' (Membership)',
-    phone:null,
-    entry_date:today,
-    visit_type:'Membership',
-    items:[{service_name:'Saundarya Exclusive Membership',price:1000,qty:1,line_total:1000}],
-    discount:0,
-    pay_method:payMethod,
-    remarks:'Membership ID: '+r.membership_id
-  });
-  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${clientName} enrolled as ⭐ Exclusive Member! ID: ${r.membership_id}`,'var(--gold)');
-  renderClients(v('crm-search')?.value||'');
+async function loadMemNotifications(){
+  if(_role!=='admin')return;
+  const alerts=await apiCall('GET','/dashboard/membership-expiry');
+  if(!alerts||!alerts.length)return;
+  // Push into notification bell
+  const list=v('notif-list');
+  if(list){
+    const pip=v('notif-pip');if(pip)pip.style.display='block';
+    const notifItems=alerts.map(a=>{
+      const days=Math.round(a.days_remaining||0);
+      const isExp=days<=0;
+      const color=isExp?'var(--rose)':days<=3?'var(--rose)':days<=7?'var(--amber)':'var(--teal)';
+      const label=isExp?'EXPIRED':`${days}d left`;
+      return `<div class="notif-item" style="border-left:3px solid ${color}">
+        <div class="notif-ico" style="background:${isExp?'#fff0f0':'#fff8e7'}">
+          <i class="fas fa-crown" style="color:${color}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="notif-text"><b>${a.name}</b> — ${a.membership_id}</div>
+          <div class="notif-time" style="color:${color};font-weight:600">${label} · Exp: ${a.expiry_date}</div>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button onclick="renewMembership(${a.client_id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;font-weight:600">Renew</button>
+            <button onclick="openWaModal('${a.phone||''}','${a.name}','Hello ${a.name}! Your Saundarya Exclusive Membership (${a.membership_id}) expires on ${a.expiry_date}. Renew today to continue enjoying your exclusive benefits. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px">WA</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    // Prepend to notif list
+    list.insertAdjacentHTML('afterbegin', notifItems);
+  }
 }
+
 
 async function renewMembership(clientId){
   if(!confirm('Renew membership for 12 months?'))return;
@@ -5371,49 +5513,137 @@ async function _loadMemberProfile(clientId){
   if(!client)return;
   const mem=mems&&mems[0];
   const body=v('mem-profile-body');if(!body)return;
+
+  // Load service history by phone
+  let histRows=[];
+  if(client.phone){
+    histRows=await apiCall('GET',`/entries?limit=100&phone=${encodeURIComponent(client.phone)}`)||[];
+  }
+
+  // Calculate total points from history
+  const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
+
   body.innerHTML=`
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-    <div style="background:var(--bg);border-radius:10px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:8px;text-transform:uppercase">Client Info</div>
-      <div style="font-size:15px;font-weight:700">${client.name}</div>
-      <div style="color:var(--ink3);font-size:12px;margin-top:4px">${client.phone||'—'}</div>
-      <div style="color:var(--ink3);font-size:11px;margin-top:2px">Visits: ${client.visit_count||0} · Spent: ${fmt(client.total_spent||0)}</div>
-      ${client.birthday?`<div style="font-size:11px;color:var(--ink3);margin-top:2px">🎂 ${client.birthday}</div>`:''}
-      ${client.anniversary?`<div style="font-size:11px;color:var(--ink3)">💑 ${client.anniversary}</div>`:''}
-      ${client.preferred_staff?`<div style="font-size:11px;color:var(--ink3)">👩‍🎨 ${client.preferred_staff}</div>`:''}
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:14px;padding:14px;background:linear-gradient(135deg,var(--charcoal,#1C1C1E),#2A2A3A);border-radius:10px;margin-bottom:16px;position:relative;overflow:hidden">
+    <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:60px;opacity:.06;color:var(--gold)">✦</div>
+    <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#E8C96A);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#1C1200;flex-shrink:0">
+      ${(client.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
     </div>
-    ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:8px;text-transform:uppercase">Membership</div>
-      <div style="font-size:16px;font-weight:700;color:var(--gold)">${mem.membership_id}</div>
-      <div style="font-size:11px;color:var(--ink2);margin-top:4px">Status: <b>${mem.status}</b></div>
-      <div style="font-size:11px;color:var(--ink2)">Expires: <b>${String(mem.expiry_date||'').substring(0,10)}</b></div>
-      <div style="font-size:11px;color:var(--ink2)">Days left: <b>${Math.max(0,Math.round(mem.days_remaining||0))}</b></div>
-      <div style="font-size:20px;font-weight:700;color:var(--gold);margin-top:8px">${mem.beauty_points||0} ⭐ pts</div>
-      <div style="font-size:10px;color:var(--ink3)">Lifetime earned: ${mem.lifetime_points||0} pts</div>
-    </div>`:'<div style="background:var(--bg);border-radius:10px;padding:14px;color:var(--ink3);font-size:12px">No active membership</div>'}
+    <div style="flex:1">
+      <div style="font-size:16px;font-weight:700;color:#fff">${client.name}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">${client.phone||'—'} &nbsp;·&nbsp; ${client.email||''}</div>
+      <span style="background:linear-gradient(135deg,var(--gold),#E8C96A);color:#1C1200;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px;display:inline-block">⭐ EXCLUSIVE MEMBER</span>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase">Membership ID</div>
+      <div style="font-size:16px;font-weight:700;color:var(--gold)">${mem?.membership_id||'—'}</div>
+    </div>
   </div>
-  ${mem?`
-  <!-- Beauty Points Management -->
-  <div style="background:#fff8e7;border:1px solid var(--gold);border-radius:8px;padding:12px;margin-bottom:14px">
-    <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:8px">Beauty Points — Manage</div>
+
+  <!-- Info Grid -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;font-size:12px">
+    <div style="background:var(--bg);border-radius:8px;padding:10px">
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">📞 Contact</div>
+      <div style="font-weight:600">${client.phone||'—'}</div>
+    </div>
+    <div style="background:var(--bg);border-radius:8px;padding:10px">
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">🎂 Birthday</div>
+      <div style="font-weight:600">${client.birthday||'—'}</div>
+    </div>
+    <div style="background:var(--bg);border-radius:8px;padding:10px">
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">💍 Anniversary</div>
+      <div style="font-weight:600">${client.anniversary||'—'}</div>
+    </div>
+    <div style="background:var(--bg);border-radius:8px;padding:10px">
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">👩‍🎨 Preferred Staff</div>
+      <div style="font-weight:600">${client.preferred_staff||'—'}</div>
+    </div>
+    ${client.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><div style="font-size:10px;color:var(--ink3);margin-bottom:4px">📝 Notes</div><div>${client.preferences}</div></div>`:''}
+  </div>
+
+  <!-- Membership Card -->
+  ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid rgba(201,168,76,.4);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:10px">
+      <div><div style="font-size:10px;color:var(--amber)">Start Date</div><div style="font-weight:700;font-size:11px">${String(mem.start_date||'').substring(0,10)}</div></div>
+      <div><div style="font-size:10px;color:var(--amber)">Expiry</div><div style="font-weight:700;font-size:11px">${String(mem.expiry_date||'').substring(0,10)}</div></div>
+      <div><div style="font-size:10px;color:var(--amber)">Status</div><div style="font-weight:700;font-size:11px;color:var(--emerald)">${mem.status}</div></div>
+      <div><div style="font-size:10px;color:var(--amber)">Days Left</div><div style="font-weight:700;font-size:11px">${Math.max(0,Math.round(mem.days_remaining||0))}</div></div>
+    </div>
+  </div>`:''}
+
+  <!-- Beauty Points -->
+  <div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+      <div>
+        <div style="font-size:10px;color:var(--amber);font-weight:600;text-transform:uppercase;margin-bottom:2px">💎 Beauty Points</div>
+        <div style="font-size:28px;font-weight:700;color:var(--gold)">${mem?.beauty_points||0} ⭐</div>
+        <div style="font-size:10px;color:var(--ink3)">Lifetime earned: ${mem?.lifetime_points||0} pts</div>
+      </div>
+      <div style="margin-left:auto;text-align:right;font-size:11px;color:var(--ink3)">
+        <div>₹100 = 1 point</div>
+        <div>From ${histRows.length} visits</div>
+      </div>
+    </div>
+    <!-- Manage Points -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px">
-        <option value="add">Add Points</option>
-        <option value="redeem">Redeem Points</option>
-        <option value="set">Set Points</option>
+      <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">
+        <option value="add">+ Add Points</option>
+        <option value="redeem">− Redeem Points</option>
+        <option value="set">= Set Points</option>
       </select>
-      <input type="number" id="pts-amount" placeholder="Points" min="0" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
-      <input type="text" id="pts-notes" placeholder="Notes (optional)" style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
+      <input type="number" id="pts-amount" placeholder="Points" min="1" style="width:90px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
+      <input type="text" id="pts-notes" placeholder="Notes" style="flex:1;min-width:100px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
       <button onclick="savePoints(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:600">Save</button>
     </div>
   </div>
-  <!-- Renew -->
+
+  <!-- Action Buttons -->
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-redo"></i> Renew Membership</button>
-    <button onclick="openWaModal('${client.phone||''}','${client.name}','Hello ${client.name}! Your Saundarya Exclusive Membership expires on ${String(mem.expiry_date||'').substring(0,10)}. Please renew to continue enjoying your benefits. - Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">WA Renewal Reminder</button>
-  </div>`:''}
+    ${client.phone?`<button onclick="openWaModal('${client.phone}','${client.name}','Hello ${client.name}! Thank you for being a Saundarya Exclusive Member. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#fff' style='margin-right:4px;vertical-align:middle'><path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z'/></svg>WhatsApp</button>`:''}
+    <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class='fas fa-redo'></i> Renew</button>
+    <button onclick="closeInvModal();editClient(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-edit'></i> Edit Profile</button>
+    <button onclick="if(confirm('Delete this member?'))deleteClient(${clientId},'${client.name.replace(/'/g,'')}');closeInvModal();" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-trash'></i> Delete</button>
+  </div>
+
+  <!-- Service History Table -->
+  <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+    <i class="fas fa-history" style="color:var(--sky);margin-right:6px"></i>Service History
+  </div>
+  <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin-bottom:10px">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead style="background:var(--charcoal,#1C1C1E)"><tr>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Date</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Invoice</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Services</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:right">Bill</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:right">Points ⭐</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Payment</th>
+      </tr></thead>
+      <tbody>
+        ${histRows.length?histRows.map(e=>{
+          const pts=Math.floor((e.net_total||0)/100);
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 10px">${String(e.entry_date||'').substring(0,10)}</td>
+            <td style="padding:7px 10px;color:var(--teal);font-weight:600">${e.inv_no}</td>
+            <td style="padding:7px 10px;color:var(--ink2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.services||'—'}</td>
+            <td style="padding:7px 10px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.net_total||0)}</td>
+            <td style="padding:7px 10px;text-align:right;color:var(--gold);font-weight:700">+${pts} ⭐</td>
+            <td style="padding:7px 10px"><span style="background:var(--bg);border-radius:4px;padding:2px 6px;font-size:10px">${(e.pay_method||'Cash').startsWith('Split')?'Split':e.pay_method||'Cash'}</span></td>
+          </tr>`;
+        }).join(''):'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--ink4)">No service history found</td></tr>'}
+      </tbody>
+      ${histRows.length?`<tfoot><tr style="background:var(--bg)">
+        <td colspan="3" style="padding:8px 10px;font-weight:700;font-size:12px">Total from ${histRows.length} visits</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--emerald)">${fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ total</td>
+        <td></td>
+      </tr></tfoot>`:''}
+    </table>
+  </div>
   `;
 }
+
 
 async function savePoints(clientId){
   const action=v('pts-action')?.value||'add';

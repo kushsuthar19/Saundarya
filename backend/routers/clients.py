@@ -137,21 +137,24 @@ async def create_client(
     ann = data.anniversary.strftime("%Y-%m-%d") if getattr(data, 'anniversary', None) else None
     pst = getattr(data, 'preferred_staff', None)
 
+    gender = getattr(data, 'gender', None)
+    address = getattr(data, 'address', None)
+    client_type_val = getattr(data, 'client_type', 'New') or 'New'
     await cursor.execute(
         """INSERT INTO clients (name, phone, email, birthday, skin_type, hair_type,
                                 tag, preferences, source, client_type,
-                                anniversary, preferred_staff)
+                                anniversary, preferred_staff, gender, address)
            VALUES (:1,:2,:3,
                    CASE WHEN :4 IS NOT NULL THEN TO_DATE(:5,'YYYY-MM-DD') ELSE NULL END,
-                   :6,:7,:8,:9,:10,'New',
-                   CASE WHEN :11 IS NOT NULL THEN TO_DATE(:12,'YYYY-MM-DD') ELSE NULL END,
-                   :13)
-           RETURNING id INTO :14""",
+                   :6,:7,:8,:9,:10,:11,
+                   CASE WHEN :12 IS NOT NULL THEN TO_DATE(:13,'YYYY-MM-DD') ELSE NULL END,
+                   :14,:15,:16)
+           RETURNING id INTO :17""",
         [data.name, data.phone, data.email,
          bday, bday,
          data.skin_type or 'Normal', data.hair_type or 'Normal',
          data.tag or 'Regular', data.preferences, data.source or 'Manual',
-         ann, ann, pst,
+         client_type_val, ann, ann, pst, gender, address,
          cursor.var(oracledb.NUMBER)]
     )
     new_id = cursor.bindvars[-1].getvalue()

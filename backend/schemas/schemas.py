@@ -62,6 +62,8 @@ class ClientCreate(BaseModel):
     tag: Optional[str] = "Regular"
     preferences: Optional[str] = Field(None, max_length=500)
     preferred_staff: Optional[str] = Field(None, max_length=100)
+    gender: Optional[str] = Field(None, max_length=10)
+    address: Optional[str] = Field(None, max_length=500)
     source: Optional[str] = "Manual"
 
 
@@ -87,6 +89,8 @@ class ClientOut(BaseModel):
     client_type: Optional[str] = 'New'
     anniversary: Optional[str] = None
     preferred_staff: Optional[str] = None
+    gender: Optional[str] = None
+    address: Optional[str] = None
     visit_count: Optional[int] = 0
     last_visit: Optional[str] = None
 
@@ -326,6 +330,8 @@ class BridalCreate(BaseModel):
     discount: float = 0
     advance_paid: float = 0
     notes: Optional[str] = Field(None, max_length=1000)
+    booking_date: Optional[date] = None
+    advance_pay_method: Optional[str] = "Cash"
     functions: List[BridalFunction] = []
 
     @field_validator("wedding_date", mode="before")

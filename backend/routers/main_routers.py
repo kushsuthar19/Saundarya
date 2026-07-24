@@ -675,11 +675,14 @@ async def create_bridal(
     if data.advance_paid and float(data.advance_paid) > 0:
         try:
             from datetime import date as _date
-            today_str = _date.today().strftime('%Y-%m-%d')
-            btype = getattr(data, 'booking_type', 'Bride')
-            client_label = f"{data.client_name} (Bridal - {btype})"
+            import oracledb as _oracledb
+            # Use booking_date if provided, else today
+            booking_dt = data.booking_date
+            entry_date_str = booking_dt.strftime('%Y-%m-%d') if booking_dt else _date.today().strftime('%Y-%m-%d')
+            btype = data.booking_type or 'Bride'
+            client_label = f"{data.client_name} (Bridal Advance - {btype})"
             adv_inv = f"BR-ADV-{new_id}"
-            pay_m = getattr(data, 'advance_pay_method', 'Cash') or 'Cash'
+            pay_m = data.advance_pay_method or 'Cash'
 
             # Get or create client
             cl_id = None
@@ -690,27 +693,29 @@ async def create_bridal(
                     cl_id = cl_row[0]
             if not cl_id:
                 await cursor.execute(
-                    "INSERT INTO clients (name,phone,source,client_type) VALUES (:1,:2,'Bridal','New') RETURNING id INTO :3",
-                    [data.client_name, data.phone, cursor.var(__import__('oracledb').NUMBER)]
+                    """INSERT INTO clients (name,phone,source,client_type,visit_count,total_spent)
+                       VALUES (:1,:2,'Bridal','New',0,0) RETURNING id INTO :3""",
+                    [data.client_name, data.phone, cursor.var(_oracledb.NUMBER)]
                 )
                 cl_id = int(cursor.bindvars[-1].getvalue()[0])
 
+            adv_amount = float(data.advance_paid)
             await cursor.execute(
                 """INSERT INTO daily_entries
                    (inv_no,client_id,client_name,phone,entry_date,visit_type,
                     services,gross_total,discount,net_total,pay_method,remarks,created_by)
                    VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),'Bridal Advance',
-                           :6,:7,0,:7,:8,:9,:10)
-                   RETURNING id INTO :11""",
-                [adv_inv, cl_id, client_label, data.phone, today_str,
-                 f"Bridal Advance - {btype}",
-                 float(data.advance_paid), pay_m,
-                 f"Advance for booking #{new_id}",
+                           :6,:7,0,:8,:9,:10,:11)
+                   RETURNING id INTO :12""",
+                [adv_inv, cl_id, client_label, data.phone, entry_date_str,
+                 f"Bridal Advance - {btype} (Job: {new_id})",
+                 adv_amount, adv_amount, pay_m,
+                 f"Bridal advance for booking #{new_id}",
                  int(current_user["id"]),
-                 cursor.var(__import__('oracledb').NUMBER)]
+                 cursor.var(_oracledb.NUMBER)]
             )
             await db.commit()
-        except Exception:
+        except Exception as _e:
             pass  # Don't fail bridal save if daily entry fails
 
     return await _get_bridal(new_id, cursor)

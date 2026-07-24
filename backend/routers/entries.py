@@ -152,42 +152,82 @@ async def create_entry(
         cid_val = cid_var.getvalue()
         client_id = int(cid_val[0] if isinstance(cid_val, list) else cid_val)
 
-    # Update client stats + visit_count + last_visit + auto-promote New→Regular after 2nd visit
+    # Check if this is a NEW day visit (different from last_visit date)
+    # This determines New→Regular promotion (only after 2nd DIFFERENT day)
+    is_new_day_visit = True
     try:
         await cursor.execute(
-            """UPDATE clients
-               SET visits = NVL(visits,0) + 1,
-                   total_spent = NVL(total_spent,0) + :1,
-                   visit_count = NVL(visit_count,0) + 1,
-                   last_visit = SYSDATE,
-                   client_type = CASE
-                       WHEN NVL(client_type,'New') = 'Exclusive' THEN 'Exclusive'
-                       WHEN NVL(visit_count,0) >= 1 THEN 'Regular'
-                       ELSE 'New'
-                   END,
-                   updated_at = SYSTIMESTAMP
-               WHERE id = :2""",
-            [net, client_id]
+            "SELECT TO_CHAR(last_visit,'YYYY-MM-DD'), NVL(visit_count,0), NVL(client_type,'New') FROM clients WHERE id=:1",
+            [client_id]
         )
+        cv_row = await cursor.fetchone()
+        if cv_row:
+            last_v_str, cur_visit_count, cur_type = cv_row
+            today_str = str(data.entry_date)
+            # Same day = not a new visit (e.g. 2 entries on same day)
+            if last_v_str and last_v_str == today_str:
+                is_new_day_visit = False
     except Exception:
-        # Fallback: update only basic columns if new columns don't exist yet
-        await cursor.execute(
-            "UPDATE clients SET visits=NVL(visits,0)+1, total_spent=NVL(total_spent,0)+:1, updated_at=SYSTIMESTAMP WHERE id=:2",
-            [net, client_id]
-        )
-    # Auto-add beauty points if member (₹100 = 1 point)
-    pts_to_add = int(net // 100)
-    if pts_to_add > 0:
+        pass
+
+    # Update client stats
+    try:
+        if is_new_day_visit:
+            await cursor.execute(
+                """UPDATE clients
+                   SET visits = NVL(visits,0) + 1,
+                       total_spent = NVL(total_spent,0) + :1,
+                       visit_count = NVL(visit_count,0) + 1,
+                       last_visit = TO_DATE(:2,'YYYY-MM-DD'),
+                       client_type = CASE
+                           WHEN NVL(client_type,'New') = 'Exclusive' THEN 'Exclusive'
+                           WHEN NVL(visit_count,0) >= 1 THEN 'Regular'
+                           ELSE 'New'
+                       END,
+                       updated_at = SYSTIMESTAMP
+                   WHERE id = :3""",
+                [net, str(data.entry_date), client_id]
+            )
+        else:
+            # Same day revisit — only update total_spent, not visit count
+            await cursor.execute(
+                """UPDATE clients
+                   SET total_spent = NVL(total_spent,0) + :1,
+                       updated_at = SYSTIMESTAMP
+                   WHERE id = :2""",
+                [net, client_id]
+            )
+    except Exception as e:
+        # Fallback
         try:
             await cursor.execute(
+                "UPDATE clients SET visits=NVL(visits,0)+1, total_spent=NVL(total_spent,0)+:1, updated_at=SYSTIMESTAMP WHERE id=:2",
+                [net, client_id]
+            )
+        except Exception:
+            pass
+
+    # Auto-add beauty points if Exclusive member (₹100 = 1 point)
+    pts_to_add = int(net // 100)
+    if pts_to_add > 0 and client_id:
+        try:
+            result = await cursor.execute(
                 """UPDATE memberships
                    SET beauty_points = beauty_points + :1,
                        lifetime_points = lifetime_points + :1
                    WHERE client_id = :2 AND status = 'Active'""",
                 [pts_to_add, client_id]
             )
+            # Log the points transaction
+            await cursor.execute(
+                """INSERT INTO beauty_points_log
+                   (membership_id, entry_type, points, notes)
+                   SELECT id, 'Earned', :1, 'Auto from invoice'
+                   FROM memberships WHERE client_id=:2 AND status='Active'""",
+                [pts_to_add, client_id]
+            )
         except Exception:
-            pass  # memberships table may not exist yet
+            pass  # non-member or table not ready
 
     # Insert entry
     nv = str(data.next_visit) if data.next_visit else None
