@@ -54,6 +54,7 @@ async def list_entries(
     pay_method: Optional[str] = Query(None),
     visit_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    phone: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, le=500),
     current_user: dict = Depends(get_current_user),
@@ -65,28 +66,30 @@ async def list_entries(
                     next_visit, remarks, wa_sent, created_at
              FROM daily_entries WHERE 1=1"""
     params = []
+    def P():
+        return f":{len(params)+1}"
     if entry_date:
-        sql += " AND entry_date = TO_DATE(:ed,'YYYY-MM-DD')"
+        sql += f" AND entry_date = TO_DATE({P()},'YYYY-MM-DD')"
         params.append(str(entry_date))
     if from_date:
-        sql += " AND entry_date >= TO_DATE(:fd,'YYYY-MM-DD')"
+        sql += f" AND entry_date >= TO_DATE({P()},'YYYY-MM-DD')"
         params.append(str(from_date))
     if to_date:
-        sql += " AND entry_date <= TO_DATE(:td,'YYYY-MM-DD')"
+        sql += f" AND entry_date <= TO_DATE({P()},'YYYY-MM-DD')"
         params.append(str(to_date))
     if pay_method:
-        sql += " AND pay_method = :pm"
+        sql += f" AND pay_method = {P()}"
         params.append(pay_method)
     if visit_type:
-        sql += " AND visit_type = :vt"
+        sql += f" AND visit_type = {P()}"
         params.append(visit_type)
     if search:
-        sql += " AND (UPPER(client_name) LIKE :s1 OR inv_no LIKE :s2)"
+        sql += f" AND (UPPER(client_name) LIKE {P()} OR inv_no LIKE {P()})"
         params += [f"%{search.upper()}%", f"%{search}%"]
     if phone:
-        sql += " AND phone = :ph"
+        sql += f" AND phone = {P()}"
         params.append(phone)
-    sql += " ORDER BY entry_date DESC, id DESC OFFSET :sk ROWS FETCH NEXT :lm ROWS ONLY"
+    sql += f" ORDER BY entry_date DESC, id DESC OFFSET {P()} ROWS FETCH NEXT {P()} ROWS ONLY"
     params += [skip, limit]
     await cursor.execute(sql, params)
     rows = await cursor.fetchall()
