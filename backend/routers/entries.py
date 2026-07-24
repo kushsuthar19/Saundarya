@@ -196,12 +196,12 @@ async def create_entry(
            (inv_no, client_id, client_name, phone, entry_date, visit_type,
             services, gross_total, discount, net_total, pay_method, next_visit, remarks, created_by)
            VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9,:10,:11,
-                   CASE WHEN :12 IS NOT NULL THEN TO_DATE(:12,'YYYY-MM-DD') ELSE NULL END,
-                   :13,:14)
-           RETURNING id INTO :15""",
+                   CASE WHEN :12 IS NOT NULL THEN TO_DATE(:13,'YYYY-MM-DD') ELSE NULL END,
+                   :14,:15)
+           RETURNING id INTO :16""",
         [inv_no, client_id, data.client_name, data.phone, str(data.entry_date),
          data.visit_type, services_str, gross, data.discount, net, data.pay_method,
-         nv, data.remarks, int(current_user["id"]),
+         nv, nv, data.remarks, int(current_user["id"]),
          cursor.var(oracledb.NUMBER)]
     )
     eid_val = cursor.bindvars[-1].getvalue()
