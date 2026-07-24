@@ -1,4 +1,4 @@
-"""Clients CRUD endpoints + Membership Module."""
+"""Clients CRUD endpoints + Membership Module — all Oracle bind params positional."""
 from typing import List, Optional
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,10 +14,17 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 
 async def _get_client(client_id: int, cursor) -> dict:
     await cursor.execute(
-        """SELECT id, name, phone, email, birthday, skin_type, hair_type,
-                  tag, preferences, visits, total_spent, source, created_at,
-                  client_type, anniversary, preferred_staff,
-                  visit_count, last_visit
+        """SELECT id, name, phone, email,
+                  TO_CHAR(birthday,'YYYY-MM-DD') as birthday,
+                  skin_type, hair_type, tag, preferences,
+                  NVL(visits,0) as visits,
+                  NVL(total_spent,0) as total_spent,
+                  source, created_at,
+                  NVL(client_type,'New') as client_type,
+                  TO_CHAR(anniversary,'YYYY-MM-DD') as anniversary,
+                  preferred_staff,
+                  NVL(visit_count,0) as visit_count,
+                  TO_CHAR(last_visit,'YYYY-MM-DD') as last_visit
            FROM clients WHERE id = :1""",
         [client_id]
     )
@@ -48,21 +55,26 @@ async def list_clients(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
-    sql = """SELECT id, name, phone, email, birthday, skin_type, hair_type,
-                    tag, preferences, NVL(visits,0) as visits,
-                    NVL(total_spent,0) as total_spent, source, created_at,
+    sql = """SELECT id, name, phone, email,
+                    TO_CHAR(birthday,'YYYY-MM-DD') as birthday,
+                    skin_type, hair_type, tag, preferences,
+                    NVL(visits,0) as visits,
+                    NVL(total_spent,0) as total_spent,
+                    source, created_at,
                     NVL(client_type,'New') as client_type,
-                    anniversary, preferred_staff,
+                    TO_CHAR(anniversary,'YYYY-MM-DD') as anniversary,
+                    preferred_staff,
                     NVL(visit_count,0) as visit_count,
-                    last_visit
+                    TO_CHAR(last_visit,'YYYY-MM-DD') as last_visit
              FROM clients WHERE 1=1"""
     params = []
+
     def P():
         return f":{len(params)+1}"
+
     if search:
-        s = f"%{search.upper()}%"
         sql += f" AND (UPPER(name) LIKE {P()} OR phone LIKE {P()})"
-        params += [s, f"%{search}%"]
+        params += [f"%{search.upper()}%", f"%{search}%"]
     if tag:
         sql += f" AND tag = {P()}"
         params.append(tag)
@@ -77,7 +89,7 @@ async def list_clients(
     return [dict(zip(cols, r)) for r in rows]
 
 
-# ── lookup by phone (for Daily Entry auto-detect) ────────────────────────────
+# ── lookup by phone ───────────────────────────────────────────────────────────
 
 @router.get("/lookup")
 async def lookup_by_phone(
@@ -91,9 +103,10 @@ async def lookup_by_phone(
                   NVL(c.client_type,'New') as client_type,
                   NVL(c.visit_count,0) as visit_count,
                   NVL(c.total_spent,0) as total_spent,
-                  c.last_visit,
+                  TO_CHAR(c.last_visit,'YYYY-MM-DD') as last_visit,
                   m.membership_id, m.status as mem_status,
-                  m.expiry_date, m.beauty_points
+                  TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
+                  m.beauty_points
            FROM clients c
            LEFT JOIN memberships m ON m.client_id=c.id AND m.status='Active'
            WHERE c.phone=:1""",
@@ -121,17 +134,24 @@ async def create_client(
             raise HTTPException(status_code=400, detail="Client with this phone already exists")
 
     bday = data.birthday.strftime("%Y-%m-%d") if data.birthday else None
-    ann = data.anniversary.strftime("%Y-%m-%d") if data.anniversary else None
+    ann = data.anniversary.strftime("%Y-%m-%d") if getattr(data, 'anniversary', None) else None
+    pst = getattr(data, 'preferred_staff', None)
+
     await cursor.execute(
         """INSERT INTO clients (name, phone, email, birthday, skin_type, hair_type,
                                 tag, preferences, source, client_type,
                                 anniversary, preferred_staff)
-           VALUES (:1,:2,:3,TO_DATE(:4,'YYYY-MM-DD'),:5,:6,:7,:8,:9,'New',
-                   TO_DATE(:10,'YYYY-MM-DD'),:11)
-           RETURNING id INTO :12""",
-        [data.name, data.phone, data.email, bday, data.skin_type, data.hair_type,
-         data.tag, data.preferences, data.source, ann,
-         getattr(data,'preferred_staff',None),
+           VALUES (:1,:2,:3,
+                   CASE WHEN :4 IS NOT NULL THEN TO_DATE(:5,'YYYY-MM-DD') ELSE NULL END,
+                   :6,:7,:8,:9,:10,'New',
+                   CASE WHEN :11 IS NOT NULL THEN TO_DATE(:12,'YYYY-MM-DD') ELSE NULL END,
+                   :13)
+           RETURNING id INTO :14""",
+        [data.name, data.phone, data.email,
+         bday, bday,
+         data.skin_type or 'Normal', data.hair_type or 'Normal',
+         data.tag or 'Regular', data.preferences, data.source or 'Manual',
+         ann, ann, pst,
          cursor.var(oracledb.NUMBER)]
     )
     new_id = cursor.bindvars[-1].getvalue()
@@ -163,31 +183,37 @@ async def update_client(
     cursor = db.cursor()
     updates = []
     params = []
-    if data.name is not None:
-        updates.append("name=:n"); params.append(data.name)
-    if data.phone is not None:
-        updates.append("phone=:ph"); params.append(data.phone)
-    if data.email is not None:
-        updates.append("email=:em"); params.append(data.email)
+
+    def add(col_expr, val):
+        updates.append(col_expr.replace("?", f":{len(params)+1}"))
+        params.append(val)
+
+    if data.name is not None:          add("name=?", data.name)
+    if data.phone is not None:         add("phone=?", data.phone)
+    if data.email is not None:         add("email=?", data.email)
     if data.birthday is not None:
-        updates.append("birthday=TO_DATE(:bd,'YYYY-MM-DD')"); params.append(data.birthday.strftime("%Y-%m-%d"))
-    if data.skin_type is not None:
-        updates.append("skin_type=:sk"); params.append(data.skin_type)
-    if data.hair_type is not None:
-        updates.append("hair_type=:hr"); params.append(data.hair_type)
-    if data.tag is not None:
-        updates.append("tag=:tg"); params.append(data.tag)
-    if data.preferences is not None:
-        updates.append("preferences=:pf"); params.append(data.preferences)
-    if hasattr(data,'anniversary') and data.anniversary is not None:
-        updates.append("anniversary=TO_DATE(:ann,'YYYY-MM-DD')"); params.append(data.anniversary.strftime("%Y-%m-%d"))
-    if hasattr(data,'preferred_staff') and data.preferred_staff is not None:
-        updates.append("preferred_staff=:pst"); params.append(data.preferred_staff)
+        bday = data.birthday.strftime("%Y-%m-%d")
+        updates.append(f"birthday=TO_DATE(:{len(params)+1},'YYYY-MM-DD')")
+        params.append(bday)
+    if data.skin_type is not None:     add("skin_type=?", data.skin_type)
+    if data.hair_type is not None:     add("hair_type=?", data.hair_type)
+    if data.tag is not None:           add("tag=?", data.tag)
+    if data.preferences is not None:   add("preferences=?", data.preferences)
+    ann = getattr(data, 'anniversary', None)
+    if ann is not None:
+        av = ann.strftime("%Y-%m-%d")
+        updates.append(f"anniversary=TO_DATE(:{len(params)+1},'YYYY-MM-DD')")
+        params.append(av)
+    pst = getattr(data, 'preferred_staff', None)
+    if pst is not None:                add("preferred_staff=?", pst)
+
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+
     updates.append("updated_at=SYSTIMESTAMP")
     params.append(client_id)
-    await cursor.execute(f"UPDATE clients SET {', '.join(updates)} WHERE id=:{len(params)}", params)
+    sql = f"UPDATE clients SET {', '.join(updates)} WHERE id=:{len(params)}"
+    await cursor.execute(sql, params)
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Client not found")
     await db.commit()
@@ -236,9 +262,7 @@ async def create_membership(
     current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
-    """Enroll client as Exclusive Member."""
     cursor = db.cursor()
-    # Check no active membership already
     await cursor.execute(
         "SELECT id FROM memberships WHERE client_id=:1 AND status='Active'",
         [client_id]
@@ -254,8 +278,7 @@ async def create_membership(
         """INSERT INTO memberships
                (client_id, membership_id, status, fee_paid, start_date, expiry_date,
                 beauty_points, lifetime_points, notes)
-           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),
-                   0,0,:6)
+           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),0,0,:6)
            RETURNING id INTO :7""",
         [client_id, mem_id, data.get('fee_paid', 1000),
          start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
@@ -263,20 +286,12 @@ async def create_membership(
          cursor.var(oracledb.NUMBER)]
     )
     await db.commit()
-
-    # Upgrade client to Exclusive
     await cursor.execute(
         "UPDATE clients SET client_type='Exclusive' WHERE id=:1",
         [client_id]
     )
     await db.commit()
-
-    return {
-        "membership_id": mem_id,
-        "start_date": str(start),
-        "expiry_date": str(expiry),
-        "status": "Active"
-    }
+    return {"membership_id": mem_id, "start_date": str(start), "expiry_date": str(expiry), "status": "Active"}
 
 
 @router.get("/{client_id}/membership")
@@ -291,7 +306,7 @@ async def get_membership(
                   TO_CHAR(m.start_date,'YYYY-MM-DD') as start_date,
                   TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
                   m.beauty_points, m.lifetime_points, m.notes,
-                  (m.expiry_date - SYSDATE) as days_remaining
+                  ROUND(m.expiry_date - SYSDATE) as days_remaining
            FROM memberships m
            WHERE m.client_id=:1
            ORDER BY m.created_at DESC""",
@@ -336,7 +351,6 @@ async def update_points(
     current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
-    """Add, edit or redeem beauty points manually."""
     cursor = db.cursor()
     await cursor.execute(
         "SELECT id, beauty_points, lifetime_points FROM memberships WHERE client_id=:1 AND status='Active'",
@@ -346,8 +360,7 @@ async def update_points(
     if not row:
         raise HTTPException(status_code=404, detail="No active membership")
     mem_id, current_pts, lifetime_pts = row
-
-    action = data.get('action', 'add')  # add / redeem / set
+    action = data.get('action', 'add')
     points = int(data.get('points', 0))
 
     if action == 'redeem':
@@ -358,7 +371,7 @@ async def update_points(
     elif action == 'set':
         new_pts = points
         new_lifetime = lifetime_pts
-    else:  # add
+    else:
         new_pts = current_pts + points
         new_lifetime = lifetime_pts + points
 
@@ -366,13 +379,11 @@ async def update_points(
         "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
         [new_pts, new_lifetime, mem_id]
     )
-    # Log the transaction
     await cursor.execute(
         """INSERT INTO beauty_points_log
                (membership_id, entry_type, points, reference_inv, notes)
            VALUES (:1,:2,:3,:4,:5)""",
-        [mem_id, action, points,
-         data.get('invoice', ''), data.get('notes', '')]
+        [mem_id, action, points, data.get('invoice', ''), data.get('notes', '')]
     )
     await db.commit()
     return {"beauty_points": new_pts, "lifetime_points": new_lifetime}
@@ -383,7 +394,6 @@ async def expiry_notifications(
     current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
-    """Return memberships expiring in 15 days or already expired."""
     cursor = db.cursor()
     await cursor.execute(
         """SELECT c.name, c.phone, m.membership_id, m.status,

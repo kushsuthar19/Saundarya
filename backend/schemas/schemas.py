@@ -70,24 +70,25 @@ class ClientUpdate(ClientCreate):
 
 
 class ClientOut(BaseModel):
+    model_config = {"from_attributes": True}
     id: int
     name: str
-    phone: Optional[str]
-    email: Optional[str]
-    birthday: Optional[date]
-    skin_type: Optional[str]
-    hair_type: Optional[str]
-    tag: Optional[str]
-    preferences: Optional[str]
-    visits: int
-    total_spent: float
-    source: Optional[str]
-    created_at: Optional[datetime]
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    birthday: Optional[str] = None
+    skin_type: Optional[str] = None
+    hair_type: Optional[str] = None
+    tag: Optional[str] = None
+    preferences: Optional[str] = None
+    visits: Optional[int] = 0
+    total_spent: Optional[float] = 0
+    source: Optional[str] = None
+    created_at: Optional[datetime] = None
     client_type: Optional[str] = 'New'
-    anniversary: Optional[date] = None
+    anniversary: Optional[str] = None
     preferred_staff: Optional[str] = None
-    visit_count: int = 0
-    last_visit: Optional[date] = None
+    visit_count: Optional[int] = 0
+    last_visit: Optional[str] = None
 
 
 # ── Staff ─────────────────────────────────────────────────
