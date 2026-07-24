@@ -1407,7 +1407,9 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Skin Type</label><select id="cl-sk"><option>Normal</option><option>Oily</option><option>Dry</option><option>Combination</option><option>Sensitive</option></select></div>
         <div class="fl"><label>Hair Type</label><select id="cl-hr"><option>Normal</option><option>Oily</option><option>Dry</option><option>Curly</option><option>Straight</option><option>Wavy</option></select></div>
         <div class="fl"><label>Tag</label><select id="cl-tg"><option>Regular</option><option>VIP</option><option>New</option><option>Bridal</option></select></div>
-        <div class="fl"><label>Preferences</label><input type="text" id="cl-pr"></div>
+        <div class="fl"><label>Preferences / Notes</label><input type="text" id="cl-pr"></div>
+        <div class="fl"><label>Anniversary Date</label><input type="date" id="cl-ann"></div>
+        <div class="fl"><label>Preferred Staff</label><input type="text" id="cl-pst" placeholder="Staff name"></div>
       </div>
       <div class="ar"><button class="btn btn-ghost" onclick="v('cf').style.display='none'">Cancel</button><button class="btn btn-sky" id="cl-save-btn" onclick="saveClient()"><i class="fas fa-save"></i>Save Client</button></div>
     </div></div>
@@ -2827,10 +2829,16 @@ function sendWaAppt(phone,name,svc,date,time){
 // ═══════════════════════════════════════════════════════════════
 async function saveClient(){
   const nm=v('cl-n').value.trim();if(!nm){toast('Enter name','var(--rose)');return;}
-  const r=await apiCall('POST','/clients',{name:nm,phone:v('cl-ph').value||null,email:v('cl-em').value||null,birthday:v('cl-bd').value||null,skin_type:v('cl-sk').value||'Normal',hair_type:v('cl-hr').value||'Normal',tag:v('cl-tg').value||'Regular',preferences:v('cl-pr').value||null});
+  const r=await apiCall('POST','/clients',{
+    name:nm,phone:v('cl-ph').value||null,email:v('cl-em').value||null,
+    birthday:v('cl-bd').value||null,skin_type:v('cl-sk').value||'Normal',
+    hair_type:v('cl-hr').value||'Normal',tag:v('cl-tg').value||'Regular',
+    preferences:v('cl-pr').value||null,anniversary:v('cl-ann')?.value||null,
+    preferred_staff:v('cl-pst')?.value||null
+  });
   if(!r)return;
   toast('<i class="fas fa-user-plus" style="color:var(--emerald)"></i> Client saved!','var(--emerald)');
-  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr','cl-ann','cl-pst'].forEach(id=>{const el=v(id);if(el)el.value='';});
   toggleCF();renderClients('');
 }
 function toggleCF(){const f=v('cf');if(f)f.style.display=f.style.display==='none'?'block':'none';}
@@ -2851,6 +2859,7 @@ async function renderClients(s){
     <td>${c.visit_count||c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
     <td style="white-space:nowrap">
       ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
+      <button onclick="showClientProfile(${c.id})" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="View Profile"><i class="fas fa-eye"></i></button>
       <button onclick="editClient(${c.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Edit"><i class="fas fa-edit"></i></button>
       <button onclick="deleteClient(${c.id},'${c.name}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Delete"><i class="fas fa-trash"></i></button>
       ${c.client_type==='Exclusive'?`<button onclick="showMemberProfile(${c.id})" style="background:var(--gold);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Member Profile"><i class="fas fa-crown"></i></button>`:''}
@@ -2914,11 +2923,13 @@ async function editClient(id){
   v('cl-n').value=c.name||'';
   v('cl-ph').value=c.phone||'';
   v('cl-em').value=c.email||'';
-  v('cl-bd').value=c.birthday||'';
+  v('cl-bd').value=String(c.birthday||'').substring(0,10);
   v('cl-sk').value=c.skin_type||'Normal';
   v('cl-hr').value=c.hair_type||'Normal';
   v('cl-tg').value=c.tag||'Regular';
   v('cl-pr').value=c.preferences||'';
+  const annEl=v('cl-ann');if(annEl)annEl.value=String(c.anniversary||'').substring(0,10);
+  const pstEl=v('cl-pst');if(pstEl)pstEl.value=c.preferred_staff||'';
   // Show form — id is "cf" not "cl-form-wrap"
   const fw=v('cf');if(fw)fw.style.display='block';
   // Change save button to Update
@@ -2934,15 +2945,147 @@ async function updateClient(id){
     name:nm, phone:v('cl-ph').value||null, email:v('cl-em').value||null,
     birthday:v('cl-bd').value||null, skin_type:v('cl-sk').value||'Normal',
     hair_type:v('cl-hr').value||'Normal', tag:v('cl-tg').value||'Regular',
-    preferences:v('cl-pr').value||null
+    preferences:v('cl-pr').value||null,
+    anniversary:v('cl-ann')?.value||null,
+    preferred_staff:v('cl-pst')?.value||null
   });
   if(!r)return;
   toast('<i class="fas fa-check" style="color:var(--emerald)"></i> Client updated!','var(--emerald)');
-  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr','cl-ann','cl-pst'].forEach(id=>{const el=v(id);if(el)el.value='';}); 
   const sb=v('cl-save-btn');
   if(sb){sb.textContent='Save Client';sb.setAttribute('onclick','saveClient()');}
   v('cf').style.display='none';
   renderClients('');
+}
+
+async function showClientProfile(clientId){
+  const modal=v('inv-modal');if(!modal)return;
+  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:750px;max-width:96vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:700;color:var(--ink)"><i class="fas fa-user" style="color:var(--sky);margin-right:8px"></i>Client Profile</div>
+      <button onclick="closeInvModal()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button>
+    </div>
+    <div id="cp-body" style="min-height:200px"><div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin fa-2x"></i></div></div>
+  </div>`;
+  modal.style.display='flex';
+  // Load client data + entries
+  const [c, mems, entries] = await Promise.all([
+    apiCall('GET',`/clients/${clientId}`),
+    apiCall('GET',`/clients/${clientId}/membership`),
+    apiCall('GET',`/entries?limit=50&client_id=${clientId}`).catch(()=>null)
+  ]);
+  if(!c){v('cp-body').innerHTML='<div style="color:var(--rose);text-align:center;padding:20px">Failed to load client</div>';return;}
+  const mem=mems&&mems[0];
+  const typeColor={'New':'var(--emerald)','Regular':'var(--sky)','Exclusive':'var(--gold)'}[c.client_type||'New'];
+  const typeBadge={'New':'🟢 NEW','Regular':'🔵 REGULAR','Exclusive':'⭐ EXCLUSIVE'}[c.client_type||'New'];
+  const cpBody=v('cp-body');if(!cpBody)return;
+  cpBody.innerHTML=`
+  <!-- Client Header -->
+  <div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--bg);border-radius:10px;margin-bottom:16px">
+    <div style="width:52px;height:52px;border-radius:50%;background:${typeColor};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0">
+      ${(c.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+    </div>
+    <div style="flex:1">
+      <div style="font-size:16px;font-weight:700">${c.name}</div>
+      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
+        <span style="background:${typeColor};color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px">${typeBadge}</span>
+        ${c.phone?`<span style="font-size:11px;color:var(--ink3)">${c.phone}</span>`:''}
+        ${c.email?`<span style="font-size:11px;color:var(--ink3)">${c.email}</span>`:''}
+      </div>
+    </div>
+    <div style="display:flex;gap:6px">
+      ${c.phone?`<button onclick="openWaModal('${c.phone}','${c.name}','Hello ${c.name}! Thank you for visiting Saundarya Beauty Care. - Team Saundarya')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:11px">WA</button>`:''}
+      ${c.phone?`<a href="tel:${c.phone}" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:11px;text-decoration:none"><i class="fas fa-phone"></i></a>`:''}
+      <button onclick="closeInvModal();editClient(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:11px"><i class="fas fa-edit"></i> Edit</button>
+    </div>
+  </div>
+  <!-- Info Grid -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+    <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700;color:var(--ink)">${c.visit_count||c.visits||0}</div>
+      <div style="font-size:10px;color:var(--ink3);text-transform:uppercase">Total Visits</div>
+    </div>
+    <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:18px;font-weight:700;color:var(--emerald)">${fmt(c.total_spent||0)}</div>
+      <div style="font-size:10px;color:var(--ink3);text-transform:uppercase">Lifetime Spent</div>
+    </div>
+    <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:13px;font-weight:700;color:var(--ink)">${String(c.last_visit||'—').substring(0,10)}</div>
+      <div style="font-size:10px;color:var(--ink3);text-transform:uppercase">Last Visit</div>
+    </div>
+  </div>
+  <!-- Details -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:12px">
+    ${c.birthday?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">🎂 Birthday:</span> <b>${String(c.birthday).substring(0,10)}</b></div>`:''}
+    ${c.anniversary?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">💑 Anniversary:</span> <b>${String(c.anniversary).substring(0,10)}</b></div>`:''}
+    ${c.preferred_staff?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">👩‍🎨 Preferred Staff:</span> <b>${c.preferred_staff}</b></div>`:''}
+    ${c.skin_type?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">✨ Skin Type:</span> <b>${c.skin_type}</b></div>`:''}
+    ${c.hair_type?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">💆 Hair Type:</span> <b>${c.hair_type}</b></div>`:''}
+    ${c.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><span style="color:var(--ink3)">📝 Notes:</span> ${c.preferences}</div>`:''}
+  </div>
+  <!-- Membership block for Exclusive -->
+  ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:10px;color:var(--amber);font-weight:700;text-transform:uppercase;margin-bottom:2px">⭐ Exclusive Membership</div>
+        <div style="font-size:15px;font-weight:700;color:var(--gold)">${mem.membership_id}</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:22px;font-weight:700;color:var(--gold)">${mem.beauty_points||0} pts</div>
+        <div style="font-size:10px;color:var(--amber)">Beauty Points</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--ink2)">Expires: <b>${String(mem.expiry_date||'').substring(0,10)}</b></div>
+        <div style="font-size:11px;color:var(--ink2)">Days left: <b>${Math.max(0,Math.round(mem.days_remaining||0))}</b></div>
+        <div style="font-size:10px;color:var(--ink3)">Lifetime: ${mem.lifetime_points||0} pts</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button onclick="showMemberProfile(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-crown"></i> Manage Points & Membership</button>
+      <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px"><i class="fas fa-redo"></i> Renew</button>
+    </div>
+  </div>`:''}
+  <!-- Invoice / Service History -->
+  <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+    <i class="fas fa-history" style="color:var(--sky)"></i> Service History
+  </div>
+  <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead style="background:var(--ink)"><tr>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Date</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Invoice</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Services</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:right;font-weight:500">Net Paid</th>
+        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Payment</th>
+      </tr></thead>
+      <tbody id="cp-history">
+        <tr><td colspan="5" style="text-align:center;padding:14px;color:var(--ink4)">Loading history...</td></tr>
+      </tbody>
+    </table>
+  </div>`;
+  // Load entry history by phone
+  if(c.phone){
+    const hRows=await apiCall('GET',`/entries?limit=50&phone=${encodeURIComponent(c.phone)}`).catch(()=>null);
+    const htb=v('cp-history');
+    if(htb){
+      if(!hRows||!hRows.length){
+        htb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--ink4)">No service history found</td></tr>';
+      } else {
+        const pmC={'Cash':'#e8f5ee','UPI':'#e8f4ff','Card':'#f0ebff','Split':'#fff8e7'};
+        htb.innerHTML=hRows.map(e=>`<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:7px 10px">${String(e.entry_date||'').substring(0,10)}</td>
+          <td style="padding:7px 10px;font-weight:600;color:var(--teal)">${e.inv_no}</td>
+          <td style="padding:7px 10px;color:var(--ink2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.services||'—'}</td>
+          <td style="padding:7px 10px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.net_total||0)}</td>
+          <td style="padding:7px 10px"><span style="background:${pmC[(e.pay_method||'Cash').split('|')[0]]||'#f0f0f0'};border-radius:4px;padding:2px 6px;font-size:10px">${(e.pay_method||'Cash').startsWith('Split')?'Split':e.pay_method||'Cash'}</span></td>
+        </tr>`).join('');
+      }
+    }
+  } else {
+    const htb=v('cp-history');
+    if(htb)htb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--ink4)">No phone number — cannot load history</td></tr>';
+  }
 }
 
 async function deleteClient(id,name){

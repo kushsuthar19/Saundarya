@@ -118,13 +118,17 @@ async def create_client(
             raise HTTPException(status_code=400, detail="Client with this phone already exists")
 
     bday = data.birthday.strftime("%Y-%m-%d") if data.birthday else None
+    ann = data.anniversary.strftime("%Y-%m-%d") if data.anniversary else None
     await cursor.execute(
         """INSERT INTO clients (name, phone, email, birthday, skin_type, hair_type,
-                                tag, preferences, source, client_type)
-           VALUES (:1,:2,:3,TO_DATE(:4,'YYYY-MM-DD'),:5,:6,:7,:8,:9,'New')
-           RETURNING id INTO :10""",
+                                tag, preferences, source, client_type,
+                                anniversary, preferred_staff)
+           VALUES (:1,:2,:3,TO_DATE(:4,'YYYY-MM-DD'),:5,:6,:7,:8,:9,'New',
+                   TO_DATE(:10,'YYYY-MM-DD'),:11)
+           RETURNING id INTO :12""",
         [data.name, data.phone, data.email, bday, data.skin_type, data.hair_type,
-         data.tag, data.preferences, data.source,
+         data.tag, data.preferences, data.source, ann,
+         getattr(data,'preferred_staff',None),
          cursor.var(oracledb.NUMBER)]
     )
     new_id = cursor.bindvars[-1].getvalue()
@@ -172,6 +176,10 @@ async def update_client(
         updates.append("tag=:tg"); params.append(data.tag)
     if data.preferences is not None:
         updates.append("preferences=:pf"); params.append(data.preferences)
+    if hasattr(data,'anniversary') and data.anniversary is not None:
+        updates.append("anniversary=TO_DATE(:ann,'YYYY-MM-DD')"); params.append(data.anniversary.strftime("%Y-%m-%d"))
+    if hasattr(data,'preferred_staff') and data.preferred_staff is not None:
+        updates.append("preferred_staff=:pst"); params.append(data.preferred_staff)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     updates.append("updated_at=SYSTIMESTAMP")

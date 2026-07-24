@@ -56,10 +56,12 @@ class ClientCreate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=100)
     birthday: Optional[date] = None
+    anniversary: Optional[date] = None
     skin_type: Optional[str] = "Normal"
     hair_type: Optional[str] = "Normal"
     tag: Optional[str] = "Regular"
     preferences: Optional[str] = Field(None, max_length=500)
+    preferred_staff: Optional[str] = Field(None, max_length=100)
     source: Optional[str] = "Manual"
 
 

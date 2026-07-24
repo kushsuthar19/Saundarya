@@ -83,6 +83,9 @@ async def list_entries(
     if search:
         sql += " AND (UPPER(client_name) LIKE :s1 OR inv_no LIKE :s2)"
         params += [f"%{search.upper()}%", f"%{search}%"]
+    if phone:
+        sql += " AND phone = :ph"
+        params.append(phone)
     sql += " ORDER BY entry_date DESC, id DESC OFFSET :sk ROWS FETCH NEXT :lm ROWS ONLY"
     params += [skip, limit]
     await cursor.execute(sql, params)
@@ -147,31 +150,41 @@ async def create_entry(
         client_id = int(cid_val[0] if isinstance(cid_val, list) else cid_val)
 
     # Update client stats + visit_count + last_visit + auto-promote New→Regular after 2nd visit
-    await cursor.execute(
-        """UPDATE clients
-           SET visits = NVL(visits,0) + 1,
-               total_spent = NVL(total_spent,0) + :1,
-               visit_count = NVL(visit_count,0) + 1,
-               last_visit = SYSDATE,
-               client_type = CASE
-                   WHEN NVL(client_type,'New') = 'Exclusive' THEN 'Exclusive'
-                   WHEN NVL(visit_count,0) >= 1 THEN 'Regular'
-                   ELSE 'New'
-               END,
-               updated_at = SYSTIMESTAMP
-           WHERE id = :2""",
-        [net, client_id]
-    )
+    try:
+        await cursor.execute(
+            """UPDATE clients
+               SET visits = NVL(visits,0) + 1,
+                   total_spent = NVL(total_spent,0) + :1,
+                   visit_count = NVL(visit_count,0) + 1,
+                   last_visit = SYSDATE,
+                   client_type = CASE
+                       WHEN NVL(client_type,'New') = 'Exclusive' THEN 'Exclusive'
+                       WHEN NVL(visit_count,0) >= 1 THEN 'Regular'
+                       ELSE 'New'
+                   END,
+                   updated_at = SYSTIMESTAMP
+               WHERE id = :2""",
+            [net, client_id]
+        )
+    except Exception:
+        # Fallback: update only basic columns if new columns don't exist yet
+        await cursor.execute(
+            "UPDATE clients SET visits=NVL(visits,0)+1, total_spent=NVL(total_spent,0)+:1, updated_at=SYSTIMESTAMP WHERE id=:2",
+            [net, client_id]
+        )
     # Auto-add beauty points if member (₹100 = 1 point)
     pts_to_add = int(net // 100)
     if pts_to_add > 0:
-        await cursor.execute(
-            """UPDATE memberships
-               SET beauty_points = beauty_points + :1,
-                   lifetime_points = lifetime_points + :1
-               WHERE client_id = :2 AND status = 'Active'""",
-            [pts_to_add, client_id]
-        )
+        try:
+            await cursor.execute(
+                """UPDATE memberships
+                   SET beauty_points = beauty_points + :1,
+                       lifetime_points = lifetime_points + :1
+                   WHERE client_id = :2 AND status = 'Active'""",
+                [pts_to_add, client_id]
+            )
+        except Exception:
+            pass  # memberships table may not exist yet
 
     # Insert entry
     nv = str(data.next_visit) if data.next_visit else None
@@ -180,7 +193,8 @@ async def create_entry(
            (inv_no, client_id, client_name, phone, entry_date, visit_type,
             services, gross_total, discount, net_total, pay_method, next_visit, remarks, created_by)
            VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9,:10,:11,
-                   TO_DATE(:12,'YYYY-MM-DD'),:13,:14)
+                   CASE WHEN :12 IS NOT NULL THEN TO_DATE(:12,'YYYY-MM-DD') ELSE NULL END,
+                   :13,:14)
            RETURNING id INTO :15""",
         [inv_no, client_id, data.client_name, data.phone, str(data.entry_date),
          data.visit_type, services_str, gross, data.discount, net, data.pay_method,
