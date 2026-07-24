@@ -670,6 +670,49 @@ async def create_bridal(
         )
 
     await db.commit()
+
+    # Auto-create Daily Entry for advance payment if advance > 0
+    if data.advance_paid and float(data.advance_paid) > 0:
+        try:
+            from datetime import date as _date
+            today_str = _date.today().strftime('%Y-%m-%d')
+            btype = getattr(data, 'booking_type', 'Bride')
+            client_label = f"{data.client_name} (Bridal - {btype})"
+            adv_inv = f"BR-ADV-{new_id}"
+            pay_m = getattr(data, 'advance_pay_method', 'Cash') or 'Cash'
+
+            # Get or create client
+            cl_id = None
+            if data.phone:
+                await cursor.execute("SELECT id FROM clients WHERE phone=:1", [data.phone])
+                cl_row = await cursor.fetchone()
+                if cl_row:
+                    cl_id = cl_row[0]
+            if not cl_id:
+                await cursor.execute(
+                    "INSERT INTO clients (name,phone,source,client_type) VALUES (:1,:2,'Bridal','New') RETURNING id INTO :3",
+                    [data.client_name, data.phone, cursor.var(__import__('oracledb').NUMBER)]
+                )
+                cl_id = int(cursor.bindvars[-1].getvalue()[0])
+
+            await cursor.execute(
+                """INSERT INTO daily_entries
+                   (inv_no,client_id,client_name,phone,entry_date,visit_type,
+                    services,gross_total,discount,net_total,pay_method,remarks,created_by)
+                   VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),'Bridal Advance',
+                           :6,:7,0,:7,:8,:9,:10)
+                   RETURNING id INTO :11""",
+                [adv_inv, cl_id, client_label, data.phone, today_str,
+                 f"Bridal Advance - {btype}",
+                 float(data.advance_paid), pay_m,
+                 f"Advance for booking #{new_id}",
+                 int(current_user["id"]),
+                 cursor.var(__import__('oracledb').NUMBER)]
+            )
+            await db.commit()
+        except Exception:
+            pass  # Don't fail bridal save if daily entry fails
+
     return await _get_bridal(new_id, cursor)
 
 
@@ -924,9 +967,11 @@ async def revenue_stats(
     month_str = date.today().strftime("%Y-%m")
     year_str = date.today().strftime("%Y")
 
-    async def scalar(sql, params=None):
+    async def scalar(sql, params=None, multi=False):
         await cursor.execute(sql, params or [])
         row = await cursor.fetchone()
+        if multi:
+            return row if row else []
         return float(row[0]) if row and row[0] else 0.0
 
     today = await scalar(
@@ -941,18 +986,37 @@ async def revenue_stats(
         "SELECT COALESCE(SUM(net_total),0) FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY')=:1",
         [year_str]
     )
-    cash = await scalar(
-        "SELECT COALESCE(SUM(net_total),0) FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY-MM')=:1 AND pay_method='Cash'",
-        [month_str]
+    # Split-aware cash/upi/card totals
+    # Handles: Cash, UPI, GPay, Card, Split|Cash:N|UPI:N|Card:N
+    cash_upi_card = await scalar(
+        """SELECT
+            SUM(CASE
+                WHEN pay_method='Cash' THEN net_total
+                WHEN pay_method LIKE 'Split|%' THEN
+                    CASE WHEN REGEXP_SUBSTR(pay_method,'Cash:([0-9]+)',1,1,'',1) IS NOT NULL
+                         THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'Cash:([0-9]+)',1,1,'',1))
+                         ELSE 0 END
+                ELSE 0 END) as cash_total,
+            SUM(CASE
+                WHEN pay_method IN ('UPI','GPay') THEN net_total
+                WHEN pay_method LIKE 'Split|%' THEN
+                    CASE WHEN REGEXP_SUBSTR(pay_method,'UPI:([0-9]+)',1,1,'',1) IS NOT NULL
+                         THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'UPI:([0-9]+)',1,1,'',1))
+                         ELSE 0 END
+                ELSE 0 END) as upi_total,
+            SUM(CASE
+                WHEN pay_method='Card' THEN net_total
+                WHEN pay_method LIKE 'Split|%' THEN
+                    CASE WHEN REGEXP_SUBSTR(pay_method,'Card:([0-9]+)',1,1,'',1) IS NOT NULL
+                         THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'Card:([0-9]+)',1,1,'',1))
+                         ELSE 0 END
+                ELSE 0 END) as card_total
+           FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY-MM')=:1""",
+        [month_str], multi=True
     )
-    upi = await scalar(
-        "SELECT COALESCE(SUM(net_total),0) FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY-MM')=:1 AND pay_method='UPI'",
-        [month_str]
-    )
-    card = await scalar(
-        "SELECT COALESCE(SUM(net_total),0) FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY-MM')=:1 AND pay_method='Card'",
-        [month_str]
-    )
+    cash = float(cash_upi_card[0] or 0) if cash_upi_card else 0
+    upi = float(cash_upi_card[1] or 0) if cash_upi_card else 0
+    card = float(cash_upi_card[2] or 0) if cash_upi_card else 0
     dues = await scalar("SELECT COALESCE(SUM(balance_due),0) FROM bridal_bookings WHERE balance_due>0 AND status='Active'")
 
     advance_paid = await scalar(
@@ -1209,6 +1273,33 @@ async def list_services(
         sql += " AND category=:1"; params.append(category)
     sql += " ORDER BY category, sort_order"
     await cursor.execute(sql, params)
+    rows = await cursor.fetchall()
+    cols = [d[0].lower() for d in cursor.description]
+    return [dict(zip(cols, r)) for r in rows]
+
+
+# ════════════════════════════════════════════════
+# MEMBERSHIP NOTIFICATIONS (Dashboard)
+# ════════════════════════════════════════════════
+
+@dash_router.get("/membership-expiry")
+async def membership_expiry_alerts(
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        """SELECT c.name, c.phone, m.membership_id, m.status,
+                  TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
+                  ROUND(m.expiry_date - SYSDATE) as days_remaining,
+                  c.id as client_id, m.id as mem_id,
+                  m.beauty_points
+           FROM memberships m
+           JOIN clients c ON c.id=m.client_id
+           WHERE m.status='Active'
+             AND m.expiry_date <= SYSDATE + 15
+           ORDER BY m.expiry_date ASC"""
+    )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
     return [dict(zip(cols, r)) for r in rows]

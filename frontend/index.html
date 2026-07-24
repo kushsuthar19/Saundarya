@@ -749,6 +749,15 @@ table tbody tr:hover td{background:var(--bg2)}
     <div class="card-body" id="att-dash-list" style="min-height:60px;padding:0"></div>
   </div>
 
+  <!-- Membership Expiry Notifications (admin only) -->
+  <div id="mem-notif-wrap" data-admin="1" style="display:none;margin-bottom:14px">
+    <div class="card">
+      <div class="card-hd amber"><div class="card-hd-t"><i class="fas fa-crown"></i> Membership Expiry Alerts</div></div>
+      <div class="card-body" id="mem-notif-body">
+        <div style="color:var(--ink4);font-size:12px;text-align:center;padding:10px">Checking...</div>
+      </div>
+    </div>
+  </div>
   <!-- Schedule + Payment Split side by side -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
     <div class="card"><div class="card-hd ink"><div class="card-hd-t"><i class="fas fa-calendar-day"></i>Today's Schedule</div><button id="sched-collapse-btn" onclick="toggleCardCollapse('dash-list','sched-collapse-btn')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:5px;padding:4px 9px;font-size:11px;cursor:pointer;margin-left:auto"><i class="fas fa-chevron-up"></i></button></div>
@@ -1261,7 +1270,7 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="card"><div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-user"></i>Client Details</div></div><div class="card-body">
     <div class="fg">
       <div class="fl"><label><i class="fas fa-user"></i>Client Name</label><input type="text" id="de-n" placeholder="Name (auto-adds to CRM)"></div>
-      <div class="fl"><label><i class="fas fa-phone"></i>Phone (for WhatsApp)</label><input type="tel" id="de-ph" placeholder="+91 XXXXX XXXXX"></div>
+      <div class="fl"><label><i class="fas fa-phone"></i>Phone (for WhatsApp)</label><input type="tel" id="de-ph" placeholder="+91 XXXXX XXXXX" oninput="if(this.value.replace(/[^0-9]/g,'').length>=8)detectClientByPhone(this.value)"></div>
       <div class="fl"><label><i class="fas fa-calendar"></i>Date</label><input type="date" id="de-dt"></div>
       <div class="fl"><label><i class="fas fa-walking"></i>Visit Type</label><select id="de-type"><option>Walk-in</option><option>Appointment</option></select></div>
     </div>
@@ -1377,8 +1386,15 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="ptitle"><i class="fas fa-users" style="color:var(--sky)"></i>Client CRM<button id="clients-min-btn" onclick="toggleClientsInfoCollapse()" title="Minimize" style="margin-left:auto;background:var(--surface);border:1px solid var(--border);color:var(--ink3);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer"><i class="fas fa-chevron-up"></i></button></div>
   <div class="psub" id="clients-psub">Auto-populated from Daily Entry — full profiles, history & preferences</div>
   <div class="nline sky" id="clients-nline"></div>
+  <!-- Client Type Tabs -->
+  <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:14px">
+    <button class="crm-tab active" id="crm-tab-all" onclick="crmTab('all',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">All Clients</button>
+    <button class="crm-tab" id="crm-tab-New" onclick="crmTab('New',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🟢 New</button>
+    <button class="crm-tab" id="crm-tab-Regular" onclick="crmTab('Regular',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🔵 Regular</button>
+    <button class="crm-tab" id="crm-tab-Exclusive" onclick="crmTab('Exclusive',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">⭐ Exclusive</button>
+  </div>
   <div style="display:flex;gap:8px;margin-bottom:12px">
-    <div class="sbar-wrap" style="flex:1"><i class="fas fa-search"></i><input type="text" placeholder="Search clients by name or phone..." oninput="renderClients(this.value)"></div>
+    <div class="sbar-wrap" style="flex:1"><i class="fas fa-search"></i><input type="text" id="crm-search" placeholder="Search clients by name or phone..." oninput="renderClients(this.value)"></div>
     <button class="btn btn-sky btn-sm" onclick="toggleCF()"><i class="fas fa-plus"></i>Add Client</button>
   </div>
   <div id="cf" style="display:none;margin-bottom:12px">
@@ -1856,7 +1872,7 @@ function go(btn,id){
   if(sec){sec.classList.add("on")}
   if(btn){btn.classList.add("on")}
   v("bc-current").textContent=PAGE_NAMES[id]||id;
-  if(id==="dash")updateDash();
+  if(id==="dash"){updateDash();if(_role==='admin')setTimeout(loadMemNotifications,600);}
   if(id==="revenue"){updateRevKpis();renderRevDaily();}
   if(id==="reports")updateReports();
   if(id==="staff"){renderStaffGrid();renderSalary();renderAtt();}
@@ -2820,19 +2836,25 @@ async function saveClient(){
 function toggleCF(){const f=v('cf');if(f)f.style.display=f.style.display==='none'?'block':'none';}
 async function renderClients(s){
   const tb=v('cl-tbody');if(!tb)return;
-  const rows=await apiCall('GET',`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`);
+  // Build URL with tab filter
+  let url=`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`;
+  if(_crmActiveType&&_crmActiveType!=='all') url+=`&client_type=${encodeURIComponent(_crmActiveType)}`;
+  const rows=await apiCall('GET',url);
   if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
-  if(!rows.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:20px">No clients</td></tr>';return;}
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:20px">No ${_crmActiveType&&_crmActiveType!=='all'?_crmActiveType+' ':''} clients found</td></tr>`;return;}
   const tg={'VIP':'p-bk','Regular':'p-nd','New':'p-lt','Bridal':'p-wa'};
+  const typeBadge={'New':'<span style="background:#e8f5ee;color:var(--emerald);border:1px solid #b2dfdb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🟢 NEW</span>','Regular':'<span style="background:#e8f4ff;color:var(--sky);border:1px solid #bbdefb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🔵 REGULAR</span>','Exclusive':'<span style="background:#fff8e7;color:var(--amber);border:1px solid rgba(201,168,76,0.4);font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">⭐ EXCLUSIVE</span>'};
   tb.innerHTML=rows.map(c=>`<tr>
-    <td><b>${c.name}</b></td><td>${c.phone||'—'}</td><td>${c.email||'—'}</td>
-    <td>${c.birthday||'—'}</td><td>${c.skin_type||'—'}</td><td>${c.hair_type||'—'}</td>
+    <td><b>${c.name}</b>${typeBadge[c.client_type||'New']||typeBadge['New']}</td><td>${c.phone||'—'}</td><td>${c.email||'—'}</td>
+    <td>${String(c.birthday||'').substring(0,10)||'—'}</td><td>${c.skin_type||'—'}</td><td>${c.hair_type||'—'}</td>
     <td><span class="pill ${tg[c.tag]||'p-lt'}">${c.tag||'Regular'}</span></td>
-    <td>${c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
+    <td>${c.visit_count||c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
     <td style="white-space:nowrap">
       ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
       <button onclick="editClient(${c.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Edit"><i class="fas fa-edit"></i></button>
       <button onclick="deleteClient(${c.id},'${c.name}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Delete"><i class="fas fa-trash"></i></button>
+      ${c.client_type==='Exclusive'?`<button onclick="showMemberProfile(${c.id})" style="background:var(--gold);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Member Profile"><i class="fas fa-crown"></i></button>`:''}
+      ${c.client_type==='Regular'?`<button onclick="giveMembership(${c.id},'${c.name.replace(/'/g,"")}')" style="background:var(--amber);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Give Membership"><i class="fas fa-crown"></i> Member</button>`:''}
     </td>
   </tr>`).join('');
 }
@@ -5074,6 +5096,191 @@ async function updateInquiry(id){
 function sendInquiryWa(id,phone,name,service){
   if(!phone){toast('No phone number for this inquiry','var(--rose)');return;}
   openWaModal(phone,name,'Namaste, '+name+'! Thank you for your inquiry at Saundarya Beauty Care, Vadodara. We would love to help with '+(service||'our services')+'. Please reply to book your appointment. - Saundarya Beauty Care & Academy');
+}
+
+// ═══════════════════════════════════════════
+// CRM TABS
+// ═══════════════════════════════════════════
+let _crmActiveType = 'all';
+
+function crmTab(type, btn){
+  _crmActiveType = type;
+  document.querySelectorAll('.crm-tab').forEach(t=>{
+    t.style.color='var(--ink3)';
+    t.style.borderBottomColor='transparent';
+  });
+  if(btn){btn.style.color='var(--sky)';btn.style.borderBottomColor='var(--sky)';}
+  renderClients(v('crm-search')?.value||'');
+}
+
+// ═══════════════════════════════════════════
+// CLIENT PHONE AUTO-DETECT (Daily Entry)
+// ═══════════════════════════════════════════
+async function detectClientByPhone(phone){
+  if(!phone||phone.length<8)return;
+  const r=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(phone)}`);
+  if(!r)return; // new client
+  // Pre-fill name
+  const nameEl=v('de-n');if(nameEl&&!nameEl.value)nameEl.value=r.name||'';
+  // Show client info chip
+  let chip=v('de-client-chip');
+  if(!chip){
+    const wrap=v('de-ph')?.closest('.fl');
+    if(wrap){
+      chip=document.createElement('div');
+      chip.id='de-client-chip';
+      chip.style.cssText='font-size:10px;margin-top:4px;padding:4px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border)';
+      wrap.appendChild(chip);
+    }
+  }
+  if(chip){
+    const typeColor={'New':'var(--emerald)','Regular':'var(--sky)','Exclusive':'var(--gold)'}[r.client_type||'New']||'var(--ink3)';
+    const typeIcon={'New':'🟢','Regular':'🔵','Exclusive':'⭐'}[r.client_type||'New']||'';
+    chip.innerHTML=`<span style="color:${typeColor};font-weight:700">${typeIcon} ${r.client_type||'New'}</span>
+      &nbsp;·&nbsp; Visits: <b>${r.visit_count||0}</b>
+      &nbsp;·&nbsp; Spent: <b>${fmt(r.total_spent||0)}</b>
+      ${r.membership_id?`&nbsp;·&nbsp; <span style="color:var(--gold);font-weight:700">⭐ ${r.membership_id}</span> (${r.beauty_points||0} pts)`:''}
+      ${r.client_type==='Exclusive'?'<span style="background:var(--gold-dim,#fff3cc);color:var(--gold);font-size:9px;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:700">10% DISCOUNT ELIGIBLE</span>':''}`;
+  }
+}
+
+// ═══════════════════════════════════════════
+// MEMBERSHIP DASHBOARD NOTIFICATIONS
+// ═══════════════════════════════════════════
+async function loadMemNotifications(){
+  if(_role!=='admin')return;
+  const wrap=v('mem-notif-wrap');
+  if(wrap)wrap.style.display='block';
+  const body=v('mem-notif-body');if(!body)return;
+  const alerts=await apiCall('GET','/dashboard/membership-expiry');
+  if(!alerts||!alerts.length){
+    wrap.style.display='none';
+    return;
+  }
+  wrap.style.display='block';
+  body.innerHTML=alerts.map(a=>{
+    const days=Math.round(a.days_remaining||0);
+    const isExp=days<=0;
+    const colorClass=isExp?'var(--rose)':days<=3?'var(--rose)':days<=7?'var(--amber)':'var(--teal)';
+    const label=isExp?'EXPIRED':`${days} day${days!==1?'s':''} left`;
+    const msg=`Hello ${a.name}! Your Saundarya Exclusive Membership (${a.membership_id}) ${isExp?'has expired':'will expire on '+a.expiry_date}. Renew today to continue enjoying your exclusive benefits including Beauty Points, Discounts and Priority Booking. Contact us for quick renewal. - Team Saundarya Beauty Care`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap">
+      <span style="color:${colorClass};font-weight:700;min-width:80px">${label}</span>
+      <span style="font-weight:600">${a.name}</span>
+      <span style="color:var(--gold);font-weight:700">${a.membership_id}</span>
+      <span style="color:var(--ink3)">${a.phone||'—'}</span>
+      <span style="color:var(--ink3)">Exp: ${a.expiry_date}</span>
+      <div style="display:flex;gap:6px;margin-left:auto">
+        <button onclick="renewMembership(${a.client_id})" style="background:var(--teal);color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:600">Renew</button>
+        <button onclick="openWaModal('${a.phone||''}','${a.name}',${JSON.stringify(msg)})" style="background:#128C7E;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px">WA</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// MEMBERSHIP FUNCTIONS
+// ═══════════════════════════════════════════
+async function giveMembership(clientId, clientName){
+  const payMethod=prompt(`Membership Fee: ₹1,000
+Payment method for ${clientName}?
+(Cash / GPay / Card)`,'Cash');
+  if(!payMethod)return;
+  // Enroll membership
+  const r=await apiCall('POST',`/clients/${clientId}/membership`,{fee_paid:1000,pay_method:payMethod});
+  if(!r)return;
+  // Auto-create Daily Entry for membership fee
+  const today=td();
+  await apiCall('POST','/entries',{
+    client_name:clientName+' (Membership)',
+    phone:null,
+    entry_date:today,
+    visit_type:'Membership',
+    items:[{service_name:'Saundarya Exclusive Membership',price:1000,qty:1,line_total:1000}],
+    discount:0,
+    pay_method:payMethod,
+    remarks:'Membership ID: '+r.membership_id
+  });
+  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${clientName} enrolled as ⭐ Exclusive Member! ID: ${r.membership_id}`,'var(--gold)');
+  renderClients(v('crm-search')?.value||'');
+}
+
+async function renewMembership(clientId){
+  if(!confirm('Renew membership for 12 months?'))return;
+  const r=await apiCall('POST',`/clients/${clientId}/membership/renew`);
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Membership renewed until '+r.new_expiry,'var(--teal)');
+  loadMemNotifications();
+}
+
+async function showMemberProfile(clientId){
+  const modal=v('inv-modal');if(!modal)return;
+  modal.innerHTML='<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div><div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><div style="font-size:16px;font-weight:700"><i class="fas fa-crown" style="color:var(--gold)"></i> Exclusive Member Profile</div><button onclick="closeInvModal()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button></div><div id="mem-profile-body"><div style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i> Loading...</div></div></div>';
+  modal.style.display='flex';
+  await _loadMemberProfile(clientId);
+}
+
+async function _loadMemberProfile(clientId){
+  const [client, mems] = await Promise.all([
+    apiCall('GET',`/clients/${clientId}`),
+    apiCall('GET',`/clients/${clientId}/membership`)
+  ]);
+  if(!client)return;
+  const mem=mems&&mems[0];
+  const body=v('mem-profile-body');if(!body)return;
+  body.innerHTML=`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <div style="background:var(--bg);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:8px;text-transform:uppercase">Client Info</div>
+      <div style="font-size:15px;font-weight:700">${client.name}</div>
+      <div style="color:var(--ink3);font-size:12px;margin-top:4px">${client.phone||'—'}</div>
+      <div style="color:var(--ink3);font-size:11px;margin-top:2px">Visits: ${client.visit_count||0} · Spent: ${fmt(client.total_spent||0)}</div>
+      ${client.birthday?`<div style="font-size:11px;color:var(--ink3);margin-top:2px">🎂 ${client.birthday}</div>`:''}
+      ${client.anniversary?`<div style="font-size:11px;color:var(--ink3)">💑 ${client.anniversary}</div>`:''}
+      ${client.preferred_staff?`<div style="font-size:11px;color:var(--ink3)">👩‍🎨 ${client.preferred_staff}</div>`:''}
+    </div>
+    ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:8px;text-transform:uppercase">Membership</div>
+      <div style="font-size:16px;font-weight:700;color:var(--gold)">${mem.membership_id}</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:4px">Status: <b>${mem.status}</b></div>
+      <div style="font-size:11px;color:var(--ink2)">Expires: <b>${String(mem.expiry_date||'').substring(0,10)}</b></div>
+      <div style="font-size:11px;color:var(--ink2)">Days left: <b>${Math.max(0,Math.round(mem.days_remaining||0))}</b></div>
+      <div style="font-size:20px;font-weight:700;color:var(--gold);margin-top:8px">${mem.beauty_points||0} ⭐ pts</div>
+      <div style="font-size:10px;color:var(--ink3)">Lifetime earned: ${mem.lifetime_points||0} pts</div>
+    </div>`:'<div style="background:var(--bg);border-radius:10px;padding:14px;color:var(--ink3);font-size:12px">No active membership</div>'}
+  </div>
+  ${mem?`
+  <!-- Beauty Points Management -->
+  <div style="background:#fff8e7;border:1px solid var(--gold);border-radius:8px;padding:12px;margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:8px">Beauty Points — Manage</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px">
+        <option value="add">Add Points</option>
+        <option value="redeem">Redeem Points</option>
+        <option value="set">Set Points</option>
+      </select>
+      <input type="number" id="pts-amount" placeholder="Points" min="0" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
+      <input type="text" id="pts-notes" placeholder="Notes (optional)" style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
+      <button onclick="savePoints(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:600">Save</button>
+    </div>
+  </div>
+  <!-- Renew -->
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-redo"></i> Renew Membership</button>
+    <button onclick="openWaModal('${client.phone||''}','${client.name}','Hello ${client.name}! Your Saundarya Exclusive Membership expires on ${String(mem.expiry_date||'').substring(0,10)}. Please renew to continue enjoying your benefits. - Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">WA Renewal Reminder</button>
+  </div>`:''}
+  `;
+}
+
+async function savePoints(clientId){
+  const action=v('pts-action')?.value||'add';
+  const points=parseInt(v('pts-amount')?.value||0);
+  const notes=v('pts-notes')?.value||'';
+  if(!points){toast('Enter points amount','var(--rose)');return;}
+  const r=await apiCall('PUT',`/clients/${clientId}/membership/points`,{action,points,notes});
+  if(!r)return;
+  toast(`Points ${action}: ${points} ⭐ · Balance: ${r.beauty_points}`,'var(--gold)');
+  await _loadMemberProfile(clientId);
 }
 
 document.addEventListener("DOMContentLoaded",()=>{

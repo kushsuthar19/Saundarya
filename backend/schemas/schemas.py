@@ -81,6 +81,11 @@ class ClientOut(BaseModel):
     total_spent: float
     source: Optional[str]
     created_at: Optional[datetime]
+    client_type: Optional[str] = 'New'
+    anniversary: Optional[date] = None
+    preferred_staff: Optional[str] = None
+    visit_count: int = 0
+    last_visit: Optional[date] = None
 
 
 # ── Staff ─────────────────────────────────────────────────

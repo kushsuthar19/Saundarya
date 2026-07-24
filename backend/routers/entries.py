@@ -145,11 +145,31 @@ async def create_entry(
         cid_val = cid_var.getvalue()
         client_id = int(cid_val[0] if isinstance(cid_val, list) else cid_val)
 
-    # Update client stats
+    # Update client stats + visit_count + last_visit + auto-promote New→Regular
     await cursor.execute(
-        "UPDATE clients SET visits = visits + 1, total_spent = total_spent + :1, updated_at = SYSTIMESTAMP WHERE id = :2",
+        """UPDATE clients
+           SET visits = visits + 1,
+               total_spent = NVL(total_spent,0) + :1,
+               visit_count = NVL(visit_count,0) + 1,
+               last_visit = SYSDATE,
+               client_type = CASE
+                   WHEN NVL(client_type,'New') = 'New' AND NVL(visit_count,0) >= 1 THEN 'Regular'
+                   ELSE NVL(client_type,'New')
+               END,
+               updated_at = SYSTIMESTAMP
+           WHERE id = :2""",
         [net, client_id]
     )
+    # Auto-add beauty points if member (₹100 = 1 point)
+    pts_to_add = int(net // 100)
+    if pts_to_add > 0:
+        await cursor.execute(
+            """UPDATE memberships
+               SET beauty_points = beauty_points + :1,
+                   lifetime_points = lifetime_points + :1
+               WHERE client_id = :2 AND status = 'Active'""",
+            [pts_to_add, client_id]
+        )
 
     # Insert entry
     nv = str(data.next_visit) if data.next_visit else None
