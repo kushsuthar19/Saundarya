@@ -5905,12 +5905,10 @@ async function _loadMemberProfile(clientId){
         <div style="font-size:11px;color:var(--emerald);font-weight:700">⭐ AVAILABLE TO USE</div>
       </div>
       <div style="background:rgba(255,255,255,.7);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--ink2);line-height:1.8">
-        <div id="pts-breakdown-${clientId}">
-          <div>🎁 Gift on joining: <b>+20 pts</b></div>
+        <div id="pts-breakdown-${clientId}" style="font-size:11px;color:var(--ink2);line-height:1.7">
           <div>💆 From ${histRows.length} services: <b>+${totalPtsEarned} pts</b></div>
-          <div style="border-top:1px solid rgba(0,0,0,.1);margin-top:4px;padding-top:4px;color:var(--ink);font-weight:700">Loading balance...</div>
+          <div style="color:var(--ink3);font-size:10px">₹100 spent = 1 point</div>
         </div>
-        <div style="font-size:10px;color:var(--amber);margin-top:2px">₹100 spent = 1 point</div>
       </div>
     </div>
     <!-- Quick Redeem -->
@@ -6070,43 +6068,47 @@ async function loadPtsHistory(clientId){
   const box=v(`pts-history-${clientId}`);if(!box)return;
   const logs=await apiCall('GET',`/clients/${clientId}/membership/points-log`);
   if(!logs||!logs.length){
-    box.innerHTML='<div style="text-align:center;padding:10px;color:var(--ink4);font-size:11px">No points history yet</div>';
+    box.innerHTML='<div style="text-align:center;padding:12px;color:var(--ink4);font-size:11px">No points history yet</div>';
     return;
   }
 
-  // The last row's running_balance is the CORRECT current total
-  // (logs come newest-first, so last = oldest = not correct; use first = newest)
-  // Actually running_balance on each row is balance AFTER that transaction
-  // The first row (newest) has the current balance
-  const currentBalance = logs[0]?.running_balance ?? 0;
-  const totalAdded = logs.reduce((s,l)=>l.entry_type!=='redeem'?s+(l.points||0):s, 0);
-  const totalRedeemed = logs.reduce((s,l)=>l.entry_type==='redeem'?s+(l.points||0):s, 0);
+  // logs[0] = newest entry, its running_balance = current correct total
+  const currentBalance=logs[0]?.running_balance??0;
+  const totalAdded=logs.reduce((s,l)=>l.entry_type!=='redeem'?s+(l.points||0):s,0);
+  const totalRedeemed=logs.reduce((s,l)=>l.entry_type==='redeem'?s+(l.points||0):s,0);
 
-  // Update the big points number in the profile with correct value from log
-  const bigNum = v(`pts-big-${clientId}`);
-  if(bigNum) bigNum.textContent = currentBalance;
-  const breakdown = v(`pts-breakdown-${clientId}`);
-  if(breakdown) breakdown.innerHTML =
-    `🎁 Gift & adjustments: <b>+${totalAdded} pts added</b><br>
-     💸 Redeemed: <b>−${totalRedeemed} pts used</b><br>
-     <span style="font-weight:700;color:var(--gold)">✅ Balance: ${currentBalance} pts</span>`;
+  // Update big number with LOG truth
+  const bigNum=v(`pts-big-${clientId}`);
+  if(bigNum)bigNum.textContent=currentBalance;
 
-  box.innerHTML = logs.map(l=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid rgba(201,168,76,.15);font-size:11px">
-      <div style="width:28px;height:28px;border-radius:50%;background:${l.entry_type==='redeem'?'#fff0f0':'#e8f5ee'};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">
-        ${l.entry_type==='redeem'?'−':'+'}
-      </div>
+  // Update breakdown
+  const bd=v(`pts-breakdown-${clientId}`);
+  if(bd)bd.innerHTML=`
+    <div style="font-size:11px;color:var(--ink2);line-height:1.8">
+      <div>✅ Total earned: <b style="color:var(--emerald)">+${totalAdded} pts</b></div>
+      <div>💸 Total redeemed: <b style="color:var(--rose)">−${totalRedeemed} pts</b></div>
+      <div style="border-top:1px solid rgba(0,0,0,.1);margin-top:3px;padding-top:3px;font-weight:700;color:var(--gold)">Balance: ${currentBalance} pts</div>
+      <div style="font-size:10px;color:var(--amber)">₹100 = 1 point per service</div>
+    </div>`;
+
+  // Render history rows
+  box.innerHTML=logs.map(l=>{
+    const isRedeem=l.entry_type==='redeem';
+    const sign=isRedeem?'−':'+';
+    const color=isRedeem?'var(--rose)':'var(--emerald)';
+    const bg=isRedeem?'#fff0f0':'#e8f5ee';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(201,168,76,.12);font-size:11px">
+      <div style="width:26px;height:26px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${color};flex-shrink:0">${sign}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;color:var(--ink);font-size:11px">${l.notes||l.entry_type}</div>
+        <div style="font-weight:600;color:var(--ink)">${l.notes||l.entry_type}</div>
         <div style="color:var(--ink3);font-size:10px">${String(l.created_at||'').substring(0,16)}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-weight:700;font-size:12px;color:${l.entry_type==='redeem'?'var(--rose)':'var(--emerald)'}">
-          ${l.entry_type==='redeem'?'−':'+'}${l.points} ⭐
-        </div>
-        <div style="font-size:9px;color:var(--ink3)">bal: ${l.running_balance}</div>
+        <div style="font-weight:700;font-size:13px;color:${color}">${sign}${l.points} ⭐</div>
+        <div style="font-size:9px;color:var(--ink3)">balance: ${l.running_balance}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════

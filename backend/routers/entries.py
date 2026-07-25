@@ -211,28 +211,31 @@ async def create_entry(
     pts_to_add = int(net // 100)
     if pts_to_add > 0 and client_id:
         try:
-            # Log points earned first
+            # Log points earned first — :1=pts, :2=inv_no string, :3=client_id
             await cursor.execute(
                 """INSERT INTO beauty_points_log
                    (membership_id, entry_type, points, notes)
-                   SELECT id, 'Earned', :1, 'Auto from invoice - '||:2
-                   FROM memberships WHERE client_id=:2 AND status='Active'""",
-                [pts_to_add, str(inv_no)]
+                   SELECT id, 'Earned', :1, 'Service: '||:2
+                   FROM memberships WHERE client_id=:3 AND status='Active'""",
+                [pts_to_add, str(inv_no), client_id]
             )
-            # Sync DB beauty_points from log (source of truth)
+            # Read correct balance from log and write to DB
             await cursor.execute(
-                """UPDATE memberships
-                   SET beauty_points = NVL((
-                       SELECT SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END)
-                       FROM beauty_points_log WHERE membership_id=memberships.id
-                   ), 0),
-                   lifetime_points = NVL((
-                       SELECT SUM(CASE WHEN entry_type!='redeem' THEN points ELSE 0 END)
-                       FROM beauty_points_log WHERE membership_id=memberships.id
-                   ), 0)
-                   WHERE client_id = :1 AND status = 'Active'""",
+                """SELECT m.id,
+                       NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
+                       NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END),0)
+                   FROM memberships m
+                   LEFT JOIN beauty_points_log l ON l.membership_id=m.id
+                   WHERE m.client_id=:1 AND m.status='Active'
+                   GROUP BY m.id""",
                 [client_id]
             )
+            sync_row = await cursor.fetchone()
+            if sync_row:
+                await cursor.execute(
+                    "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+                    [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
+                )
         except Exception:
             pass  # non-member or table not ready
 

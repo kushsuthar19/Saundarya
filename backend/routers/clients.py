@@ -598,24 +598,22 @@ async def update_points(
         [mem_id, action, points, data.get('invoice', ''), data.get('notes', '')]
     )
     # Sync DB beauty_points from log (source of truth)
-    await cursor.execute(
-        """UPDATE memberships
-           SET beauty_points = NVL((
-               SELECT SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END)
-               FROM beauty_points_log WHERE membership_id=:1
-           ), 0),
-           lifetime_points = NVL((
-               SELECT SUM(CASE WHEN entry_type!='redeem' THEN points ELSE 0 END)
-               FROM beauty_points_log WHERE membership_id=:1
-           ), 0)
-           WHERE id=:2""",
-        [mem_id, mem_id, mem_id]
-    )
     await db.commit()
-    # Re-read correct values
+    # Re-read correct balance directly from log (source of truth)
     await cursor.execute(
-        "SELECT beauty_points, lifetime_points FROM memberships WHERE id=:1",
+        """SELECT
+               NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END), 0) as balance,
+               NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END), 0) as earned
+           FROM beauty_points_log l WHERE l.membership_id=:1""",
         [mem_id]
     )
-    fresh = await cursor.fetchone()
-    return {"beauty_points": int(fresh[0] or 0), "lifetime_points": int(fresh[1] or 0)}
+    log_row = await cursor.fetchone()
+    final_balance = max(0, int(log_row[0] or 0))
+    final_earned = int(log_row[1] or 0)
+    # Write correct values back to DB
+    await cursor.execute(
+        "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+        [final_balance, final_earned, mem_id]
+    )
+    await db.commit()
+    return {"beauty_points": final_balance, "lifetime_points": final_earned}
