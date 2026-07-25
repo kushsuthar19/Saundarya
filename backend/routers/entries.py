@@ -211,20 +211,27 @@ async def create_entry(
     pts_to_add = int(net // 100)
     if pts_to_add > 0 and client_id:
         try:
-            result = await cursor.execute(
-                """UPDATE memberships
-                   SET beauty_points = beauty_points + :1,
-                       lifetime_points = lifetime_points + :1
-                   WHERE client_id = :2 AND status = 'Active'""",
-                [pts_to_add, client_id]
-            )
-            # Log the points transaction
+            # Log points earned first
             await cursor.execute(
                 """INSERT INTO beauty_points_log
                    (membership_id, entry_type, points, notes)
-                   SELECT id, 'Earned', :1, 'Auto from invoice'
+                   SELECT id, 'Earned', :1, 'Auto from invoice - '||:2
                    FROM memberships WHERE client_id=:2 AND status='Active'""",
-                [pts_to_add, client_id]
+                [pts_to_add, str(inv_no)]
+            )
+            # Sync DB beauty_points from log (source of truth)
+            await cursor.execute(
+                """UPDATE memberships
+                   SET beauty_points = NVL((
+                       SELECT SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END)
+                       FROM beauty_points_log WHERE membership_id=memberships.id
+                   ), 0),
+                   lifetime_points = NVL((
+                       SELECT SUM(CASE WHEN entry_type!='redeem' THEN points ELSE 0 END)
+                       FROM beauty_points_log WHERE membership_id=memberships.id
+                   ), 0)
+                   WHERE client_id = :1 AND status = 'Active'""",
+                [client_id]
             )
         except Exception:
             pass  # non-member or table not ready
@@ -369,10 +376,89 @@ async def delete_entry(
 ):
     cursor = db.cursor()
     try:
+        # Step 1: Read entry details BEFORE deleting
+        await cursor.execute(
+            """SELECT client_id, phone, net_total, entry_date
+               FROM daily_entries WHERE id=:1""",
+            [entry_id]
+        )
+        row = await cursor.fetchone()
+        client_id = row[0] if row else None
+        phone = row[1] if row else None
+        net_total = float(row[2] or 0) if row else 0
+        entry_date = row[3] if row else None
+
+        # Step 2: Delete entry items and entry
         await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
         await db.commit()
         await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
         await db.commit()
+
+        # Step 3: Reverse client stats if we have a client
+        if client_id:
+            try:
+                # Check if this was the ONLY entry on that date (for visit_count)
+                check_date = str(entry_date)[:10] if entry_date else None
+                same_day_count = 0
+                if check_date:
+                    await cursor.execute(
+                        """SELECT COUNT(*) FROM daily_entries
+                           WHERE client_id=:1 AND TO_CHAR(entry_date,'YYYY-MM-DD')=:2""",
+                        [client_id, check_date]
+                    )
+                    r2 = await cursor.fetchone()
+                    same_day_count = r2[0] if r2 else 0
+
+                if same_day_count == 0:
+                    # No other entries on that day — reduce visit_count too
+                    await cursor.execute(
+                        """UPDATE clients
+                           SET total_spent = GREATEST(0, NVL(total_spent,0) - :1),
+                               visits = GREATEST(0, NVL(visits,0) - 1),
+                               visit_count = GREATEST(0, NVL(visit_count,0) - 1),
+                               updated_at = SYSTIMESTAMP
+                           WHERE id=:2""",
+                        [net_total, client_id]
+                    )
+                else:
+                    # Other entries exist on same day — only reduce spent
+                    await cursor.execute(
+                        """UPDATE clients
+                           SET total_spent = GREATEST(0, NVL(total_spent,0) - :1),
+                               updated_at = SYSTIMESTAMP
+                           WHERE id=:2""",
+                        [net_total, client_id]
+                    )
+                await db.commit()
+            except Exception:
+                pass  # Don't fail delete if stats update fails
+
+            # Step 4: Reverse beauty points earned from this entry
+            pts_to_remove = int(net_total // 100)
+            if pts_to_remove > 0:
+                try:
+                    # Log the reversal
+                    await cursor.execute(
+                        """INSERT INTO beauty_points_log
+                               (membership_id, entry_type, points, notes)
+                           SELECT id, 'redeem', :1, 'Points reversed - entry deleted'
+                           FROM memberships WHERE client_id=:2 AND status='Active'""",
+                        [pts_to_remove, client_id]
+                    )
+                    # Sync DB from log
+                    await cursor.execute(
+                        """UPDATE memberships
+                           SET beauty_points = GREATEST(0, NVL((
+                               SELECT SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END)
+                               FROM beauty_points_log WHERE membership_id=memberships.id
+                           ), 0))
+                           WHERE client_id=:1 AND status='Active'""",
+                        [client_id]
+                    )
+                    await db.commit()
+                except Exception:
+                    pass  # Non-member or log table issue
+
         return {"deleted": entry_id}
     except Exception as e:
         try: await db.rollback()
