@@ -5675,14 +5675,20 @@ async function detectClientByPhone(phone){
         ${r.membership_id?`<span style="color:var(--gold);font-weight:700">⭐ ${r.membership_id}</span><span style="color:var(--amber);font-weight:700">${availPts} pts available</span>`:''}
         ${r.client_type==='Exclusive'?'<span style="background:#fff3cc;color:var(--gold);font-size:9px;padding:1px 6px;border-radius:10px;font-weight:700">10% OFF ELIGIBLE</span>':''}
       </div>
-      ${r.client_type==='Exclusive'&&availPts>0?`
-      <div style="margin-top:6px;padding:7px 10px;background:#fff8e7;border:1px solid var(--gold);border-radius:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:10px;font-weight:700;color:var(--amber)">⭐ Redeem Points:</span>
-        <input type="number" id="de-redeem-pts" placeholder="Points" min="1" max="${availPts}"
-          style="width:80px;border:1px solid var(--gold);border-radius:5px;padding:4px 8px;font-size:11px">
-        <span style="font-size:10px;color:var(--ink3)">(Balance: ${availPts} pts)</span>
-        <button onclick="redeemFromEntry(${clientId})"
-          style="background:var(--gold);color:#fff;border:none;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:11px;font-weight:700">Redeem</button>
+      ${r.client_type==='Exclusive'?`
+      <div style="margin-top:6px;padding:10px;background:#fff8e7;border:1px solid var(--gold);border-radius:8px">
+        <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:6px">
+          ⭐ Beauty Points — Balance: <b style="font-size:14px;color:var(--gold)">${availPts}</b> pts
+        </div>
+        ${availPts>0?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:20px;font-weight:700;color:var(--rose);line-height:1">−</span>
+          <input type="number" id="de-redeem-pts" placeholder="Points to redeem" min="1" max="${availPts}"
+            style="width:90px;border:2px solid var(--rose);border-radius:5px;padding:5px 8px;font-size:12px;font-weight:600">
+          <input type="text" id="de-redeem-note" placeholder="Reason (e.g. ₹50 discount)"
+            style="flex:1;min-width:130px;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:11px">
+          <button onclick="redeemFromEntry(${clientId})"
+            style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">− Redeem</button>
+        </div>`:'<div style="font-size:10px;color:var(--ink3)">No points available yet</div>'}
       </div>`:''}`;
   }
 }
@@ -6036,19 +6042,20 @@ async function savePoints(clientId){
 
 async function redeemFromEntry(clientId){
   const pts=parseInt(v('de-redeem-pts')?.value||0);
+  const note=(v('de-redeem-note')?.value||'').trim();
   if(!pts||pts<1){toast('Enter points to redeem','var(--rose)');return;}
+  if(!note){toast('Enter a reason for redeeming','var(--rose)');return;}
   const r=await apiCall('PUT',`/clients/${clientId}/membership/points`,{
-    action:'redeem',points:pts,notes:'Redeemed at reception during service'
+    action:'redeem',points:pts,notes:'Reception: '+note
   });
   if(!r)return;
-  toast(`✅ ${pts} pts redeemed · Remaining balance: ${r.beauty_points} ⭐`,'var(--gold)');
-  const el=v('de-redeem-pts');if(el)el.value='';
-  // Update chip to show new balance
-  const chip=v('de-client-chip');
-  if(chip){
-    const balSpan=chip.querySelector('span[style*="amber"]');
-    if(balSpan)balSpan.textContent=r.beauty_points+' pts available';
-  }
+  toast(`✅ ${pts} pts redeemed for "${note}" · New balance: ${r.beauty_points} ⭐`,'var(--gold)');
+  // Clear inputs
+  const ep=v('de-redeem-pts');if(ep)ep.value='';
+  const en=v('de-redeem-note');if(en)en.value='';
+  // Re-detect phone to refresh chip with new balance
+  const phone=v('de-ph')?.value;
+  if(phone)detectClientByPhone(phone);
 }
 
 async function redeemPoints(clientId){

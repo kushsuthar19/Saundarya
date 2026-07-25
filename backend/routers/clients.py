@@ -106,7 +106,9 @@ async def lookup_by_phone(
                   TO_CHAR(c.last_visit,'YYYY-MM-DD') as last_visit,
                   m.membership_id, m.status as mem_status,
                   TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
-                  m.beauty_points
+                  m.id as membership_db_id,
+                  NVL((SELECT SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END)
+                       FROM beauty_points_log l WHERE l.membership_id=m.id), m.beauty_points) as beauty_points
            FROM clients c
            LEFT JOIN memberships m ON m.client_id=c.id AND m.status='Active'
            WHERE c.phone=:1""",
@@ -571,31 +573,31 @@ async def update_points(
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="No active membership")
-    mem_id, current_pts, lifetime_pts = row
+    mem_id = row[0]
     action = data.get('action', 'add')
     points = int(data.get('points', 0))
 
-    if action == 'redeem':
-        if points > current_pts:
-            raise HTTPException(status_code=400, detail="Insufficient points")
-        new_pts = current_pts - points
-        new_lifetime = lifetime_pts
-    elif action == 'set':
-        new_pts = points
-        new_lifetime = lifetime_pts
-    else:
-        new_pts = current_pts + points
-        new_lifetime = lifetime_pts + points
-
+    # Read TRUE current balance from log (not stale DB column)
     await cursor.execute(
-        "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
-        [new_pts, new_lifetime, mem_id]
+        """SELECT NVL(SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END),0)
+           FROM beauty_points_log WHERE membership_id=:1""",
+        [mem_id]
     )
+    log_row = await cursor.fetchone()
+    true_balance = max(0, int(log_row[0] or 0)) if log_row else 0
+
+    if action == 'redeem':
+        if points > true_balance:
+            raise HTTPException(status_code=400, detail=f"Insufficient points. Balance: {true_balance}")
+
+    # Insert into log FIRST
     await cursor.execute(
         """INSERT INTO beauty_points_log
                (membership_id, entry_type, points, reference_inv, notes)
            VALUES (:1,:2,:3,:4,:5)""",
-        [mem_id, action, points, data.get('invoice', ''), data.get('notes', '')]
+        [mem_id, action, points,
+         data.get('invoice', '') or '',
+         data.get('notes', '') or '']
     )
     # Sync DB beauty_points from log (source of truth)
     await db.commit()
