@@ -1471,7 +1471,7 @@ table tbody tr:hover td{background:var(--bg2)}
               <option>Cash</option><option>GPay/UPI</option><option>Card</option>
             </select>
           </div>
-          <div class="fl"><label>Start Date</label><input type="date" id="em-start" onchange="autoSetExpiry()"></div>
+          <div class="fl"><label>Start Date</label><input type="date" id="em-start" onchange="autoSetExpiry();const ph=v('em-phone')?.value;const cid=v('cf')?.querySelector('.btn-gold')?.getAttribute('onclick')?.match(/\d+/)?.[0];if(ph&&cid)_showPastPtsPreview(ph,this.value,cid);"></div>
           <div class="fl"><label>Expiry Date <span style="font-size:9px;color:var(--ink3);font-weight:400">(auto or edit)</span></label><input type="date" id="em-expiry" style="border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></div>
         </div>
         <!-- Staff & Notes -->
@@ -5785,29 +5785,103 @@ async function loadMemNotifications(){
 
 
 async function giveMembership(clientId, clientName){
-  const payMethod=prompt(`Upgrade ${clientName} to Exclusive Member?
-
-Membership Fee: ₹1,000
-Payment method (Cash / GPay/UPI / Card):`, 'Cash');
-  if(!payMethod)return;
-  // Enroll membership
-  const r=await apiCall('POST',`/clients/${clientId}/membership`,{fee_paid:1000});
-  if(!r)return;
-  // Auto Daily Entry for membership fee
-  await apiCall('POST','/entries',{
-    client_name:clientName+' (Membership - '+r.membership_id+')',
-    phone:null,
-    entry_date:td(),
-    visit_type:'Membership',
-    items:[{service_name:'Saundarya Exclusive Membership',price:1000,qty:1,line_total:1000,staff_id:null,staff_name:null}],
-    discount:0,
-    pay_method:payMethod,
-    remarks:'Membership ID: '+r.membership_id
-  });
-  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${clientName} is now ⭐ Exclusive Member! ID: ${r.membership_id}`,'var(--gold)');
-  renderClients(v('crm-search')?.value||'');
-  updateDash();
+  // Load existing client details to pre-fill the form
+  const c=await apiCall('GET',`/clients/${clientId}`);
+  if(!c)return;
+  // Open exclusive form pre-filled
+  const cf=v('cf');if(cf)cf.style.display='block';
+  showCfExclusive();
+  const set=(eid,val)=>{const el=v(eid);if(el)el.value=val||'';};
+  set('em-name',c.name);set('em-phone',c.phone);
+  set('em-gender',c.gender||'');
+  set('em-dob',String(c.birthday||'').substring(0,10));
+  set('em-ann',String(c.anniversary||'').substring(0,10));
+  set('em-addr',c.address||'');
+  set('em-pstaff',c.preferred_staff||'');
+  set('em-notes',c.preferences||'');
+  // Change save button to Convert
+  const btn=cf?.querySelector('.btn-gold');
+  if(btn){btn.innerHTML='<i class="fas fa-crown"></i> Convert to Exclusive Member';btn.setAttribute('onclick',`convertToExclusive(${clientId})`);}
+  // Preview past pts
+  if(c.phone){const sd=v('em-start')?.value||td();_showPastPtsPreview(c.phone,sd,clientId);}
+  cf?.scrollIntoView({behavior:'smooth'});
+  toast('Fill missing details — past service points calculated automatically','var(--sky)');
 }
+
+async function _showPastPtsPreview(phone,fromDate,clientId){
+  const entries=await apiCall('GET',`/entries?limit=200&phone=${encodeURIComponent(phone)}`).catch(()=>null);
+  if(!entries||!entries.length)return;
+  const relevant=entries.filter(e=>String(e.entry_date||'').substring(0,10)<fromDate&&e.visit_type!=='Membership');
+  const pastPts=relevant.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
+  let preview=document.getElementById('pts-preview-note');
+  const startEl=v('em-start');
+  if(startEl){
+    if(!preview){preview=document.createElement('div');preview.id='pts-preview-note';preview.style.cssText='font-size:10px;color:var(--amber);margin-top:4px;font-weight:600';startEl.parentNode.appendChild(preview);}
+    preview.textContent=`⭐ ${pastPts} pts from ${relevant.length} services before joining + 20 gift = ${20+pastPts} starting pts`;
+  }
+}
+
+async function convertToExclusive(clientId){
+  const nm=v('em-name')?.value.trim();
+  const ph=v('em-phone')?.value.trim();
+  if(!nm){toast('Enter name','var(--rose)');return;}
+  if(!ph){toast('Enter phone','var(--rose)');return;}
+  const payMethod=v('em-pay')?.value||'Cash';
+  const fee=parseFloat(v('em-fee')?.value||1000);
+  const startDate=v('em-start')?.value||td();
+  const expiryDate=v('em-expiry')?.value||'';
+
+  // Step 1: Update existing client details
+  await apiCall('PUT',`/clients/${clientId}`,{
+    name:nm,phone:ph,
+    birthday:v('em-dob')?.value||null,
+    anniversary:v('em-ann')?.value||null,
+    preferred_staff:v('em-pstaff')?.value||null,
+    preferences:v('em-notes')?.value||null,
+    gender:v('em-gender')?.value||null,
+    address:v('em-addr')?.value||null
+  });
+
+  // Step 2: Calculate past service points from joining date
+  let pastPts=0;
+  if(ph){
+    const entries=await apiCall('GET',`/entries?limit=200&phone=${encodeURIComponent(ph)}`).catch(()=>null);
+    if(entries&&entries.length){
+      const relevant=entries.filter(e=>String(e.entry_date||'').substring(0,10)<startDate&&e.visit_type!=='Membership');
+      pastPts=relevant.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
+    }
+  }
+
+  // Step 3: Enroll membership with past_points
+  const mem=await apiCall('POST',`/clients/${clientId}/membership`,{
+    fee_paid:fee,start_date:startDate,
+    expiry_date:expiryDate||null,
+    past_points:pastPts
+  });
+  if(!mem){toast('Membership enrollment failed','var(--rose)');return;}
+
+  // Step 4: Auto Daily Entry for fee
+  await apiCall('POST','/entries',{
+    client_name:nm+' (Membership - '+mem.membership_id+')',
+    phone:ph,entry_date:startDate,visit_type:'Membership',
+    items:[{service_name:'Saundarya Exclusive Membership',price:fee,qty:1,line_total:fee,staff_id:null,staff_name:null}],
+    discount:0,pay_method:payMethod,remarks:'Membership ID: '+mem.membership_id
+  });
+
+  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${nm} is now ⭐ Exclusive Member! ID: ${mem.membership_id} · Starting pts: ${20+pastPts}`,'var(--gold)');
+
+  // Reset button back
+  const cf=v('cf');
+  const btn=cf?.querySelector('.btn-gold');
+  if(btn){btn.innerHTML='<i class="fas fa-crown"></i>Save & Enroll Member';btn.setAttribute('onclick','saveExclusiveMember()');}
+  // Clear form fields
+  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const ef=v('em-fee');if(ef)ef.value='1000';
+  const pp=document.getElementById('pts-preview-note');if(pp)pp.remove();
+  if(cf)cf.style.display='none';
+  renderClients('');renderDailyView();updateDash();
+}
+
 
 async function renewMembership(clientId){
   if(!confirm('Renew membership for 12 months?'))return;
@@ -6285,4 +6359,4 @@ function clearBridalFilters(){
 
 </div>
 </body>
-</html>
+</html> 
