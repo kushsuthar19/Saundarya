@@ -5349,9 +5349,10 @@ async function initApp(){
 
 async function loadAllNotifications(){
   clearNotifs();
-  await loadMemNotifications();
-  const bridalCount=await loadBridalNotifications()||0;
-  const apptCount=await loadApptNotifications()||0;
+  try{await loadMemNotifications();}catch(e){}
+  let bridalCount=0,apptCount=0;
+  try{bridalCount=await loadBridalNotifications()||0;}catch(e){}
+  try{apptCount=await loadApptNotifications()||0;}catch(e){}
 
   // Count total items in bell
   const list=v('notif-list');
@@ -5418,35 +5419,34 @@ async function loadBridalNotifications(){
 
   const upcoming=[];
   bookings.forEach(b=>{
-    // Check each function date
-    (b.functions||[]).forEach(fn=>{
-      const fd=String(fn.fn_date||'').substring(0,10);
-      if(validDates.includes(fd)){
-        upcoming.push({
-          name:b.client_name, phone:b.phone||'—',
+    try{
+      // Check each function date
+      const fns=Array.isArray(b.functions)?b.functions:[];
+      fns.forEach(fn=>{
+        const fd=String(fn.fn_date||fn.date||'').substring(0,10);
+        if(fd&&validDates.includes(fd)){
+          upcoming.push({
+            name:b.client_name||b.name||'Client', phone:b.phone||'—',
+            booking_type:b.booking_type||'Bridal',
+            pkg:b.package_name||b.booking_type||'—',
+            fn_name:fn.function_name||fn.name||'Function',
+            fn_date:fd, isToday:fd===todayStr, id:b.id
+          });
+        }
+      });
+      // Also check wedding_date itself
+      const wd=String(b.wedding_date||'').substring(0,10);
+      if(wd&&validDates.includes(wd)){
+        const already=upcoming.find(u=>u.id===b.id&&u.fn_date===wd);
+        if(!already) upcoming.push({
+          name:b.client_name||b.name||'Client', phone:b.phone||'—',
           booking_type:b.booking_type||'Bridal',
           pkg:b.package_name||b.booking_type||'—',
-          fn_name:fn.function_name||'Function',
-          fn_date:fd,
-          isToday:fd===todayStr,
-          id:b.id
+          fn_name:'Wedding Day 💍',
+          fn_date:wd, isToday:wd===todayStr, id:b.id
         });
       }
-    });
-    // Also check wedding_date itself
-    const wd=String(b.wedding_date||'').substring(0,10);
-    if(validDates.includes(wd)){
-      const already=upcoming.find(u=>u.id===b.id&&u.fn_name==='Wedding Day'&&u.fn_date===wd);
-      if(!already) upcoming.push({
-        name:b.client_name, phone:b.phone||'—',
-        booking_type:b.booking_type||'Bridal',
-        pkg:b.package_name||b.booking_type||'—',
-        fn_name:'Wedding Day 💍',
-        fn_date:wd,
-        isToday:wd===todayStr,
-        id:b.id
-      });
-    }
+    }catch(e){}
   });
   if(!upcoming.length)return;
 
@@ -5901,13 +5901,15 @@ async function _loadMemberProfile(clientId){
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px">
         <div style="font-size:10px;color:var(--amber);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">💎 Beauty Points Balance</div>
-        <div style="font-size:44px;font-weight:700;color:var(--gold);line-height:1">${mem?.beauty_points||0}</div>
+        <div id="pts-big-${clientId}" style="font-size:44px;font-weight:700;color:var(--gold);line-height:1">${mem?.beauty_points||0}</div>
         <div style="font-size:11px;color:var(--emerald);font-weight:700">⭐ AVAILABLE TO USE</div>
       </div>
       <div style="background:rgba(255,255,255,.7);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--ink2);line-height:1.8">
-        <div>🎁 Gift on joining: <b>+${Math.max(0,(mem?.beauty_points||0)-totalPtsEarned)} pts</b></div>
-        <div>💆 From ${histRows.length} services: <b>+${totalPtsEarned} pts</b></div>
-        <div style="border-top:1px solid rgba(0,0,0,.1);margin-top:4px;padding-top:4px;color:var(--ink);font-weight:700">Total balance: ${mem?.beauty_points||0} pts</div>
+        <div id="pts-breakdown-${clientId}">
+          <div>🎁 Gift on joining: <b>+20 pts</b></div>
+          <div>💆 From ${histRows.length} services: <b>+${totalPtsEarned} pts</b></div>
+          <div style="border-top:1px solid rgba(0,0,0,.1);margin-top:4px;padding-top:4px;color:var(--ink);font-weight:700">Loading balance...</div>
+        </div>
         <div style="font-size:10px;color:var(--amber);margin-top:2px">₹100 spent = 1 point</div>
       </div>
     </div>
@@ -6004,7 +6006,7 @@ async function _loadMemberProfile(clientId){
             <td style="padding:7px 10px;color:var(--teal);font-weight:600">${e.inv_no}</td>
             <td style="padding:7px 10px;color:var(--ink2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.services||'—'}</td>
             <td style="padding:7px 10px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.net_total||0)}</td>
-            <td style="padding:7px 10px;text-align:right;color:var(--gold);font-weight:700">+${pts} ⭐</td>
+            <td style="padding:7px 10px;text-align:right;color:var(--gold);font-weight:700" title="₹${e.net_total||0} ÷ 100">+${pts} ⭐</td>
             <td style="padding:7px 10px"><span style="background:var(--bg);border-radius:4px;padding:2px 6px;font-size:10px">${(e.pay_method||'Cash').startsWith('Split')?'Split':e.pay_method||'Cash'}</span></td>
           </tr>`;
         }).join(''):'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--ink4)">No service history found</td></tr>'}
@@ -6012,7 +6014,7 @@ async function _loadMemberProfile(clientId){
       ${histRows.length?`<tfoot><tr style="background:var(--bg)">
         <td colspan="3" style="padding:8px 10px;font-weight:700;font-size:12px">Total from ${histRows.length} visits</td>
         <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--emerald)">${fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))}</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ earned<br><span style="font-size:10px;color:var(--emerald);font-weight:600">${mem?.beauty_points||0} ⭐ available</span></td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ from services<br><span style="font-size:10px;color:var(--emerald);font-weight:600" id="pts-avail-${clientId}">see points log ↑</span></td>
         <td></td>
       </tr></tfoot>`:''}
     </table>
@@ -6071,18 +6073,38 @@ async function loadPtsHistory(clientId){
     box.innerHTML='<div style="text-align:center;padding:10px;color:var(--ink4);font-size:11px">No points history yet</div>';
     return;
   }
-  const icons={add:'<span style="color:var(--emerald);font-weight:700">+</span>',redeem:'<span style="color:var(--rose);font-weight:700">−</span>',set:'<span style="color:var(--sky);font-weight:700">=</span>',Earned:'<span style="color:var(--emerald);font-weight:700">+</span>'};
-  box.innerHTML=logs.map(l=>`
+
+  // The last row's running_balance is the CORRECT current total
+  // (logs come newest-first, so last = oldest = not correct; use first = newest)
+  // Actually running_balance on each row is balance AFTER that transaction
+  // The first row (newest) has the current balance
+  const currentBalance = logs[0]?.running_balance ?? 0;
+  const totalAdded = logs.reduce((s,l)=>l.entry_type!=='redeem'?s+(l.points||0):s, 0);
+  const totalRedeemed = logs.reduce((s,l)=>l.entry_type==='redeem'?s+(l.points||0):s, 0);
+
+  // Update the big points number in the profile with correct value from log
+  const bigNum = v(`pts-big-${clientId}`);
+  if(bigNum) bigNum.textContent = currentBalance;
+  const breakdown = v(`pts-breakdown-${clientId}`);
+  if(breakdown) breakdown.innerHTML =
+    `🎁 Gift & adjustments: <b>+${totalAdded} pts added</b><br>
+     💸 Redeemed: <b>−${totalRedeemed} pts used</b><br>
+     <span style="font-weight:700;color:var(--gold)">✅ Balance: ${currentBalance} pts</span>`;
+
+  box.innerHTML = logs.map(l=>`
     <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid rgba(201,168,76,.15);font-size:11px">
-      <div style="width:22px;height:22px;border-radius:50%;background:${l.entry_type==='redeem'?'#fff0f0':l.entry_type==='Earned'?'#e8f5ee':'#fff8e7'};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">
-        ${icons[l.entry_type]||'+'}
+      <div style="width:28px;height:28px;border-radius:50%;background:${l.entry_type==='redeem'?'#fff0f0':'#e8f5ee'};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">
+        ${l.entry_type==='redeem'?'−':'+'}
       </div>
-      <div style="flex:1">
-        <div style="font-weight:600;color:var(--ink)">${l.notes||l.entry_type}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:var(--ink);font-size:11px">${l.notes||l.entry_type}</div>
         <div style="color:var(--ink3);font-size:10px">${String(l.created_at||'').substring(0,16)}</div>
       </div>
-      <div style="font-weight:700;color:${l.entry_type==='redeem'?'var(--rose)':'var(--emerald)'}">
-        ${l.entry_type==='redeem'?'−':'+'}${l.points} ⭐
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-weight:700;font-size:12px;color:${l.entry_type==='redeem'?'var(--rose)':'var(--emerald)'}">
+          ${l.entry_type==='redeem'?'−':'+'}${l.points} ⭐
+        </div>
+        <div style="font-size:9px;color:var(--ink3)">bal: ${l.running_balance}</div>
       </div>
     </div>`).join('');
 }

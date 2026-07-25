@@ -300,13 +300,25 @@ async def get_points_log(
            FROM beauty_points_log l
            JOIN memberships m ON m.id=l.membership_id
            WHERE m.client_id=:1
-           ORDER BY l.created_at DESC
-           FETCH FIRST 30 ROWS ONLY""",
+           ORDER BY l.created_at ASC""",
         [client_id]
     )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
-    return [dict(zip(cols, r)) for r in rows]
+    # Calculate running balance for each row
+    balance = 0
+    result = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        if d['entry_type'] == 'redeem':
+            balance -= int(d['points'] or 0)
+        else:
+            balance += int(d['points'] or 0)
+        d['running_balance'] = balance
+        result.append(d)
+    # Return newest first
+    result.reverse()
+    return result
 
 
 @router.get("/membership/expiry-notifications")
@@ -464,6 +476,13 @@ async def create_membership(
            VALUES (:1,'add',20,'GIFT','Welcome gift points on membership enrollment')""",
         [new_mem_db_id]
     )
+    # Sync DB beauty_points from log immediately
+    await cursor.execute(
+        """UPDATE memberships
+           SET beauty_points = 20, lifetime_points = 20
+           WHERE id=:1""",
+        [new_mem_db_id]
+    )
     await db.commit()
     await cursor.execute(
         "UPDATE clients SET client_type='Exclusive' WHERE id=:1",
@@ -484,8 +503,14 @@ async def get_membership(
         """SELECT m.id, m.membership_id, m.status, m.fee_paid,
                   TO_CHAR(m.start_date,'YYYY-MM-DD') as start_date,
                   TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
-                  m.beauty_points, m.lifetime_points, m.notes,
-                  ROUND(m.expiry_date - SYSDATE) as days_remaining
+                  m.beauty_points,
+                  m.lifetime_points,
+                  m.notes,
+                  ROUND(m.expiry_date - SYSDATE) as days_remaining,
+                  NVL((SELECT SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END)
+                       FROM beauty_points_log l WHERE l.membership_id=m.id), m.beauty_points) as log_balance,
+                  NVL((SELECT SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END)
+                       FROM beauty_points_log l WHERE l.membership_id=m.id), 0) as log_earned
            FROM memberships m
            WHERE m.client_id=:1
            ORDER BY m.created_at DESC""",
@@ -493,7 +518,15 @@ async def get_membership(
     )
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
-    return [dict(zip(cols, r)) for r in rows]
+    result = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        # Use log_balance as truth if log exists, else fall back to DB beauty_points
+        if d.get('log_balance') is not None:
+            d['beauty_points'] = int(d['log_balance'])
+        d['lifetime_points'] = int(d.get('log_earned') or d.get('lifetime_points') or 0)
+        result.append(d)
+    return result
 
 
 @router.post("/{client_id}/membership/renew")
@@ -564,5 +597,25 @@ async def update_points(
            VALUES (:1,:2,:3,:4,:5)""",
         [mem_id, action, points, data.get('invoice', ''), data.get('notes', '')]
     )
+    # Sync DB beauty_points from log (source of truth)
+    await cursor.execute(
+        """UPDATE memberships
+           SET beauty_points = NVL((
+               SELECT SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END)
+               FROM beauty_points_log WHERE membership_id=:1
+           ), 0),
+           lifetime_points = NVL((
+               SELECT SUM(CASE WHEN entry_type!='redeem' THEN points ELSE 0 END)
+               FROM beauty_points_log WHERE membership_id=:1
+           ), 0)
+           WHERE id=:2""",
+        [mem_id, mem_id, mem_id]
+    )
     await db.commit()
-    return {"beauty_points": new_pts, "lifetime_points": new_lifetime}
+    # Re-read correct values
+    await cursor.execute(
+        "SELECT beauty_points, lifetime_points FROM memberships WHERE id=:1",
+        [mem_id]
+    )
+    fresh = await cursor.fetchone()
+    return {"beauty_points": int(fresh[0] or 0), "lifetime_points": int(fresh[1] or 0)}
