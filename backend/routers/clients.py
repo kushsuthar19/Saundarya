@@ -413,6 +413,7 @@ async def delete_client(
 ):
     cursor = db.cursor()
     try:
+        # Step 1: Nullify foreign keys in entries/appointments
         for sql in [
             "UPDATE daily_entries SET client_id=NULL WHERE client_id=:1",
             "UPDATE appointments SET client_id=NULL WHERE client_id=:1",
@@ -423,8 +424,45 @@ async def delete_client(
             except Exception:
                 try: await db.rollback()
                 except Exception: pass
-        await cursor.execute("DELETE FROM memberships WHERE client_id=:1", [client_id])
-        await db.commit()
+
+        # Step 2: Get membership IDs before deleting
+        await cursor.execute(
+            "SELECT id FROM memberships WHERE client_id=:1",
+            [client_id]
+        )
+        mem_rows = await cursor.fetchall()
+        mem_ids = [r[0] for r in mem_rows]
+
+        # Step 3: Delete beauty_points_log and nfc_cards (FK to memberships)
+        for mid in mem_ids:
+            try:
+                await cursor.execute(
+                    "DELETE FROM beauty_points_log WHERE membership_id=:1", [mid]
+                )
+                await db.commit()
+            except Exception:
+                try: await db.rollback()
+                except Exception: pass
+            try:
+                await cursor.execute(
+                    "DELETE FROM nfc_cards WHERE membership_id=:1", [mid]
+                )
+                await db.commit()
+            except Exception:
+                try: await db.rollback()
+                except Exception: pass
+
+        # Step 4: Now safe to delete memberships
+        try:
+            await cursor.execute(
+                "DELETE FROM memberships WHERE client_id=:1", [client_id]
+            )
+            await db.commit()
+        except Exception:
+            try: await db.rollback()
+            except Exception: pass
+
+        # Step 5: Delete the client
         await cursor.execute("DELETE FROM clients WHERE id=:1", [client_id])
         await db.commit()
         return {"deleted": client_id}
