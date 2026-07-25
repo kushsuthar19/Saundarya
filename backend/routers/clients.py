@@ -287,6 +287,28 @@ async def get_nfc_card(
     return dict(zip(cols, row))
 
 
+@router.get("/{client_id}/membership/points-log")
+async def get_points_log(
+    client_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        """SELECT l.entry_type, l.points, l.notes, l.reference_inv,
+                  TO_CHAR(l.created_at,'YYYY-MM-DD HH24:MI') as created_at
+           FROM beauty_points_log l
+           JOIN memberships m ON m.id=l.membership_id
+           WHERE m.client_id=:1
+           ORDER BY l.created_at DESC
+           FETCH FIRST 30 ROWS ONLY""",
+        [client_id]
+    )
+    rows = await cursor.fetchall()
+    cols = [d[0].lower() for d in cursor.description]
+    return [dict(zip(cols, r)) for r in rows]
+
+
 @router.get("/membership/expiry-notifications")
 async def expiry_notifications(
     current_user: dict = Depends(get_current_user),
@@ -431,6 +453,16 @@ async def create_membership(
          start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
          data.get('notes', ''),
          cursor.var(oracledb.NUMBER)]
+    )
+    new_mem_id = cursor.bindvars[-1].getvalue()
+    new_mem_db_id = int(new_mem_id[0] if isinstance(new_mem_id, list) else new_mem_id)
+    await db.commit()
+    # Log the 20 gift points
+    await cursor.execute(
+        """INSERT INTO beauty_points_log
+               (membership_id, entry_type, points, reference_inv, notes)
+           VALUES (:1,'add',20,'GIFT','Welcome gift points on membership enrollment')""",
+        [new_mem_db_id]
     )
     await db.commit()
     await cursor.execute(
