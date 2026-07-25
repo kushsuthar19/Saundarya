@@ -272,7 +272,8 @@ async def get_nfc_card(
     cursor = db.cursor()
     await cursor.execute(
         """SELECT n.card_uid, n.status,
-                  TO_CHAR(n.issued_date,'YYYY-MM-DD') as issued_date
+                  TO_CHAR(n.issued_date,'YYYY-MM-DD') as issued_date,
+                  m.membership_id
            FROM nfc_cards n
            JOIN memberships m ON m.id=n.membership_id
            WHERE m.client_id=:1 AND n.status='Active'
@@ -281,7 +282,7 @@ async def get_nfc_card(
     )
     row = await cursor.fetchone()
     if not row:
-        return {"card_uid": None, "status": "Not Assigned", "issued_date": None}
+        return {"card_uid": None, "status": "Not Assigned", "issued_date": None, "membership_id": None}
     cols = [d[0].lower() for d in cursor.description]
     return dict(zip(cols, row))
 
