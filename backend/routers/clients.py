@@ -164,6 +164,149 @@ async def create_client(
 
 # ── get single client ─────────────────────────────────────────────────────────
 
+# ── NFC Card endpoints ───────────────────────────────────────────────────────
+
+@router.post("/{client_id}/nfc-card")
+async def register_nfc_card(
+    client_id: int,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Register or replace NFC card UID for a member."""
+    cursor = db.cursor()
+    uid = (data.get('card_uid') or '').strip()
+    if not uid:
+        raise HTTPException(status_code=400, detail="Card UID is required")
+
+    # Check UID not already used by another client
+    await cursor.execute(
+        """SELECT n.id, c.name FROM nfc_cards n
+           JOIN memberships m ON m.id=n.membership_id
+           JOIN clients c ON c.id=m.client_id
+           WHERE n.card_uid=:1 AND n.status='Active'""",
+        [uid]
+    )
+    existing = await cursor.fetchone()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"UID already assigned to {existing[1]}")
+
+    # Get active membership id
+    await cursor.execute(
+        "SELECT id FROM memberships WHERE client_id=:1 AND status='Active'",
+        [client_id]
+    )
+    mem_row = await cursor.fetchone()
+    if not mem_row:
+        raise HTTPException(status_code=404, detail="No active membership found for this client")
+    mem_id = mem_row[0]
+
+    # Deactivate any old cards for this membership
+    await cursor.execute(
+        "UPDATE nfc_cards SET status='Inactive', deactivated_at=SYSTIMESTAMP WHERE membership_id=:1 AND status='Active'",
+        [mem_id]
+    )
+
+    # Insert new card
+    await cursor.execute(
+        """INSERT INTO nfc_cards (membership_id, card_uid, status, issued_date)
+           VALUES (:1, :2, 'Active', SYSDATE)
+           RETURNING id INTO :3""",
+        [mem_id, uid, cursor.var(oracledb.NUMBER)]
+    )
+    await db.commit()
+    return {"registered": True, "card_uid": uid, "membership_id": mem_id}
+
+
+@router.get("/card-search")
+async def nfc_lookup(
+    uid: str,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Look up client by NFC card UID or membership ID."""
+    cursor = db.cursor()
+    uid = uid.strip()
+
+    # Try NFC card UID first
+    await cursor.execute(
+        """SELECT c.id, c.name, c.phone, NVL(c.client_type,'New') as client_type,
+                  m.membership_id, m.beauty_points,
+                  TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
+                  m.status as mem_status
+           FROM nfc_cards n
+           JOIN memberships m ON m.id=n.membership_id
+           JOIN clients c ON c.id=m.client_id
+           WHERE n.card_uid=:1 AND n.status='Active'""",
+        [uid]
+    )
+    row = await cursor.fetchone()
+
+    # If not found by UID, try membership_id (SBC001 etc)
+    if not row:
+        await cursor.execute(
+            """SELECT c.id, c.name, c.phone, NVL(c.client_type,'New') as client_type,
+                      m.membership_id, m.beauty_points,
+                      TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
+                      m.status as mem_status
+               FROM memberships m
+               JOIN clients c ON c.id=m.client_id
+               WHERE UPPER(m.membership_id)=UPPER(:1) AND m.status='Active'""",
+            [uid]
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        return None
+    cols = [d[0].lower() for d in cursor.description]
+    return dict(zip(cols, row))
+
+
+@router.get("/{client_id}/nfc-card")
+async def get_nfc_card(
+    client_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Get NFC card status for a member."""
+    cursor = db.cursor()
+    await cursor.execute(
+        """SELECT n.card_uid, n.status,
+                  TO_CHAR(n.issued_date,'YYYY-MM-DD') as issued_date
+           FROM nfc_cards n
+           JOIN memberships m ON m.id=n.membership_id
+           WHERE m.client_id=:1 AND n.status='Active'
+           ORDER BY n.issued_date DESC""",
+        [client_id]
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return {"card_uid": None, "status": "Not Assigned", "issued_date": None}
+    cols = [d[0].lower() for d in cursor.description]
+    return dict(zip(cols, row))
+
+
+@router.get("/membership/expiry-notifications")
+async def expiry_notifications(
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        """SELECT c.name, c.phone, m.membership_id, m.status,
+                  TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
+                  ROUND(m.expiry_date - SYSDATE) as days_remaining,
+                  c.id as client_id, m.id as mem_id
+           FROM memberships m
+           JOIN clients c ON c.id=m.client_id
+           WHERE m.status='Active'
+             AND m.expiry_date <= SYSDATE + 15
+           ORDER BY m.expiry_date ASC"""
+    )
+    rows = await cursor.fetchall()
+    cols = [d[0].lower() for d in cursor.description]
+    return [dict(zip(cols, r)) for r in rows]
+
 @router.get("/{client_id}", response_model=ClientOut)
 async def get_client(
     client_id: int,
@@ -281,7 +424,7 @@ async def create_membership(
         """INSERT INTO memberships
                (client_id, membership_id, status, fee_paid, start_date, expiry_date,
                 beauty_points, lifetime_points, notes)
-           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),0,0,:6)
+           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),20,20,:6)
            RETURNING id INTO :7""",
         [client_id, mem_id, data.get('fee_paid', 1000),
          start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
@@ -390,25 +533,3 @@ async def update_points(
     )
     await db.commit()
     return {"beauty_points": new_pts, "lifetime_points": new_lifetime}
-
-
-@router.get("/membership/expiry-notifications")
-async def expiry_notifications(
-    current_user: dict = Depends(get_current_user),
-    db: oracledb.AsyncConnection = Depends(get_db),
-):
-    cursor = db.cursor()
-    await cursor.execute(
-        """SELECT c.name, c.phone, m.membership_id, m.status,
-                  TO_CHAR(m.expiry_date,'YYYY-MM-DD') as expiry_date,
-                  ROUND(m.expiry_date - SYSDATE) as days_remaining,
-                  c.id as client_id, m.id as mem_id
-           FROM memberships m
-           JOIN clients c ON c.id=m.client_id
-           WHERE m.status='Active'
-             AND m.expiry_date <= SYSDATE + 15
-           ORDER BY m.expiry_date ASC"""
-    )
-    rows = await cursor.fetchall()
-    cols = [d[0].lower() for d in cursor.description]
-    return [dict(zip(cols, r)) for r in rows]

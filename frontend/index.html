@@ -3011,11 +3011,16 @@ async function renderClients(s){
     <td>${c.visit_count||c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
     <td style="white-space:nowrap">
       ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
-      <button onclick="showClientProfile(${c.id})" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="View Profile"><i class="fas fa-eye"></i></button>
-      <button onclick="editClient(${c.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Edit"><i class="fas fa-edit"></i></button>
-      <button onclick="deleteClient(${c.id},'${c.name}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Delete"><i class="fas fa-trash"></i></button>
-      ${c.client_type==='Exclusive'?`<button onclick="showMemberProfile(${c.id})" style="background:var(--gold);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Member Profile"><i class="fas fa-crown"></i></button>`:''}
-      ${c.client_type==='Regular'?`<button onclick="giveMembership(${c.id},'${c.name.replace(/'/g,"")}')" style="background:var(--amber);color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;margin-left:2px" title="Give Membership"><i class="fas fa-crown"></i> Member</button>`:''}
+      <div style="position:relative;display:inline-block">
+        <button onclick="toggleRowMenu('cr-menu-${c.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
+        <div id="cr-menu-${c.id}" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:150px;overflow:hidden">
+          <div onclick="showClientProfile(${c.id});toggleRowMenu('cr-menu-${c.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-eye" style="width:14px;color:var(--sky)"></i> View Profile</div>
+          <div onclick="editClient(${c.id});toggleRowMenu('cr-menu-${c.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-edit" style="width:14px;color:var(--teal)"></i> Edit</div>
+          ${c.client_type==='Exclusive'?`<div onclick="showMemberProfile(${c.id});toggleRowMenu('cr-menu-${c.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-crown" style="width:14px;color:var(--gold)"></i> Membership</div>`:''}
+          ${c.client_type==='Regular'?`<div onclick="giveMembership(${c.id},'${c.name.replace(/'/g,'')}');toggleRowMenu('cr-menu-${c.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-crown" style="width:14px;color:var(--amber)"></i> Give Membership</div>`:''}
+          <div onclick="deleteClient(${c.id},'${c.name}');toggleRowMenu('cr-menu-${c.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;color:var(--rose)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-trash" style="width:14px"></i> Delete</div>
+        </div>
+      </div>
     </td>
   </tr>`).join('');
 }
@@ -3377,10 +3382,15 @@ async function renderDailyView(){
       <span class="pill p-nd">${e.visit_type||'Walk-in'}</span>
       <span class="pill p-bk">${e.pay_method||'Cash'}</span>
       <span style="margin-left:auto;font-weight:600">${fmt(e.net_total||0)}</span>
-      <button onclick="event.stopPropagation();apiDownload('/entries/${e.id}/pdf','Invoice_${e.inv_no}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px"><i class="fas fa-download"></i> PDF</button>
-      ${e.phone?`<button onclick="event.stopPropagation();sendWAEntry(${JSON.stringify({id:e.id,inv_no:e.inv_no,phone:e.phone})})" style="background:none;border:none;cursor:pointer;font-size:16px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
-      <button onclick="event.stopPropagation();editEntry(${e.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Edit"><i class="fas fa-edit"></i></button>
-      <button onclick="event.stopPropagation();deleteEntry(${e.id},'${e.inv_no}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px" title="Delete"><i class="fas fa-trash"></i></button>
+      <div style="position:relative;display:inline-block" onclick="event.stopPropagation()">
+        <button onclick="toggleRowMenu('de-menu-${e.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
+        <div id="de-menu-${e.id}" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:140px;overflow:hidden">
+          <div onclick="apiDownload('/entries/${e.id}/pdf','Invoice_${e.inv_no}.pdf');toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-download" style="width:14px;color:var(--sky)"></i> Download PDF</div>
+          ${e.phone?`<div onclick="sendWAEntry({id:${e.id},inv_no:'${e.inv_no}',phone:'${e.phone}'});toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fab fa-whatsapp" style="width:14px;color:#128C7E"></i> WhatsApp</div>`:''}
+          <div onclick="editEntry(${e.id});toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-edit" style="width:14px;color:var(--teal)"></i> Edit</div>
+          <div onclick="deleteEntry(${e.id},'${e.inv_no}');toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;color:var(--rose)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-trash" style="width:14px"></i> Delete</div>
+        </div>
+      </div>
     </div>
   </div>`).join('');
 }
@@ -3915,8 +3925,13 @@ async function renderBridalList(search, typeF){
               <button onclick="apiDownload('/bridal/${b.id}/pdf','${b.job_no}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="PDF"><i class="fas fa-download"></i></button>
               ${b.phone?`<button onclick="sendBridalWa(${b.id})" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
               ${b.balance_due>0?`<button onclick="recordPayment(${b.id},'${b.client_name}',${b.balance_due})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px" title="Pay"><i class="fas fa-rupee-sign"></i></button>`:''}
-              <button onclick="editBridal(${b.id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="Edit Booking"><i class="fas fa-edit"></i></button>
-              <button onclick="deleteBridal(${b.id},'${b.job_no}')" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="Delete"><i class="fas fa-trash"></i></button>
+              <div style="position:relative;display:inline-block">
+                <button onclick="toggleRowMenu('br-menu-${b.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
+                <div id="br-menu-${b.id}" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:130px;overflow:hidden">
+                  <div onclick="editBridal(${b.id});toggleRowMenu('br-menu-${b.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-edit" style="width:14px;color:var(--teal)"></i> Edit</div>
+                  <div onclick="deleteBridal(${b.id},'${b.job_no}');toggleRowMenu('br-menu-${b.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;color:var(--rose)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-trash" style="width:14px"></i> Delete</div>
+                </div>
+              </div>
             </div>
           </td>
         </tr>`;
@@ -5366,8 +5381,13 @@ async function renderInquiries(search){
     <td style="max-width:120px;font-size:11px;color:var(--ink3)">${inq.notes||'—'}</td>
     <td style="white-space:nowrap">
       <button onclick="sendInquiryWa(${inq.id},'${inq.phone||''}','${inq.name.replace(/'/g,'')}','${inq.service||''}')" style="background:none;border:none;cursor:pointer;font-size:16px" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>
-      <button onclick="editInquiry(${inq.id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px"><i class="fas fa-edit"></i></button>
-      <button onclick="deleteInquiry(${inq.id},'${inq.name.replace(/'/g,'')}')" style="background:var(--rose);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px"><i class="fas fa-trash"></i></button>
+      <div style="position:relative;display:inline-block">
+        <button onclick="toggleRowMenu('inq-menu-${inq.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
+        <div id="inq-menu-${inq.id}" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:130px;overflow:hidden">
+          <div onclick="editInquiry(${inq.id});toggleRowMenu('inq-menu-${inq.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-edit" style="width:14px;color:var(--teal)"></i> Edit</div>
+          <div onclick="deleteInquiry(${inq.id},'${inq.name.replace(/'/g,'')}');toggleRowMenu('inq-menu-${inq.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;color:var(--rose)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-trash" style="width:14px"></i> Delete</div>
+        </div>
+      </div>
     </td>
   </tr>`;
   }).join('');
@@ -5475,6 +5495,26 @@ async function detectClientByPhone(phone){
 // ═══════════════════════════════════════════
 // MEMBERSHIP DASHBOARD NOTIFICATIONS
 // ═══════════════════════════════════════════
+function toggleRowMenu(id){
+  // Close all open menus first
+  document.querySelectorAll('[id$="-menu-"]').forEach(m=>{
+    if(m.id!==id)m.style.display='none';
+  });
+  // Find by exact id
+  const el=v(id);
+  if(!el)return;
+  el.style.display=el.style.display==='none'?'block':'none';
+  // Close when clicking outside
+  if(el.style.display==='block'){
+    setTimeout(()=>{
+      document.addEventListener('click',function closer(e){
+        if(!el.contains(e.target))el.style.display='none';
+        document.removeEventListener('click',closer);
+      });
+    },10);
+  }
+}
+
 function toggleDashAtt(){
   const list=v('att-dash-list');
   const chevron=v('att-dash-chevron');
@@ -5645,10 +5685,12 @@ async function _loadMemberProfile(clientId){
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
       <div>
         <div style="font-size:10px;color:var(--amber);font-weight:600;text-transform:uppercase;margin-bottom:2px">💎 Beauty Points</div>
-        <div style="font-size:28px;font-weight:700;color:var(--gold)">${mem?.beauty_points||0} ⭐</div>
-        <div style="font-size:11px;color:var(--emerald);font-weight:600">Available Balance</div>
-        <div style="font-size:10px;color:var(--ink3);margin-top:2px">Total earned: ${totalPtsEarned} pts (₹100 = 1 pt)</div>
-        <div style="font-size:10px;color:var(--ink3)">Lifetime recorded: ${mem?.lifetime_points||0} pts</div>
+        <div style="font-size:36px;font-weight:700;color:var(--gold);line-height:1">${mem?.beauty_points||0} ⭐</div>
+        <div style="font-size:12px;color:var(--emerald);font-weight:700;margin-top:2px">AVAILABLE POINTS</div>
+        <div style="font-size:10px;color:var(--ink3);margin-top:4px">
+          20 gift + ${totalPtsEarned} earned = <b>${20+totalPtsEarned} total calculated</b>
+        </div>
+        <div style="font-size:10px;color:var(--amber);margin-top:2px">₹100 = 1 point on every service</div>
       </div>
       <div style="margin-left:auto;text-align:right;font-size:11px;color:var(--ink3)">
         <div>From ${histRows.length} visits</div>
@@ -5687,11 +5729,17 @@ async function _loadMemberProfile(clientId){
       </div>
     </div>
     <div id="nfc-register-wrap-${clientId}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-      <div style="font-size:11px;color:var(--ink3);margin-bottom:6px">Enter Card UID manually <span style="color:var(--ink4)">(tap-to-read available when ACR122U reader arrives)</span></div>
+      <div style="font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:4px">Enter Card UID to link with this member</div>
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:8px;background:var(--bg);padding:7px 10px;border-radius:6px;border:1px solid var(--border)">
+        <i class="fas fa-info-circle" style="color:var(--sky)"></i>
+        The card has a built-in UID (printed on back or scan via reader).<br>
+        When reader arrives: tap card → UID auto-filled → profile opens instantly.<br>
+        <b>When client taps card at reception → this member profile opens directly.</b>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="nfc-uid-input-${clientId}" placeholder="e.g. SBC001-CARD or any unique ID"
-          style="flex:1;min-width:180px;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:'Inter',sans-serif">
-        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Assign</button>
+        <input type="text" id="nfc-uid-input-${clientId}" placeholder="Enter Card UID (check back of card) or any unique ID"
+          style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:'Inter',sans-serif">
+        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-link"></i> Link Card</button>
         <button onclick="v('nfc-register-wrap-${clientId}').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--ink3)">Cancel</button>
       </div>
     </div>
@@ -5771,7 +5819,7 @@ async function saveNfcCard(clientId){
 async function nfcSearch(val){
   val=(val||'').trim();
   if(!val||val.length<3)return;
-  const r=await apiCall('GET',`/clients/nfc-lookup?uid=${encodeURIComponent(val)}`);
+  const r=await apiCall('GET',`/clients/card-search?uid=${encodeURIComponent(val)}`);
   const res=v('nfc-search-result');
   if(!res)return;
   if(!r){
