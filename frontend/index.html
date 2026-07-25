@@ -1471,8 +1471,8 @@ table tbody tr:hover td{background:var(--bg2)}
               <option>Cash</option><option>GPay/UPI</option><option>Card</option>
             </select>
           </div>
-          <div class="fl"><label>Start Date</label><input type="date" id="em-start"></div>
-          <div class="fl"><label>Expiry Date (auto)</label><input type="date" id="em-expiry" readonly style="background:var(--bg);color:var(--ink3)"></div>
+          <div class="fl"><label>Start Date</label><input type="date" id="em-start" onchange="autoSetExpiry()"></div>
+          <div class="fl"><label>Expiry Date <span style="font-size:9px;color:var(--ink3);font-weight:400">(auto or edit)</span></label><input type="date" id="em-expiry" style="border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></div>
         </div>
         <!-- Staff & Notes -->
         <div class="fg" style="margin-bottom:14px">
@@ -2982,6 +2982,15 @@ function showCfRegular(){
   v('cf-regular').style.display='block';
   v('cf-exclusive').style.display='none';
 }
+function autoSetExpiry(){
+  const start=v('em-start')?.value;
+  if(!start)return;
+  const d=new Date(start);
+  d.setFullYear(d.getFullYear()+1);
+  const exp=v('em-expiry');
+  if(exp)exp.value=d.toISOString().split('T')[0];
+}
+
 function showCfExclusive(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='none';
