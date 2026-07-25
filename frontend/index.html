@@ -5824,9 +5824,6 @@ async function _loadMemberProfile(clientId){
   const mem=mems&&mems[0];
   const body=v('mem-profile-body');if(!body)return;
 
-  // Load points history
-  setTimeout(()=>loadPtsHistory(clientId), 100);
-
   // Load NFC card status
   const nfcStatus=await apiCall('GET',`/clients/${clientId}/nfc-card`);
   const nfcStatusEl=v(`nfc-status-${clientId}`);
@@ -6024,6 +6021,9 @@ async function _loadMemberProfile(clientId){
     </table>
   </div>
   `;
+
+  // NOW the DOM has pts-history-${clientId} — load history
+  await loadPtsHistory(clientId);
 }
 
 
