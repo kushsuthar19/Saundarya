@@ -1391,10 +1391,18 @@ table tbody tr:hover td{background:var(--bg2)}
     <button class="crm-tab" id="crm-tab-Regular" onclick="crmTab('Regular',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🔵 Regular</button>
     <button class="crm-tab" id="crm-tab-Exclusive" onclick="crmTab('Exclusive',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">⭐ Exclusive</button>
   </div>
-  <div style="display:flex;gap:8px;margin-bottom:12px">
+  <div style="display:flex;gap:8px;margin-bottom:8px">
     <div class="sbar-wrap" style="flex:1"><i class="fas fa-search"></i><input type="text" id="crm-search" placeholder="Search clients by name or phone..." oninput="renderClients(this.value)"></div>
     <button class="btn btn-sky btn-sm" onclick="toggleCF()"><i class="fas fa-plus"></i>Add Client</button>
   </div>
+  <!-- NFC / Member ID Quick Lookup -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start">
+    <div class="sbar-wrap" style="flex:1;border-color:var(--gold)">
+      <i class="fas fa-credit-card" style="color:var(--gold)"></i>
+      <input type="text" id="nfc-search-input" placeholder="Quick lookup by Card UID or Membership ID (e.g. SBC001)..." oninput="nfcSearch(this.value)" style="font-size:11px">
+    </div>
+  </div>
+  <div id="nfc-search-result"></div>
   <div id="cf" style="display:none;margin-bottom:12px">
     <!-- Step 0: Choose client type -->
     <div id="cf-choose" style="display:block">
@@ -3232,6 +3240,28 @@ async function showClientProfile(clientId){
   }
 }
 
+async function updateExclusiveMember(clientId){
+  const nm=v('em-name')?.value.trim();
+  if(!nm){toast('Enter name','var(--rose)');return;}
+  const r=await apiCall('PUT',`/clients/${clientId}`,{
+    name:nm,
+    phone:v('em-phone')?.value||null,
+    birthday:v('em-dob')?.value||null,
+    anniversary:v('em-ann')?.value||null,
+    preferred_staff:v('em-pstaff')?.value||null,
+    preferences:v('em-notes')?.value||null,
+    gender:v('em-gender')?.value||null,
+    address:v('em-addr')?.value||null
+  });
+  if(!r)return;
+  toast('<i class="fas fa-check" style="color:var(--gold)"></i> Exclusive member updated!','var(--gold)');
+  const cf=v('cf');
+  const btn=cf?.querySelector('.btn-gold');
+  if(btn){btn.innerHTML='<i class="fas fa-crown"></i>Save & Enroll Member';btn.setAttribute('onclick','saveExclusiveMember()');}
+  v('cf').style.display='none';
+  renderClients('');
+}
+
 async function deleteClient(id,name){
   if(!confirm(`Delete client "${name}"? This cannot be undone.`))return;
   const r=await apiCall('DELETE',`/clients/${id}`);
@@ -4824,7 +4854,7 @@ async function updateDashPaymentSplit(){
   rows.forEach(e=>{
     const amt=e.net_total||0;
     if(e.pay_method==='Cash')cash+=amt;
-    else if(e.pay_method==='UPI'||e.pay_method==='GPay')upi+=amt;
+    else if(e.pay_method==='UPI'||e.pay_method==='GPay'||e.pay_method==='GPay/UPI'||e.pay_method==='GPay/UPI')upi+=amt;
     else if(e.pay_method==='Card')card+=amt;
     else if(e.pay_method&&e.pay_method.startsWith('Split')){
       const parts=e.pay_method.split('|');
@@ -4891,7 +4921,7 @@ async function renderDashPaySplitCalendar(){
     if(!dayMap[d])dayMap[d]={cash:0,upi:0,card:0};
     const amt=r.net_total||0;
     if(r.pay_method==='Cash')dayMap[d].cash+=amt;
-    else if(r.pay_method==='UPI'||r.pay_method==='GPay')dayMap[d].upi+=amt;
+    else if(r.pay_method==='UPI'||r.pay_method==='GPay'||r.pay_method==='GPay/UPI')dayMap[d].upi+=amt;
     else if(r.pay_method==='Card')dayMap[d].card+=amt;
     else if(r.pay_method&&r.pay_method.startsWith('Split')){
         // Parse "Split|Cash:750|UPI:250|Card:0" format
@@ -5102,7 +5132,7 @@ async function renderRevCalendar(){
     dayMap[d].total+=amt;
     dayMap[d].count+=1;
     if(r.pay_method==='Cash')dayMap[d].cash+=amt;
-    else if(r.pay_method==='UPI'||r.pay_method==='GPay')dayMap[d].upi+=amt;
+    else if(r.pay_method==='UPI'||r.pay_method==='GPay'||r.pay_method==='GPay/UPI')dayMap[d].upi+=amt;
     else if(r.pay_method==='Card')dayMap[d].card+=amt;
     else if(r.pay_method&&r.pay_method.startsWith('Split')){
         // Parse "Split|Cash:750|UPI:250|Card:0" format
@@ -5490,6 +5520,31 @@ async function loadMemNotifications(){
 }
 
 
+async function giveMembership(clientId, clientName){
+  const payMethod=prompt(`Upgrade ${clientName} to Exclusive Member?
+
+Membership Fee: ₹1,000
+Payment method (Cash / GPay/UPI / Card):`, 'Cash');
+  if(!payMethod)return;
+  // Enroll membership
+  const r=await apiCall('POST',`/clients/${clientId}/membership`,{fee_paid:1000});
+  if(!r)return;
+  // Auto Daily Entry for membership fee
+  await apiCall('POST','/entries',{
+    client_name:clientName+' (Membership - '+r.membership_id+')',
+    phone:null,
+    entry_date:td(),
+    visit_type:'Membership',
+    items:[{service_name:'Saundarya Exclusive Membership',price:1000,qty:1,line_total:1000,staff_id:null,staff_name:null}],
+    discount:0,
+    pay_method:payMethod,
+    remarks:'Membership ID: '+r.membership_id
+  });
+  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${clientName} is now ⭐ Exclusive Member! ID: ${r.membership_id}`,'var(--gold)');
+  renderClients(v('crm-search')?.value||'');
+  updateDash();
+}
+
 async function renewMembership(clientId){
   if(!confirm('Renew membership for 12 months?'))return;
   const r=await apiCall('POST',`/clients/${clientId}/membership/renew`);
@@ -5513,6 +5568,19 @@ async function _loadMemberProfile(clientId){
   if(!client)return;
   const mem=mems&&mems[0];
   const body=v('mem-profile-body');if(!body)return;
+
+  // Load NFC card status
+  const nfcStatus=await apiCall('GET',`/clients/${clientId}/nfc-card`);
+  const nfcStatusEl=v(`nfc-status-${clientId}`);
+  const nfcActionsEl=v(`nfc-actions-${clientId}`);
+  if(nfcStatusEl){
+    if(nfcStatus&&nfcStatus.card_uid){
+      nfcStatusEl.innerHTML=`<span style="color:var(--emerald);font-weight:700">✔ Assigned</span> &nbsp;·&nbsp; UID: <b>${nfcStatus.card_uid}</b> &nbsp;·&nbsp; Issued: ${nfcStatus.issued_date||'—'}`;
+      if(nfcActionsEl)nfcActionsEl.innerHTML=`<span style="background:#e8f5ee;color:var(--emerald);font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;border:1px solid #b2dfdb">✔ Card Active</span><button onclick="showNfcRegister(${clientId})" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600">Replace Card</button>`;
+    } else {
+      nfcStatusEl.innerHTML='<span style="color:var(--rose);font-weight:600">✗ Not Assigned</span> &nbsp;·&nbsp; Register a card below';
+    }
+  }
 
   // Load service history by phone
   let histRows=[];
@@ -5578,10 +5646,11 @@ async function _loadMemberProfile(clientId){
       <div>
         <div style="font-size:10px;color:var(--amber);font-weight:600;text-transform:uppercase;margin-bottom:2px">💎 Beauty Points</div>
         <div style="font-size:28px;font-weight:700;color:var(--gold)">${mem?.beauty_points||0} ⭐</div>
-        <div style="font-size:10px;color:var(--ink3)">Lifetime earned: ${mem?.lifetime_points||0} pts</div>
+        <div style="font-size:11px;color:var(--emerald);font-weight:600">Available Balance</div>
+        <div style="font-size:10px;color:var(--ink3);margin-top:2px">Total earned: ${totalPtsEarned} pts (₹100 = 1 pt)</div>
+        <div style="font-size:10px;color:var(--ink3)">Lifetime recorded: ${mem?.lifetime_points||0} pts</div>
       </div>
       <div style="margin-left:auto;text-align:right;font-size:11px;color:var(--ink3)">
-        <div>₹100 = 1 point</div>
         <div>From ${histRows.length} visits</div>
       </div>
     </div>
@@ -5604,6 +5673,28 @@ async function _loadMemberProfile(clientId){
     <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class='fas fa-redo'></i> Renew</button>
     <button onclick="closeInvModal();editClient(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-edit'></i> Edit Profile</button>
     <button onclick="if(confirm('Delete this member?'))deleteClient(${clientId},'${client.name.replace(/'/g,'')}');closeInvModal();" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-trash'></i> Delete</button>
+  </div>
+
+  <!-- NFC Card Section -->
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;margin-bottom:4px">💳 NFC Membership Card</div>
+        <div id="nfc-status-${clientId}" style="font-size:12px;color:var(--ink3)">Loading card status...</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="nfc-actions-${clientId}">
+        <button onclick="showNfcRegister(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-credit-card"></i> Register Card</button>
+      </div>
+    </div>
+    <div id="nfc-register-wrap-${clientId}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:6px">Enter Card UID manually <span style="color:var(--ink4)">(tap-to-read available when ACR122U reader arrives)</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="nfc-uid-input-${clientId}" placeholder="e.g. SBC001-CARD or any unique ID"
+          style="flex:1;min-width:180px;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:'Inter',sans-serif">
+        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Assign</button>
+        <button onclick="v('nfc-register-wrap-${clientId}').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--ink3)">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- Service History Table -->
@@ -5636,7 +5727,7 @@ async function _loadMemberProfile(clientId){
       ${histRows.length?`<tfoot><tr style="background:var(--bg)">
         <td colspan="3" style="padding:8px 10px;font-weight:700;font-size:12px">Total from ${histRows.length} visits</td>
         <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--emerald)">${fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))}</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ total</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ earned<br><span style="font-size:10px;color:var(--emerald);font-weight:600">${mem?.beauty_points||0} ⭐ available</span></td>
         <td></td>
       </tr></tfoot>`:''}
     </table>
@@ -5654,6 +5745,47 @@ async function savePoints(clientId){
   if(!r)return;
   toast(`Points ${action}: ${points} ⭐ · Balance: ${r.beauty_points}`,'var(--gold)');
   await _loadMemberProfile(clientId);
+}
+
+// ═══════════════════════════════════════════
+// NFC CARD FUNCTIONS
+// ═══════════════════════════════════════════
+function showNfcRegister(clientId){
+  const wrap=v(`nfc-register-wrap-${clientId}`);
+  if(wrap)wrap.style.display=wrap.style.display==='none'?'block':'none';
+  const inp=v(`nfc-uid-input-${clientId}`);
+  if(inp)inp.focus();
+}
+
+async function saveNfcCard(clientId){
+  const inp=v(`nfc-uid-input-${clientId}`);
+  const uid=(inp?.value||'').trim();
+  if(!uid){toast('Enter a Card UID','var(--rose)');return;}
+  const r=await apiCall('POST',`/clients/${clientId}/nfc-card`,{card_uid:uid});
+  if(!r)return;
+  toast('<i class="fas fa-credit-card" style="color:var(--sky)"></i> NFC Card registered!','var(--sky)');
+  // Reload member profile to show updated status
+  await _loadMemberProfile(clientId);
+}
+
+async function nfcSearch(val){
+  val=(val||'').trim();
+  if(!val||val.length<3)return;
+  const r=await apiCall('GET',`/clients/nfc-lookup?uid=${encodeURIComponent(val)}`);
+  const res=v('nfc-search-result');
+  if(!res)return;
+  if(!r){
+    res.innerHTML='<span style="color:var(--rose);font-size:11px">No member found for this UID / ID</span>';
+    return;
+  }
+  res.innerHTML=`<div style="display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--gold);border-radius:8px;padding:8px 12px;margin-top:6px;flex-wrap:wrap">
+    <span style="font-size:18px">⭐</span>
+    <div>
+      <div style="font-weight:700;font-size:13px">${r.name}</div>
+      <div style="font-size:11px;color:var(--ink3)">${r.phone||'—'} &nbsp;·&nbsp; ${r.membership_id} &nbsp;·&nbsp; ${r.beauty_points||0} pts</div>
+    </div>
+    <button onclick="showMemberProfile(${r.id})" style="margin-left:auto;background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-crown"></i> Open Profile</button>
+  </div>`;
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
