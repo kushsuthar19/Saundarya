@@ -300,8 +300,9 @@ async def get_points_log(
         """SELECT l.entry_type, l.points, l.notes, l.reference_inv,
                   TO_CHAR(l.created_at,'YYYY-MM-DD HH24:MI') as created_at
            FROM beauty_points_log l
-           JOIN memberships m ON m.id=l.membership_id
-           WHERE m.client_id=:1
+           WHERE l.membership_id IN (
+               SELECT id FROM memberships WHERE client_id=:1
+           )
            ORDER BY l.created_at ASC""",
         [client_id]
     )
@@ -389,6 +390,10 @@ async def update_client(
         params.append(av)
     pst = getattr(data, 'preferred_staff', None)
     if pst is not None:                add("preferred_staff=?", pst)
+    gender = getattr(data, 'gender', None)
+    if gender is not None:             add("gender=?", gender)
+    address = getattr(data, 'address', None)
+    if address is not None:            add("address=?", address)
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -493,16 +498,34 @@ async def create_membership(
 
     mem_id = await _next_membership_id(cursor)
     start = date.today()
+    # Use provided start_date if given
+    if data.get('start_date'):
+        try:
+            from datetime import datetime as _dt
+            start = _dt.strptime(data['start_date'], '%Y-%m-%d').date()
+        except Exception:
+            pass
+    # Use provided expiry_date if given, else +12 months
     expiry = start + timedelta(days=365)
+    if data.get('expiry_date'):
+        try:
+            from datetime import datetime as _dt
+            expiry = _dt.strptime(data['expiry_date'], '%Y-%m-%d').date()
+        except Exception:
+            pass
+    # Starting points = 20 gift + any past service points
+    past_pts = int(data.get('past_points', 0) or 0)
+    starting_pts = 20 + past_pts
 
     await cursor.execute(
         """INSERT INTO memberships
                (client_id, membership_id, status, fee_paid, start_date, expiry_date,
                 beauty_points, lifetime_points, notes)
-           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),20,20,:6)
-           RETURNING id INTO :7""",
+           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:6,:7)
+           RETURNING id INTO :8""",
         [client_id, mem_id, data.get('fee_paid', 1000),
          start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
+         starting_pts,
          data.get('notes', ''),
          cursor.var(oracledb.NUMBER)]
     )
@@ -510,18 +533,26 @@ async def create_membership(
     new_mem_db_id = int(new_mem_id[0] if isinstance(new_mem_id, list) else new_mem_id)
     await db.commit()
     # Log the 20 gift points
+    # Log 20 gift points
     await cursor.execute(
         """INSERT INTO beauty_points_log
                (membership_id, entry_type, points, reference_inv, notes)
-           VALUES (:1,'add',20,'GIFT','Welcome gift points on membership enrollment')""",
+           VALUES (:1,'add',20,'GIFT','Welcome gift — 20 joining points')""",
         [new_mem_db_id]
     )
-    # Sync DB beauty_points from log immediately
+    # Log past service points if any
+    past_pts_val = int(data.get('past_points', 0) or 0)
+    if past_pts_val > 0:
+        await cursor.execute(
+            """INSERT INTO beauty_points_log
+                   (membership_id, entry_type, points, reference_inv, notes)
+               VALUES (:1,'add',:2,'PAST','Points from past services before joining')""",
+            [new_mem_db_id, past_pts_val]
+        )
+    # Sync DB with correct starting balance
     await cursor.execute(
-        """UPDATE memberships
-           SET beauty_points = 20, lifetime_points = 20
-           WHERE id=:1""",
-        [new_mem_db_id]
+        "UPDATE memberships SET beauty_points=:1, lifetime_points=:1 WHERE id=:2",
+        [starting_pts, new_mem_db_id]
     )
     await db.commit()
     await cursor.execute(
