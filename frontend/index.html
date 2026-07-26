@@ -4458,24 +4458,13 @@ function toggleCF(){
     f.style.display='none';
   }
 }
-function showCfChoose(){
-  v('cf-choose').style.display='block';
-  v('cf-regular').style.display='none';
-  v('cf-exclusive').style.display='none';
-}
+
 function showCfRegular(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='block';
   v('cf-exclusive').style.display='none';
 }
-function autoSetExpiry(){
-  const start=v('em-start')?.value;
-  if(!start)return;
-  const d=new Date(start);
-  d.setFullYear(d.getFullYear()+1);
-  const exp=v('em-expiry');
-  if(exp)exp.value=d.toISOString().split('T')[0];
-}
+
 
 function showCfExclusive(){
   v('cf-choose').style.display='none';
@@ -4624,488 +4613,25 @@ async function updateClient(id){
   renderClients('');
 }
 
-async function showClientProfile(clientId){
-  const modal=v('inv-modal');if(!modal)return;
-  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
-  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:750px;max-width:96vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <div style="font-size:16px;font-weight:700;color:var(--ink)"><i class="fas fa-user" style="color:var(--sky);margin-right:8px"></i>Client Profile</div>
-      <button onclick="closeInvModal()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button>
-    </div>
-    <div id="cp-body" style="min-height:200px"><div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin fa-2x"></i></div></div>
-  </div>`;
-  modal.style.display='flex';
-  // Load client data + entries
-  const [c, mems, entries] = await Promise.all([
-    apiCall('GET',`/clients/${clientId}`),
-    apiCall('GET',`/clients/${clientId}/membership`),
-    apiCall('GET',`/entries?limit=50&client_id=${clientId}`).catch(()=>null)
-  ]);
-  if(!c){v('cp-body').innerHTML='<div style="color:var(--rose);text-align:center;padding:20px">Failed to load client</div>';return;}
-  const mem=mems&&mems[0];
-  const typeColor={'New':'var(--emerald)','Regular':'var(--sky)','Exclusive':'var(--gold)'}[c.client_type||'New'];
-  const typeBadge={'New':'🟢 NEW','Regular':'🔵 REGULAR','Exclusive':'⭐ EXCLUSIVE'}[c.client_type||'New'];
-  const cpBody=v('cp-body');if(!cpBody)return;
-  cpBody.innerHTML=`
-  <!-- Client Header -->
-  <div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--bg);border-radius:10px;margin-bottom:16px">
-    <div style="width:52px;height:52px;border-radius:50%;background:${typeColor};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0">
-      ${(c.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
-    </div>
-    <div style="flex:1">
-      <div style="font-size:16px;font-weight:700">${c.name}</div>
-      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
-        <span style="background:${typeColor};color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px">${typeBadge}</span>
-        ${c.phone?`<span style="font-size:11px;color:var(--ink3)">${c.phone}</span>`:''}
-        ${c.email?`<span style="font-size:11px;color:var(--ink3)">${c.email}</span>`:''}
-      </div>
-    </div>
-    <div style="display:flex;gap:6px">
-      ${c.phone?`<button onclick="openWaModal('${c.phone}','${c.name}','Hello ${c.name}! Thank you for visiting Saundarya Beauty Care. - Team Saundarya')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:11px">WA</button>`:''}
-      ${c.phone?`<a href="tel:${c.phone}" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:11px;text-decoration:none"><i class="fas fa-phone"></i></a>`:''}
-      <button onclick="closeInvModal();editClient(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:11px"><i class="fas fa-edit"></i> Edit</button>
-    </div>
-  </div>
-  <!-- Info Grid -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-    <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-      <div style="font-size:20px;font-weight:700;color:var(--ink)">${c.visit_count||c.visits||0}</div>
-      <div style="font-size:10px;color:var(--ink3);text-transform:uppercase">Total Visits</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-      <div style="font-size:18px;font-weight:700;color:var(--emerald)">${fmt(c.total_spent||0)}</div>
-      <div style="font-size:10px;color:var(--ink3);text-transform:uppercase">Lifetime Spent</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-      <div style="font-size:13px;font-weight:700;color:var(--ink)">${String(c.last_visit||'—').substring(0,10)}</div>
-      <div style="font-size:10px;color:var(--ink3);text-transform:uppercase">Last Visit</div>
-    </div>
-  </div>
-  <!-- Details -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:12px">
-    ${c.birthday?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">🎂 Birthday:</span> <b>${String(c.birthday).substring(0,10)}</b></div>`:''}
-    ${c.anniversary?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">💑 Anniversary:</span> <b>${String(c.anniversary).substring(0,10)}</b></div>`:''}
-    ${c.preferred_staff?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">👩‍🎨 Preferred Staff:</span> <b>${c.preferred_staff}</b></div>`:''}
-    ${c.skin_type?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">✨ Skin Type:</span> <b>${c.skin_type}</b></div>`:''}
-    ${c.hair_type?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">💆 Hair Type:</span> <b>${c.hair_type}</b></div>`:''}
-    ${c.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><span style="color:var(--ink3)">📝 Notes:</span> ${c.preferences}</div>`:''}
-  </div>
-  <!-- Membership block for Exclusive -->
-  ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:10px;color:var(--amber);font-weight:700;text-transform:uppercase;margin-bottom:2px">⭐ Exclusive Membership</div>
-        <div style="font-size:15px;font-weight:700;color:var(--gold)">${mem.membership_id}</div>
-      </div>
-      <div style="margin-left:auto;text-align:right">
-        <div style="font-size:22px;font-weight:700;color:var(--gold)">${mem.beauty_points||0} pts</div>
-        <div style="font-size:10px;color:var(--amber)">Beauty Points</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;color:var(--ink2)">Expires: <b>${String(mem.expiry_date||'').substring(0,10)}</b></div>
-        <div style="font-size:11px;color:var(--ink2)">Days left: <b>${Math.max(0,Math.round(mem.days_remaining||0))}</b></div>
-        <div style="font-size:10px;color:var(--ink3)">Lifetime: ${mem.lifetime_points||0} pts</div>
-      </div>
-    </div>
-    <div style="margin-top:10px;display:flex;gap:8px">
-      <button onclick="showMemberProfile(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-crown"></i> Manage Points & Membership</button>
-      <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px"><i class="fas fa-redo"></i> Renew</button>
-    </div>
-  </div>`:''}
-  <!-- Invoice / Service History -->
-  <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:8px">
-    <i class="fas fa-history" style="color:var(--sky)"></i> Service History
-  </div>
-  <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead style="background:var(--ink)"><tr>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Date</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Invoice</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Services</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:right;font-weight:500">Net Paid</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.7);text-align:left;font-weight:500">Payment</th>
-      </tr></thead>
-      <tbody id="cp-history">
-        <tr><td colspan="5" style="text-align:center;padding:14px;color:var(--ink4)">Loading history...</td></tr>
-      </tbody>
-    </table>
-  </div>`;
-  // Load entry history by phone
-  if(c.phone){
-    const hRows=await apiCall('GET',`/entries?limit=50&phone=${encodeURIComponent(c.phone)}`).catch(()=>null);
-    const htb=v('cp-history');
-    if(htb){
-      if(!hRows||!hRows.length){
-        htb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--ink4)">No service history found</td></tr>';
-      } else {
-        const pmC={'Cash':'#e8f5ee','UPI':'#e8f4ff','Card':'#f0ebff','Split':'#fff8e7'};
-        htb.innerHTML=hRows.map(e=>`<tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:7px 10px">${String(e.entry_date||'').substring(0,10)}</td>
-          <td style="padding:7px 10px;font-weight:600;color:var(--teal)">${e.inv_no}</td>
-          <td style="padding:7px 10px;color:var(--ink2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.services||'—'}</td>
-          <td style="padding:7px 10px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.net_total||0)}</td>
-          <td style="padding:7px 10px"><span style="background:${pmC[(e.pay_method||'Cash').split('|')[0]]||'#f0f0f0'};border-radius:4px;padding:2px 6px;font-size:10px">${(e.pay_method||'Cash').startsWith('Split')?'Split':e.pay_method||'Cash'}</span></td>
-        </tr>`).join('');
-      }
-    }
-  } else {
-    const htb=v('cp-history');
-    if(htb)htb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--ink4)">No phone number — cannot load history</td></tr>';
-  }
-}
-
-async function updateExclusiveMember(clientId){
-  const nm=v('em-name')?.value.trim();
-  if(!nm){toast('Enter name','var(--rose)');return;}
-  const r=await apiCall('PUT',`/clients/${clientId}`,{
-    name:nm,
-    phone:v('em-phone')?.value||null,
-    birthday:v('em-dob')?.value||null,
-    anniversary:v('em-ann')?.value||null,
-    preferred_staff:v('em-pstaff')?.value||null,
-    preferences:v('em-notes')?.value||null,
-    gender:v('em-gender')?.value||null,
-    address:v('em-addr')?.value||null
-  });
-  if(!r)return;
-  toast('<i class="fas fa-check" style="color:var(--gold)"></i> Exclusive member updated!','var(--gold)');
-  const cf=v('cf');
-  const cfExcl2=v('cf-exclusive');
-  const btn=cfExcl2?.querySelector('.btn-gold');
-  if(btn){btn.innerHTML='<i class="fas fa-crown"></i>Save & Enroll Member';btn.setAttribute('onclick','saveExclusiveMember()');}
-  // Clear form fields // Clear form fields
-  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
-  const ef=v('em-fee');if(ef)ef.value='1000';
-  const pp=document.getElementById('pts-preview-note');if(pp)pp.remove();
-  if(cf)cf.style.display='none';
-  renderClients('');renderDailyView();updateDash();
-}
 
 
-async function renewMembership(clientId){
-  if(!confirm('Renew membership for 12 months?'))return;
-  const r=await apiCall('POST',`/clients/${clientId}/membership/renew`);
-  if(!r)return;
-  toast('<i class="fas fa-check"></i> Membership renewed until '+r.new_expiry,'var(--teal)');
-  loadMemNotifications();
-}
-
-async function showMemberProfile(clientId){
-  const modal=v('inv-modal');if(!modal)return;
-  modal.innerHTML='<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div><div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><div style="font-size:16px;font-weight:700"><i class="fas fa-crown" style="color:var(--gold)"></i> Exclusive Member Profile</div><button onclick="closeInvModal()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button></div><div id="mem-profile-body"><div style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i> Loading...</div></div></div>';
-  modal.style.display='flex';
-  await _loadMemberProfile(clientId);
-}
-
-async function _loadMemberProfile(clientId){
-  const [client, mems] = await Promise.all([
-    apiCall('GET',`/clients/${clientId}`),
-    apiCall('GET',`/clients/${clientId}/membership`)
-  ]);
-  if(!client)return;
-  const mem=mems&&mems[0];
-  const body=v('mem-profile-body');if(!body)return;
-
-  // Load NFC card status
-  const nfcStatus=await apiCall('GET',`/clients/${clientId}/nfc-card`);
-  const nfcStatusEl=v(`nfc-status-${clientId}`);
-  const nfcActionsEl=v(`nfc-actions-${clientId}`);
-  if(nfcStatusEl){
-    if(nfcStatus&&nfcStatus.card_uid){
-      nfcStatusEl.innerHTML=`<span style="color:var(--emerald);font-weight:700">✔ Assigned</span>
-        &nbsp;·&nbsp; Membership: <b style="color:var(--gold)">${nfcStatus.membership_id||'—'}</b>
-        &nbsp;·&nbsp; Issued: ${nfcStatus.issued_date||'—'}
-        ${_role==='admin'?`<span style="font-size:9px;color:var(--ink4);margin-left:6px">(UID: ${nfcStatus.card_uid})</span>`:''}`;
-      if(nfcActionsEl)nfcActionsEl.innerHTML=`<span style="background:#e8f5ee;color:var(--emerald);font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;border:1px solid #b2dfdb">✔ Card Active</span><button onclick="showNfcRegister(${clientId})" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600">Replace Card</button>`;
-    } else {
-      nfcStatusEl.innerHTML='<span style="color:var(--rose);font-weight:600">✗ Not Assigned</span> &nbsp;·&nbsp; Register a card below';
-    }
-  }
-
-  // Load service history by phone
-  let histRows=[];
-  if(client.phone){
-    histRows=await apiCall('GET',`/entries?limit=100&phone=${encodeURIComponent(client.phone)}`)||[];
-  }
-
-  // Calculate total points from history
-  const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
-
-  body.innerHTML=`
-  <!-- Header -->
-  <div style="display:flex;align-items:center;gap:14px;padding:14px;background:linear-gradient(135deg,var(--charcoal,#1C1C1E),#2A2A3A);border-radius:10px;margin-bottom:16px;position:relative;overflow:hidden">
-    <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:60px;opacity:.06;color:var(--gold)">✦</div>
-    <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#E8C96A);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#1C1200;flex-shrink:0">
-      ${(client.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
-    </div>
-    <div style="flex:1">
-      <div style="font-size:16px;font-weight:700;color:#fff">${client.name}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">${client.phone||'—'} &nbsp;·&nbsp; ${client.email||''}</div>
-      <span style="background:linear-gradient(135deg,var(--gold),#E8C96A);color:#1C1200;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px;display:inline-block">⭐ EXCLUSIVE MEMBER</span>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase">Membership ID</div>
-      <div style="font-size:16px;font-weight:700;color:var(--gold)">${mem?.membership_id||'—'}</div>
-    </div>
-  </div>
-
-  <!-- Info Grid -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;font-size:12px">
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">📞 Contact</div>
-      <div style="font-weight:600">${client.phone||'—'}</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">🎂 Birthday</div>
-      <div style="font-weight:600">${client.birthday||'—'}</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">💍 Anniversary</div>
-      <div style="font-weight:600">${client.anniversary||'—'}</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">👩‍🎨 Preferred Staff</div>
-      <div style="font-weight:600">${client.preferred_staff||'—'}</div>
-    </div>
-    ${client.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><div style="font-size:10px;color:var(--ink3);margin-bottom:4px">📝 Notes</div><div>${client.preferences}</div></div>`:''}
-  </div>
-
-  <!-- Membership Card -->
-  ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid rgba(201,168,76,.4);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:10px">
-      <div><div style="font-size:10px;color:var(--amber)">Start Date</div><div style="font-weight:700;font-size:11px">${String(mem.start_date||'').substring(0,10)}</div></div>
-      <div><div style="font-size:10px;color:var(--amber)">Expiry</div><div style="font-weight:700;font-size:11px">${String(mem.expiry_date||'').substring(0,10)}</div></div>
-      <div><div style="font-size:10px;color:var(--amber)">Status</div><div style="font-weight:700;font-size:11px;color:var(--emerald)">${mem.status}</div></div>
-      <div><div style="font-size:10px;color:var(--amber)">Days Left</div><div style="font-weight:700;font-size:11px">${Math.max(0,Math.round(mem.days_remaining||0))}</div></div>
-    </div>
-  </div>`:''}
-
-  <!-- Beauty Points -->
-  <div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:14px">
-    <!-- Balance Row -->
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:160px">
-        <div style="font-size:10px;color:var(--amber);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">💎 Beauty Points Balance</div>
-        <div id="pts-big-${clientId}" style="font-size:44px;font-weight:700;color:var(--gold);line-height:1">${mem?.beauty_points||0}</div>
-        <div style="font-size:11px;color:var(--emerald);font-weight:700">⭐ AVAILABLE TO USE</div>
-      </div>
-      <div style="background:rgba(255,255,255,.7);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--ink2);line-height:1.8">
-        <div id="pts-breakdown-${clientId}" style="font-size:11px;color:var(--ink2);line-height:1.7">
-          <div>💆 From ${histRows.length} services: <b>+${totalPtsEarned} pts</b></div>
-          <div style="color:var(--ink3);font-size:10px">₹100 spent = 1 point</div>
-        </div>
-      </div>
-    </div>
-    <!-- Quick Redeem -->
-    <div style="background:rgba(255,255,255,.8);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:6px;text-transform:uppercase">⚡ Quick Redeem</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <input type="number" id="pts-redeem-amt" placeholder="Points to redeem" min="1" max="${mem?.beauty_points||0}"
-          style="flex:1;min-width:120px;border:1px solid var(--gold);border-radius:6px;padding:6px 10px;font-size:12px">
-        <input type="text" id="pts-redeem-note" placeholder="What for? (e.g. haircut discount)"
-          style="flex:2;min-width:140px;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px">
-        <button onclick="redeemPoints(${clientId})"
-          style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:700">
-          − Redeem
-        </button>
-      </div>
-    </div>
-    <!-- Add / Adjust (admin only) -->
-    ${_role==='admin'?`
-    <div style="background:rgba(255,255,255,.6);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:6px;text-transform:uppercase">⚙ Admin — Add / Adjust Points</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">
-          <option value="add">+ Add Points</option>
-          <option value="set">= Set Balance</option>
-        </select>
-        <input type="number" id="pts-amount" placeholder="Points" min="1" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
-        <input type="text" id="pts-notes" placeholder="Reason" style="flex:1;min-width:100px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
-        <button onclick="savePoints(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600">Save</button>
-      </div>
-    </div>`:''}
-    <!-- Points History Log -->
-    <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;margin-bottom:6px">📋 Points History</div>
-    <div id="pts-history-${clientId}" style="max-height:140px;overflow-y:auto;border-radius:6px;border:1px solid rgba(201,168,76,.2)">
-      <div style="text-align:center;padding:10px;color:var(--ink4);font-size:11px"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
-    </div>
-  </div>
-
-  <!-- Action Buttons -->
-  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    ${client.phone?`<button onclick="openWaModal('${client.phone}','${client.name}','Hello ${client.name}! Thank you for being a Saundarya Exclusive Member. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#fff' style='margin-right:4px;vertical-align:middle'><path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z'/></svg>WhatsApp</button>`:''}
-    <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class='fas fa-redo'></i> Renew</button>
-    <button onclick="closeInvModal();editClient(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-edit'></i> Edit Profile</button>
-    <button onclick="if(confirm('Delete this member?'))deleteClient(${clientId},'${client.name.replace(/'/g,'')}');closeInvModal();" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-trash'></i> Delete</button>
-  </div>
-
-  <!-- NFC Card Section -->
-  <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;margin-bottom:4px">💳 NFC Membership Card</div>
-        <div id="nfc-status-${clientId}" style="font-size:12px;color:var(--ink3)">Loading card status...</div>
-      </div>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="nfc-actions-${clientId}">
-        <button onclick="showNfcRegister(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-credit-card"></i> Register Card</button>
-      </div>
-    </div>
-    <div id="nfc-register-wrap-${clientId}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-      <div style="font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:4px">Enter Card UID to link with this member</div>
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:8px;background:var(--bg);padding:7px 10px;border-radius:6px;border:1px solid var(--border)">
-        <i class="fas fa-info-circle" style="color:var(--sky)"></i>
-        The card has a built-in UID (printed on back or scan via reader).<br>
-        When reader arrives: tap card → UID auto-filled → profile opens instantly.<br>
-        <b>When client taps card at reception → this member profile opens directly.</b>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="nfc-uid-input-${clientId}" placeholder="Enter Card UID (check back of card) or any unique ID"
-          style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:'Inter',sans-serif">
-        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-link"></i> Link Card</button>
-        <button onclick="v('nfc-register-wrap-${clientId}').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--ink3)">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Service History Table -->
-  <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
-    <i class="fas fa-history" style="color:var(--sky);margin-right:6px"></i>Service History
-  </div>
-  <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin-bottom:10px">
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead style="background:var(--charcoal,#1C1C1E)"><tr>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Date</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Invoice</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Services</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:right">Bill</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:right">Points ⭐</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Payment</th>
-      </tr></thead>
-      <tbody>
-        ${histRows.length?histRows.map(e=>{
-          const pts=Math.floor((e.net_total||0)/100);
-          return `<tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:7px 10px">${String(e.entry_date||'').substring(0,10)}</td>
-            <td style="padding:7px 10px;color:var(--teal);font-weight:600">${e.inv_no}</td>
-            <td style="padding:7px 10px;color:var(--ink2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.services||'—'}</td>
-            <td style="padding:7px 10px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.net_total||0)}</td>
-            <td style="padding:7px 10px;text-align:right;color:var(--gold);font-weight:700" title="₹${e.net_total||0} ÷ 100">+${pts} ⭐</td>
-            <td style="padding:7px 10px"><span style="background:var(--bg);border-radius:4px;padding:2px 6px;font-size:10px">${(e.pay_method||'Cash').startsWith('Split')?'Split':e.pay_method||'Cash'}</span></td>
-          </tr>`;
-        }).join(''):'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--ink4)">No service history found</td></tr>'}
-      </tbody>
-      ${histRows.length?`<tfoot><tr style="background:var(--bg)">
-        <td colspan="3" style="padding:8px 10px;font-weight:700;font-size:12px">Total from ${histRows.length} visits</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--emerald)">${fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))}</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ from services<br><span style="font-size:10px;color:var(--emerald);font-weight:600" id="pts-avail-${clientId}">see points log ↑</span></td>
-        <td></td>
-      </tr></tfoot>`:''}
-    </table>
-  </div>
-  `;
-
-  // NOW the DOM has pts-history-${clientId} — load history
-  await loadPtsHistory(clientId);
-}
 
 
-async function savePoints(clientId){
-  const action=v('pts-action')?.value||'add';
-  const points=parseInt(v('pts-amount')?.value||0);
-  const notes=v('pts-notes')?.value||'';
-  if(!points){toast('Enter points amount','var(--rose)');return;}
-  const r=await apiCall('PUT',`/clients/${clientId}/membership/points`,{action,points,notes});
-  if(!r)return;
-  toast(`✅ Points ${action==='add'?'added':'updated'}: ${points} ⭐  ·  Balance: ${r.beauty_points}`,'var(--gold)');
-  const el=v('pts-amount');if(el)el.value='';
-  const nl=v('pts-notes');if(nl)nl.value='';
-  await _loadMemberProfile(clientId);
-}
 
-async function redeemFromEntry(clientId){
-  const pts=parseInt(v('de-redeem-pts')?.value||0);
-  const note=(v('de-redeem-note')?.value||'').trim();
-  if(!pts||pts<1){toast('Enter points to redeem','var(--rose)');return;}
-  if(!note){toast('Enter a reason for redeeming','var(--rose)');return;}
-  const r=await apiCall('PUT',`/clients/${clientId}/membership/points`,{
-    action:'redeem',points:pts,notes:'Reception: '+note
-  });
-  if(!r)return;
-  toast(`✅ ${pts} pts redeemed for "${note}" · New balance: ${r.beauty_points} ⭐`,'var(--gold)');
-  // Clear inputs
-  const ep=v('de-redeem-pts');if(ep)ep.value='';
-  const en=v('de-redeem-note');if(en)en.value='';
-  // Re-detect phone to refresh chip with new balance
-  const phone=v('de-ph')?.value;
-  if(phone)detectClientByPhone(phone);
-}
 
-async function redeemPoints(clientId){
-  const pts=parseInt(v('pts-redeem-amt')?.value||0);
-  const note=v('pts-redeem-note')?.value||'';
-  if(!pts||pts<1){toast('Enter points to redeem','var(--rose)');return;}
-  if(!note.trim()){toast('Enter what the points are used for','var(--rose)');return;}
-  const r=await apiCall('PUT',`/clients/${clientId}/membership/points`,{action:'redeem',points:pts,notes:note});
-  if(!r)return;
-  toast(`✅ ${pts} points redeemed for "${note}" · Balance: ${r.beauty_points} ⭐`,'var(--emerald)');
-  const ea=v('pts-redeem-amt');if(ea)ea.value='';
-  const en=v('pts-redeem-note');if(en)en.value='';
-  await _loadMemberProfile(clientId);
-}
 
-async function loadPtsHistory(clientId){
-  const box=v(`pts-history-${clientId}`);if(!box)return;
-  const logs=await apiCall('GET',`/clients/${clientId}/membership/points-log`);
-  if(!logs||!logs.length){
-    box.innerHTML='<div style="text-align:center;padding:12px;color:var(--ink4);font-size:11px">No points history yet</div>';
-    // Still update big number from DB value
-    const bigNum0=v(`pts-big-${clientId}`);
-    if(bigNum0){
-      // Get DB balance from membership API
-      const mems=await apiCall('GET',`/clients/${clientId}/membership`);
-      if(mems&&mems[0])bigNum0.textContent=mems[0].beauty_points||0;
-    }
-    return;
-  }
 
-  // logs[0] = newest entry, its running_balance = current correct total
-  const currentBalance=logs[0]?.running_balance??0;
-  const totalAdded=logs.reduce((s,l)=>l.entry_type!=='redeem'?s+(l.points||0):s,0);
-  const totalRedeemed=logs.reduce((s,l)=>l.entry_type==='redeem'?s+(l.points||0):s,0);
 
-  // Update big number with LOG truth
-  const bigNum=v(`pts-big-${clientId}`);
-  if(bigNum)bigNum.textContent=currentBalance;
 
-  // Update breakdown
-  const bd=v(`pts-breakdown-${clientId}`);
-  if(bd)bd.innerHTML=`
-    <div style="font-size:11px;color:var(--ink2);line-height:1.8">
-      <div>✅ Total earned: <b style="color:var(--emerald)">+${totalAdded} pts</b></div>
-      <div>💸 Total redeemed: <b style="color:var(--rose)">−${totalRedeemed} pts</b></div>
-      <div style="border-top:1px solid rgba(0,0,0,.1);margin-top:3px;padding-top:3px;font-weight:700;color:var(--gold)">Balance: ${currentBalance} pts</div>
-      <div style="font-size:10px;color:var(--amber)">₹100 = 1 point per service</div>
-    </div>`;
 
-  // Render history rows
-  box.innerHTML=logs.map(l=>{
-    const isRedeem=l.entry_type==='redeem';
-    const sign=isRedeem?'−':'+';
-    const color=isRedeem?'var(--rose)':'var(--emerald)';
-    const bg=isRedeem?'#fff0f0':'#e8f5ee';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(201,168,76,.12);font-size:11px">
-      <div style="width:26px;height:26px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${color};flex-shrink:0">${sign}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;color:var(--ink)">${l.notes||l.entry_type}</div>
-        <div style="color:var(--ink3);font-size:10px">${String(l.created_at||'').substring(0,16)}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-weight:700;font-size:13px;color:${color}">${sign}${l.points} ⭐</div>
-        <div style="font-size:9px;color:var(--ink3)">balance: ${l.running_balance}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
+
+
+
+
+
+
+
+
 
 // ═══════════════════════════════════════════
 // NFC CARD FUNCTIONS
@@ -5458,6 +4984,161 @@ async function renderInquiries(s){
       </div>
     </td>
   </tr>`).join('');
+}
+
+
+
+
+// ═══════════════════════════════════════════
+// CRM TAB SYSTEM
+// ═══════════════════════════════════════════
+let _crmActiveType = 'all';
+
+function crmTab(type, btn){
+  _crmActiveType = type;
+  document.querySelectorAll('.crm-tab').forEach(t=>{
+    t.style.color='var(--ink3)';
+    t.style.borderBottomColor='transparent';
+  });
+  if(btn){btn.style.color='var(--sky)';btn.style.borderBottomColor='var(--sky)';}
+  renderClients(document.getElementById('crm-search')?.value||'');
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD ATTENDANCE TOGGLE
+// ═══════════════════════════════════════════
+function toggleDashAtt(){
+  const list=document.getElementById('att-dash-list');
+  const chevron=document.getElementById('att-dash-chevron');
+  if(!list)return;
+  const isCollapsed=list.style.maxHeight==='0px';
+  list.style.maxHeight=isCollapsed?'320px':'0px';
+  list.style.overflow=isCollapsed?'auto':'hidden';
+  if(chevron){chevron.className=isCollapsed?'fas fa-chevron-up':'fas fa-chevron-down';}
+}
+
+// ═══════════════════════════════════════════
+// CLIENT PHONE AUTO-DETECT (Daily Entry)
+// ═══════════════════════════════════════════
+async function detectClientByPhone(phone){
+  if(!phone||phone.replace(/[^0-9]/g,'').length<8)return;
+  const r=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(phone)}`);
+  const nameEl=document.getElementById('de-n');
+  if(nameEl&&r&&!nameEl.value)nameEl.value=r.name||'';
+  let chip=document.getElementById('de-client-chip');
+  const wrap=document.getElementById('de-ph')?.closest('.fl');
+  if(!chip&&wrap){
+    chip=document.createElement('div');
+    chip.id='de-client-chip';
+    chip.style.cssText='font-size:10px;margin-top:4px;padding:6px 10px;border-radius:6px;background:var(--bg);border:1px solid var(--border)';
+    wrap.appendChild(chip);
+  }
+  if(!chip)return;
+  if(!r){chip.innerHTML='<span style="color:var(--ink3)">New client — will be registered on save</span>';return;}
+  const typeColor={'New':'var(--emerald)','Regular':'var(--sky)','Exclusive':'var(--gold)'}[r.client_type||'New']||'var(--ink3)';
+  const typeIcon={'New':'🟢','Regular':'🔵','Exclusive':'⭐'}[r.client_type||'New']||'';
+  const clientId=r.id;
+  const availPts=r.beauty_points||0;
+  chip.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="color:${typeColor};font-weight:700;font-size:11px">${typeIcon} ${r.client_type||'New'}</span>
+      <span style="color:var(--ink3)">Visits: <b>${r.visit_count||0}</b></span>
+      <span style="color:var(--ink3)">Spent: <b>${fmt(r.total_spent||0)}</b></span>
+      ${r.membership_id?`<span style="color:var(--gold);font-weight:700">⭐ ${r.membership_id}</span><span style="color:var(--amber);font-weight:700">${availPts} pts</span>`:''}
+      ${r.client_type==='Exclusive'?'<span style="background:#fff3cc;color:var(--gold);font-size:9px;padding:1px 6px;border-radius:10px;font-weight:700">10% OFF</span>':''}
+    </div>
+    ${r.client_type==='Exclusive'?`
+    <div style="margin-top:6px;padding:10px;background:#fff8e7;border:1px solid var(--gold);border-radius:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:6px">⭐ Beauty Points — Balance: <b style="font-size:14px;color:var(--gold)">${availPts}</b> pts</div>
+      ${availPts>0?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:20px;font-weight:700;color:var(--rose);line-height:1">−</span>
+        <input type="number" id="de-redeem-pts" placeholder="Points to redeem" min="1" max="${availPts}" style="width:90px;border:2px solid var(--rose);border-radius:5px;padding:5px 8px;font-size:12px;font-weight:600">
+        <input type="text" id="de-redeem-note" placeholder="Reason (e.g. ₹50 discount)" style="flex:1;min-width:130px;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:11px">
+        <button onclick="redeemFromEntry(${clientId})" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">− Redeem</button>
+      </div>`:'<div style="font-size:10px;color:var(--ink3)">No points available yet</div>'}
+    </div>`:''}`;
+}
+
+// ═══════════════════════════════════════════
+// GIVE MEMBERSHIP + CONVERT
+// ═══════════════════════════════════════════
+async function giveMembership(clientId, clientName){
+  const c=await apiCall('GET',`/clients/${clientId}`);
+  if(!c)return;
+  const cf=document.getElementById('cf');if(cf)cf.style.display='block';
+  showCfExclusive();
+  const set=(eid,val)=>{const el=document.getElementById(eid);if(el)el.value=val||'';};
+  set('em-name',c.name);set('em-phone',c.phone);
+  set('em-gender',c.gender||'');
+  set('em-dob',String(c.birthday||'').substring(0,10));
+  set('em-ann',String(c.anniversary||'').substring(0,10));
+  set('em-addr',c.address||'');
+  set('em-pstaff',c.preferred_staff||'');
+  set('em-notes',c.preferences||'');
+  const cfExcl=document.getElementById('cf-exclusive');
+  const btn=cfExcl?.querySelector('.btn-gold');
+  if(btn){btn.innerHTML='<i class="fas fa-crown"></i> Convert to Exclusive Member';btn.setAttribute('onclick',`convertToExclusive(${clientId})`);}
+  if(c.phone){const sd=document.getElementById('em-start')?.value||td();_showPastPtsPreview(c.phone,sd,clientId);}
+  cf?.scrollIntoView({behavior:'smooth'});
+  toast('Fill missing details — past service points calculated automatically','var(--sky)');
+}
+
+async function _showPastPtsPreview(phone,fromDate,clientId){
+  const entries=await apiCall('GET',`/entries?limit=200&phone=${encodeURIComponent(phone)}`).catch(()=>null);
+  if(!entries||!entries.length)return;
+  const relevant=entries.filter(e=>String(e.entry_date||'').substring(0,10)<fromDate&&e.visit_type!=='Membership');
+  const pastPts=relevant.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
+  let preview=document.getElementById('pts-preview-note');
+  const startEl=document.getElementById('em-start');
+  if(startEl){
+    if(!preview){preview=document.createElement('div');preview.id='pts-preview-note';preview.style.cssText='font-size:10px;color:var(--amber);margin-top:4px;font-weight:600';startEl.parentNode.appendChild(preview);}
+    preview.textContent=`⭐ ${pastPts} pts from ${relevant.length} past services + 20 gift = ${20+pastPts} starting pts`;
+  }
+}
+
+async function convertToExclusive(clientId){
+  const nm=document.getElementById('em-name')?.value.trim();
+  const ph=document.getElementById('em-phone')?.value.trim();
+  if(!nm){toast('Enter name','var(--rose)');return;}
+  if(!ph){toast('Enter phone','var(--rose)');return;}
+  const payMethod=document.getElementById('em-pay')?.value||'Cash';
+  const fee=parseFloat(document.getElementById('em-fee')?.value||1000);
+  const startDate=document.getElementById('em-start')?.value||td();
+  const expiryDate=document.getElementById('em-expiry')?.value||'';
+  await apiCall('PUT',`/clients/${clientId}`,{
+    name:nm,phone:ph,
+    birthday:document.getElementById('em-dob')?.value||null,
+    anniversary:document.getElementById('em-ann')?.value||null,
+    preferred_staff:document.getElementById('em-pstaff')?.value||null,
+    preferences:document.getElementById('em-notes')?.value||null,
+    gender:document.getElementById('em-gender')?.value||null,
+    address:document.getElementById('em-addr')?.value||null
+  });
+  let pastPts=0;
+  if(ph){
+    const entries=await apiCall('GET',`/entries?limit=200&phone=${encodeURIComponent(ph)}`).catch(()=>null);
+    if(entries&&entries.length){
+      const relevant=entries.filter(e=>String(e.entry_date||'').substring(0,10)<startDate&&e.visit_type!=='Membership');
+      pastPts=relevant.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
+    }
+  }
+  const mem=await apiCall('POST',`/clients/${clientId}/membership`,{fee_paid:fee,start_date:startDate,expiry_date:expiryDate||null,past_points:pastPts});
+  if(!mem){toast('Could not enroll membership','var(--rose)');return;}
+  await apiCall('POST','/entries',{
+    client_name:nm+' (Membership - '+mem.membership_id+')',
+    phone:ph,entry_date:startDate,visit_type:'Membership',
+    items:[{service_name:'Saundarya Exclusive Membership',price:fee,qty:1,line_total:fee,staff_id:null,staff_name:null}],
+    discount:0,pay_method:payMethod,remarks:'Membership ID: '+mem.membership_id
+  });
+  toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${nm} is now ⭐ Exclusive! ID: ${mem.membership_id} · ${20+pastPts} pts`,'var(--gold)');
+  const cfExcl2=document.getElementById('cf-exclusive');
+  const btn=cfExcl2?.querySelector('.btn-gold');
+  if(btn){btn.innerHTML='<i class="fas fa-crown"></i>Save & Enroll Member';btn.setAttribute('onclick','saveExclusiveMember()');}
+  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const ef=document.getElementById('em-fee');if(ef)ef.value='1000';
+  const pp=document.getElementById('pts-preview-note');if(pp)pp.remove();
+  const cf=document.getElementById('cf');if(cf)cf.style.display='none';
+  renderClients('');renderDailyView();updateDash();
 }
 
 
