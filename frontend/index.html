@@ -1171,6 +1171,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Transport (₹)</label><input type="number" id="sd-tr" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="sd-di" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="sd-ad" placeholder="0" oninput="sdBill()"></div>
+        <div class="fl"><label>Advance Payment</label><select id="sd-pay-method" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px"><option value="Cash">Cash</option><option value="GPay/UPI">GPay / UPI</option><option value="Card">Card</option></select></div>
       </div>
       <div class="bill-box"><div class="bill-row"><span class="bl">Total</span><span class="br" id="sb-t">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="sb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="sb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="sb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="sb-due">₹0</span></div></div>
       <div class="ar">
@@ -1940,6 +1941,7 @@ function toggleDark(){
 const PAGE_NAMES={dash:"Dashboard",appt:"Appointments",bridal:"Bridal Management",daily:"Daily Entry",clients:"Client CRM",inquiry:"Inquiry",staff:"Staff Management",revenue:"Revenue",reports:"Reports & Analytics"};
 
 function go(btn,id){
+  if(!id&&btn){id=btn;btn=null;}
   document.querySelectorAll(".sec").forEach(s=>s.classList.remove("on"));
   document.querySelectorAll(".nb").forEach(b=>b.classList.remove("on"));
   const sec=v("sec-"+id);
@@ -2924,21 +2926,23 @@ async function saveExclusiveMember(){
   // Step 1: Create client
   const client=await apiCall('POST','/clients',{
     name:nm, phone:ph,
-    birthday:v('em-dob')?.value||null,
-    anniversary:v('em-ann')?.value||null,
-    preferred_staff:v('em-pstaff')?.value||null,
-    preferences:v('em-notes')?.value||null,
+    birthday:(v('em-dob')?.value||'').trim()||null,
+    anniversary:(v('em-ann')?.value||'').trim()||null,
+    preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
+    preferences:(v('em-notes')?.value||'').trim()||null,
     client_type:'Exclusive',
-    gender:v('em-gender')?.value||null,
-    address:v('em-addr')?.value||null
+    gender:(v('em-gender')?.value||'').trim()||null,
+    address:(v('em-addr')?.value||'').trim()||null
   });
   if(!client){return;}
 
   // Step 2: Enroll membership
-  const startDate=v('em-start')?.value||td();
+  const startDate=(v('em-start')?.value||'').trim()||td();
+  const expiryDate=(v('em-expiry')?.value||'').trim()||null;
   const mem=await apiCall('POST',`/clients/${client.id}/membership`,{
     fee_paid:fee,
-    start_date:startDate
+    start_date:startDate,
+    expiry_date:expiryDate
   });
   if(!mem){toast('Client saved but membership enrollment failed','var(--amber)');renderClients('');return;}
 
@@ -2946,7 +2950,7 @@ async function saveExclusiveMember(){
   await apiCall('POST','/entries',{
     client_name:nm+' (Membership - '+mem.membership_id+')',
     phone:ph,
-    entry_date:td(),
+    entry_date:startDate,
     visit_type:'Membership',
     items:[{service_name:'Saundarya Exclusive Membership',price:fee,qty:1,line_total:fee,staff_id:null,staff_name:null}],
     discount:0,
@@ -3016,8 +3020,7 @@ async function renderClients(s){
   const typeBadge={'New':'<span style="background:#e8f5ee;color:var(--emerald);border:1px solid #b2dfdb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🟢 NEW</span>','Regular':'<span style="background:#e8f4ff;color:var(--sky);border:1px solid #bbdefb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🔵 REGULAR</span>','Exclusive':'<span style="background:#fff8e7;color:var(--amber);border:1px solid rgba(201,168,76,0.4);font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">⭐ EXCLUSIVE</span>'};
   tb.innerHTML=rows.map(c=>`<tr>
     <td><b>${c.name}</b>${typeBadge[c.client_type||'New']||typeBadge['New']}</td><td>${c.phone||'—'}</td><td>${c.email||'—'}</td>
-    <td>${String(c.birthday||'').substring(0,10)||'—'}</td><td>${c.skin_type||'—'}</td><td>${c.hair_type||'—'}</td>
-    <td><span class="pill ${tg[c.tag]||'p-lt'}">${c.tag||'Regular'}</span></td>
+    <td>${String(c.birthday||'').substring(0,10)||'—'}</td><td><span class="pill ${tg[c.tag]||'p-lt'}">${c.tag||'Regular'}</span></td>
     <td>${c.visit_count||c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
     <td style="white-space:nowrap">
       ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
@@ -3123,8 +3126,7 @@ async function updateClient(id){
   const nm=v('cl-n').value.trim();if(!nm){toast('Enter name','var(--rose)');return;}
   const r=await apiCall('PUT',`/clients/${id}`,{
     name:nm, phone:v('cl-ph').value||null, email:v('cl-em').value||null,
-    birthday:v('cl-bd').value||null, skin_type:v('cl-sk').value||'Normal',
-    hair_type:v('cl-hr').value||'Normal', tag:v('cl-tg').value||'Regular',
+    birthday:v('cl-bd').value||null, tag:v('cl-tg').value||'Regular',
     preferences:v('cl-pr').value||null,
     anniversary:v('cl-ann')?.value||null,
     preferred_staff:v('cl-pst')?.value||null
@@ -3200,8 +3202,6 @@ async function showClientProfile(clientId){
     ${c.birthday?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">🎂 Birthday:</span> <b>${String(c.birthday).substring(0,10)}</b></div>`:''}
     ${c.anniversary?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">💑 Anniversary:</span> <b>${String(c.anniversary).substring(0,10)}</b></div>`:''}
     ${c.preferred_staff?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">👩‍🎨 Preferred Staff:</span> <b>${c.preferred_staff}</b></div>`:''}
-    ${c.skin_type?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">✨ Skin Type:</span> <b>${c.skin_type}</b></div>`:''}
-    ${c.hair_type?`<div style="background:var(--bg);border-radius:8px;padding:10px"><span style="color:var(--ink3)">💆 Hair Type:</span> <b>${c.hair_type}</b></div>`:''}
     ${c.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><span style="color:var(--ink3)">📝 Notes:</span> ${c.preferences}</div>`:''}
   </div>
   <!-- Membership block for Exclusive -->
@@ -3616,6 +3616,7 @@ async function saveBridal(type){
   } else { // sider
     name=v('sd-n').value.trim();if(!name){toast('Enter name','var(--rose)');return;}
     phone=v('sd-ph')?.value||null;wdate=v('sd-dt')?.value||null;
+    advPayMethod=v('sd-pay-method')?.value||'Cash';
     // Calculate total from sider table - reads the package select value
     let sdTot=0;
     v('sd-body')?.querySelectorAll('tr').forEach(r=>{
@@ -3665,6 +3666,9 @@ async function saveBridal(type){
   } else if(type==='groom'){
     bookingDate=v('gr-bkd')?.value||td();
     advPayMethod=v('gr-pay-method')?.value||'Cash';
+  } else {
+    bookingDate=v('sd-bkd')?.value||td();
+    if(!advPayMethod)advPayMethod=v('sd-pay-method')?.value||'Cash';
   }
   const payload={
     booking_type:type==='bride'?'Bride':type==='groom'?'Groom':'Sider',
@@ -3684,8 +3688,6 @@ async function saveBridal(type){
       name:name,
       phone:payload.phone||null,
       tag:'Bridal',
-      skin_type:'Normal',
-      hair_type:'Normal',
       preferences:`${payload.booking_type} booking — ${payload.package_name||''}`
     });
   }
@@ -5479,7 +5481,7 @@ async function loadBridalNotifications(){
           <div style="color:${color};font-weight:700;font-size:11px;margin-top:2px">${when}</div>
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
-            <button onclick="go('bridal')" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
+            <button onclick="go(null,'bridal');setTimeout(()=>renderBridalList('','',${u.id}),300)" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
           </div>
         </div>
       </div>`);
@@ -5800,7 +5802,7 @@ async function giveMembership(clientId, clientName){
   set('em-pstaff',c.preferred_staff||'');
   set('em-notes',c.preferences||'');
   // Change save button to Convert
-  const btn=cf?.querySelector('.btn-gold');
+    const cfExcl2=v('cf-exclusive');const btn=cfExcl2?.querySelector('.btn-gold');
   if(btn){btn.innerHTML='<i class="fas fa-crown"></i> Convert to Exclusive Member';btn.setAttribute('onclick',`convertToExclusive(${clientId})`);}
   // Preview past pts
   if(c.phone){const sd=v('em-start')?.value||td();_showPastPtsPreview(c.phone,sd,clientId);}
@@ -5872,7 +5874,8 @@ async function convertToExclusive(clientId){
 
   // Reset button back
   const cf=v('cf');
-  const btn=cf?.querySelector('.btn-gold');
+  const cfExcl=v('cf-exclusive');
+  const btn=cfExcl?.querySelector('.btn-gold');
   if(btn){btn.innerHTML='<i class="fas fa-crown"></i>Save & Enroll Member';btn.setAttribute('onclick','saveExclusiveMember()');}
   // Clear form fields
   ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
@@ -5907,22 +5910,6 @@ async function _loadMemberProfile(clientId){
   const mem=mems&&mems[0];
   const body=v('mem-profile-body');if(!body)return;
 
-  // Load NFC card status
-  const nfcStatus=await apiCall('GET',`/clients/${clientId}/nfc-card`);
-  const nfcStatusEl=v(`nfc-status-${clientId}`);
-  const nfcActionsEl=v(`nfc-actions-${clientId}`);
-  if(nfcStatusEl){
-    if(nfcStatus&&nfcStatus.card_uid){
-      nfcStatusEl.innerHTML=`<span style="color:var(--emerald);font-weight:700">✔ Assigned</span>
-        &nbsp;·&nbsp; Membership: <b style="color:var(--gold)">${nfcStatus.membership_id||'—'}</b>
-        &nbsp;·&nbsp; Issued: ${nfcStatus.issued_date||'—'}
-        ${_role==='admin'?`<span style="font-size:9px;color:var(--ink4);margin-left:6px">(UID: ${nfcStatus.card_uid})</span>`:''}`;
-      if(nfcActionsEl)nfcActionsEl.innerHTML=`<span style="background:#e8f5ee;color:var(--emerald);font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;border:1px solid #b2dfdb">✔ Card Active</span><button onclick="showNfcRegister(${clientId})" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600">Replace Card</button>`;
-    } else {
-      nfcStatusEl.innerHTML='<span style="color:var(--rose);font-weight:600">✗ Not Assigned</span> &nbsp;·&nbsp; Register a card below';
-    }
-  }
-
   // Load service history by phone
   let histRows=[];
   if(client.phone){
@@ -5933,180 +5920,164 @@ async function _loadMemberProfile(clientId){
   const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
 
   body.innerHTML=`
-  <!-- Header -->
-  <div style="display:flex;align-items:center;gap:14px;padding:14px;background:linear-gradient(135deg,var(--charcoal,#1C1C1E),#2A2A3A);border-radius:10px;margin-bottom:16px;position:relative;overflow:hidden">
-    <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:60px;opacity:.06;color:var(--gold)">✦</div>
-    <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#E8C96A);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#1C1200;flex-shrink:0">
-      ${(client.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
-    </div>
-    <div style="flex:1">
-      <div style="font-size:16px;font-weight:700;color:#fff">${client.name}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">${client.phone||'—'} &nbsp;·&nbsp; ${client.email||''}</div>
-      <span style="background:linear-gradient(135deg,var(--gold),#E8C96A);color:#1C1200;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px;display:inline-block">⭐ EXCLUSIVE MEMBER</span>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase">Membership ID</div>
-      <div style="font-size:16px;font-weight:700;color:var(--gold)">${mem?.membership_id||'—'}</div>
-    </div>
-  </div>
+<div style="font-family:'Inter',sans-serif">
 
-  <!-- Info Grid -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;font-size:12px">
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">📞 Contact</div>
-      <div style="font-weight:600">${client.phone||'—'}</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">🎂 Birthday</div>
-      <div style="font-weight:600">${client.birthday||'—'}</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">💍 Anniversary</div>
-      <div style="font-weight:600">${client.anniversary||'—'}</div>
-    </div>
-    <div style="background:var(--bg);border-radius:8px;padding:10px">
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:4px">👩‍🎨 Preferred Staff</div>
-      <div style="font-weight:600">${client.preferred_staff||'—'}</div>
-    </div>
-    ${client.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><div style="font-size:10px;color:var(--ink3);margin-bottom:4px">📝 Notes</div><div>${client.preferences}</div></div>`:''}
-  </div>
-
-  <!-- Membership Card -->
-  ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid rgba(201,168,76,.4);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:10px">
-      <div><div style="font-size:10px;color:var(--amber)">Start Date</div><div style="font-weight:700;font-size:11px">${String(mem.start_date||'').substring(0,10)}</div></div>
-      <div><div style="font-size:10px;color:var(--amber)">Expiry</div><div style="font-weight:700;font-size:11px">${String(mem.expiry_date||'').substring(0,10)}</div></div>
-      <div><div style="font-size:10px;color:var(--amber)">Status</div><div style="font-weight:700;font-size:11px;color:var(--emerald)">${mem.status}</div></div>
-      <div><div style="font-size:10px;color:var(--amber)">Days Left</div><div style="font-weight:700;font-size:11px">${Math.max(0,Math.round(mem.days_remaining||0))}</div></div>
-    </div>
-  </div>`:''}
-
-  <!-- Beauty Points -->
-  <div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:14px">
-    <!-- Balance Row -->
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:160px">
-        <div style="font-size:10px;color:var(--amber);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">💎 Beauty Points Balance</div>
-        <div id="pts-big-${clientId}" style="font-size:44px;font-weight:700;color:var(--gold);line-height:1">${mem?.beauty_points||0}</div>
-        <div style="font-size:11px;color:var(--emerald);font-weight:700">⭐ AVAILABLE TO USE</div>
-      </div>
-      <div style="background:rgba(255,255,255,.7);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--ink2);line-height:1.8">
-        <div id="pts-breakdown-${clientId}" style="font-size:11px;color:var(--ink2);line-height:1.7">
-          <div>💆 From ${histRows.length} services: <b>+${totalPtsEarned} pts</b></div>
-          <div style="color:var(--ink3);font-size:10px">₹100 spent = 1 point</div>
+  <!-- PREMIUM HEADER -->
+  <div style="background:linear-gradient(135deg,#1a0a00,#3d1a00,#1a0a00);border-radius:14px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(201,168,76,.15)"></div>
+    <div style="position:absolute;bottom:-20px;left:-20px;width:80px;height:80px;border-radius:50%;background:rgba(201,168,76,.1)"></div>
+    <div style="display:flex;align-items:center;gap:14px;position:relative">
+      <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#c9a84c,#f5d78e);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 12px rgba(201,168,76,.4)">⭐</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:9px;color:#f5d78e;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px">Saundarya Exclusive Member</div>
+        <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:2px">${client.name}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <span style="color:#f5d78e;font-size:11px;font-weight:600">${mem?.membership_id||'—'}</span>
+          <span style="color:rgba(255,255,255,.5);font-size:10px">📞 ${client.phone||'—'}</span>
+          ${mem?.expiry_date?`<span style="background:rgba(201,168,76,.2);color:#f5d78e;font-size:9px;padding:2px 8px;border-radius:10px;border:1px solid rgba(201,168,76,.4)">Valid till ${mem.expiry_date}</span>`:''}
         </div>
       </div>
-    </div>
-    <!-- Quick Redeem -->
-    <div style="background:rgba(255,255,255,.8);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:6px;text-transform:uppercase">⚡ Quick Redeem</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <input type="number" id="pts-redeem-amt" placeholder="Points to redeem" min="1" max="${mem?.beauty_points||0}"
-          style="flex:1;min-width:120px;border:1px solid var(--gold);border-radius:6px;padding:6px 10px;font-size:12px">
-        <input type="text" id="pts-redeem-note" placeholder="What for? (e.g. haircut discount)"
-          style="flex:2;min-width:140px;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px">
-        <button onclick="redeemPoints(${clientId})"
-          style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:700">
-          − Redeem
-        </button>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:36px;font-weight:800;color:#f5d78e;line-height:1" id="pts-big-${clientId}">${mem?.beauty_points||0}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em">points</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:2px" id="pts-breakdown-${clientId}">available</div>
       </div>
     </div>
-    <!-- Add / Adjust (admin only) -->
-    ${_role==='admin'?`
-    <div style="background:rgba(255,255,255,.6);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:6px;text-transform:uppercase">⚙ Admin — Add / Adjust Points</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">
-          <option value="add">+ Add Points</option>
-          <option value="set">= Set Balance</option>
-        </select>
-        <input type="number" id="pts-amount" placeholder="Points" min="1" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
-        <input type="text" id="pts-notes" placeholder="Reason" style="flex:1;min-width:100px;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px">
-        <button onclick="savePoints(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600">Save</button>
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px;position:relative">
+      <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:15px;font-weight:700;color:#fff">${histRows.length}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:1px">Visits</div>
       </div>
-    </div>`:''}
-    <!-- Points History Log -->
-    <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;margin-bottom:6px">📋 Points History</div>
-    <div id="pts-history-${clientId}" style="max-height:140px;overflow-y:auto;border-radius:6px;border:1px solid rgba(201,168,76,.2)">
-      <div style="text-align:center;padding:10px;color:var(--ink4);font-size:11px"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+      <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:15px;font-weight:700;color:#f5d78e">${fmt(client.total_spent||0)}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:1px">Total Spent</div>
+      </div>
+      <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:15px;font-weight:700;color:#fff">${mem?.status||'—'}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:1px">Status</div>
+      </div>
     </div>
   </div>
 
-  <!-- Action Buttons -->
-  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    ${client.phone?`<button onclick="openWaModal('${client.phone}','${client.name}','Hello ${client.name}! Thank you for being a Saundarya Exclusive Member. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='#fff' style='margin-right:4px;vertical-align:middle'><path d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z'/></svg>WhatsApp</button>`:''}
-    <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class='fas fa-redo'></i> Renew</button>
-    <button onclick="closeInvModal();editClient(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-edit'></i> Edit Profile</button>
-    <button onclick="if(confirm('Delete this member?'))deleteClient(${clientId},'${client.name.replace(/'/g,'')}');closeInvModal();" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px"><i class='fas fa-trash'></i> Delete</button>
+  <!-- ACTION BUTTONS -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <button onclick="editClient(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-edit" style="color:var(--teal)"></i> Edit</button>
+    <button onclick="renewMembership(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-sync" style="color:var(--sky)"></i> Renew</button>
+    ${client.phone?`<a href="tel:${client.phone}" style="flex:1;min-width:100px;background:#25D366;border:none;border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;text-decoration:none"><i class="fab fa-whatsapp"></i> Call</a>`:''}
+    <button onclick="deleteClient(${clientId},'${client.name.replace(/'/g,'')}')" style="background:#fff;border:1px solid var(--rose);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:11px;color:var(--rose);display:flex;align-items:center;gap:5px"><i class="fas fa-trash"></i></button>
   </div>
 
-  <!-- NFC Card Section -->
-  <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <!-- CLIENT INFO -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:9px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">👤 Member Details</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+      ${client.gender?`<div><span style="color:var(--ink3)">Gender:</span> <b>${client.gender}</b></div>`:''}
+      ${client.birthday?`<div><span style="color:var(--ink3)">Birthday:</span> <b>${String(client.birthday).substring(0,10)}</b></div>`:''}
+      ${client.anniversary?`<div><span style="color:var(--ink3)">Anniversary:</span> <b>${String(client.anniversary).substring(0,10)}</b></div>`:''}
+      ${client.preferred_staff?`<div><span style="color:var(--ink3)">Preferred:</span> <b>${client.preferred_staff}</b></div>`:''}
+      ${client.address?`<div style="grid-column:1/-1"><span style="color:var(--ink3)">Address:</span> <b>${client.address}</b></div>`:''}
+      ${client.preferences?`<div style="grid-column:1/-1"><span style="color:var(--ink3)">Notes:</span> <b>${client.preferences}</b></div>`:''}
+    </div>
+  </div>
+
+  <!-- QUICK REDEEM (prominent) -->
+  <div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:2px solid var(--gold);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:16px">⭐</span>
       <div>
-        <div style="font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;margin-bottom:4px">💳 NFC Membership Card</div>
-        <div id="nfc-status-${clientId}" style="font-size:12px;color:var(--ink3)">Loading card status...</div>
+        <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em">Beauty Points — Redeem</div>
+        <div style="font-size:10px;color:var(--ink3)">₹100 spent = 1 point · 20 joining gift</div>
       </div>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="nfc-actions-${clientId}">
-        <button onclick="showNfcRegister(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-credit-card"></i> Register Card</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:20px;font-weight:800;color:var(--rose)">−</span>
+      <input type="number" id="pts-redeem-amt" placeholder="Points" min="1" style="width:80px;border:2px solid var(--rose);border-radius:6px;padding:5px 8px;font-size:13px;font-weight:700;text-align:center">
+      <input type="text" id="pts-redeem-note" placeholder="What for? (e.g. haircut discount)" style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+      <button onclick="redeemPoints(${clientId})" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700">Redeem</button>
+    </div>
+    ${_role==='admin'?`
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(201,168,76,.3);display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+        <option value="add">+ Add Points</option>
+        <option value="set">= Set Balance</option>
+      </select>
+      <input type="number" id="pts-amount" placeholder="Points" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+      <input type="text" id="pts-notes" placeholder="Reason" style="flex:1;min-width:80px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+      <button onclick="savePoints(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600">Save</button>
+    </div>`:''}
+  </div>
+
+  <!-- NFC CARD -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:9px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💳 Membership Card</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div id="nfc-status-${clientId}" style="flex:1;font-size:11px;color:var(--ink3)">Loading...</div>
+      <div id="nfc-actions-${clientId}" style="display:flex;gap:6px">
+        <button onclick="showNfcRegister(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600"><i class="fas fa-credit-card"></i> Register Card</button>
       </div>
     </div>
     <div id="nfc-register-wrap-${clientId}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-      <div style="font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:4px">Enter Card UID to link with this member</div>
-      <div style="font-size:10px;color:var(--ink3);margin-bottom:8px;background:var(--bg);padding:7px 10px;border-radius:6px;border:1px solid var(--border)">
-        <i class="fas fa-info-circle" style="color:var(--sky)"></i>
-        The card has a built-in UID (printed on back or scan via reader).<br>
-        When reader arrives: tap card → UID auto-filled → profile opens instantly.<br>
-        <b>When client taps card at reception → this member profile opens directly.</b>
-      </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="nfc-uid-input-${clientId}" placeholder="Enter Card UID (check back of card) or any unique ID"
-          style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:'Inter',sans-serif">
-        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-link"></i> Link Card</button>
-        <button onclick="v('nfc-register-wrap-${clientId}').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:11px;color:var(--ink3)">Cancel</button>
+        <input type="text" id="nfc-uid-input-${clientId}" placeholder="Enter Card UID" style="flex:1;min-width:160px;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px">
+        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600">Link Card</button>
+        <button onclick="v('nfc-register-wrap-${clientId}').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:10px;color:var(--ink3)">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- Service History Table -->
-  <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
-    <i class="fas fa-history" style="color:var(--sky);margin-right:6px"></i>Service History
+  <!-- POINTS HISTORY -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:9px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">📋 Points History</div>
+    <div id="pts-history-${clientId}" style="max-height:160px;overflow-y:auto">
+      <div style="text-align:center;padding:12px;color:var(--ink4);font-size:11px"><i class="fas fa-spinner fa-spin"></i></div>
+    </div>
   </div>
-  <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin-bottom:10px">
+
+  <!-- SERVICE HISTORY -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px">
+    <div style="font-size:9px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px"><i class="fas fa-history" style="color:var(--sky)"></i> Service History (${histRows.length})</div>
+    <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead style="background:var(--charcoal,#1C1C1E)"><tr>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Date</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Invoice</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Services</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:right">Bill</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:right">Points ⭐</th>
-        <th style="padding:8px 10px;color:rgba(255,255,255,.65);font-weight:500;text-align:left">Payment</th>
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="padding:6px 8px;text-align:left;color:var(--ink3);font-weight:600">Date</th>
+        <th style="padding:6px 8px;text-align:left;color:var(--ink3);font-weight:600">Services</th>
+        <th style="padding:6px 8px;text-align:right;color:var(--ink3);font-weight:600">Bill</th>
+        <th style="padding:6px 8px;text-align:right;color:var(--ink3);font-weight:600">Pts</th>
       </tr></thead>
       <tbody>
-        ${histRows.length?histRows.map(e=>{
-          const pts=Math.floor((e.net_total||0)/100);
-          return `<tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:7px 10px">${String(e.entry_date||'').substring(0,10)}</td>
-            <td style="padding:7px 10px;color:var(--teal);font-weight:600">${e.inv_no}</td>
-            <td style="padding:7px 10px;color:var(--ink2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.services||'—'}</td>
-            <td style="padding:7px 10px;text-align:right;font-weight:600;color:var(--emerald)">${fmt(e.net_total||0)}</td>
-            <td style="padding:7px 10px;text-align:right;color:var(--gold);font-weight:700" title="₹${e.net_total||0} ÷ 100">+${pts} ⭐</td>
-            <td style="padding:7px 10px"><span style="background:var(--bg);border-radius:4px;padding:2px 6px;font-size:10px">${(e.pay_method||'Cash').startsWith('Split')?'Split':e.pay_method||'Cash'}</span></td>
-          </tr>`;
-        }).join(''):'<tr><td colspan="6" style="text-align:center;padding:14px;color:var(--ink4)">No service history found</td></tr>'}
+      \${histRows.map(e=>{
+        const pts=Math.floor((e.net_total||0)/100);
+        const svcs=(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';
+        const dt=String(e.entry_date||'').substring(0,10);
+        return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3);white-space:nowrap">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';
+      }).join('')}
+      \${!histRows.length?'<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--ink4)">No service history</td></tr>':''}
       </tbody>
-      ${histRows.length?`<tfoot><tr style="background:var(--bg)">
-        <td colspan="3" style="padding:8px 10px;font-weight:700;font-size:12px">Total from ${histRows.length} visits</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--emerald)">${fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))}</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--gold)">${totalPtsEarned} ⭐ from services<br><span style="font-size:10px;color:var(--emerald);font-weight:600" id="pts-avail-${clientId}">see points log ↑</span></td>
-        <td></td>
-      </tr></tfoot>`:''}
+      ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:6px 8px;font-weight:700;font-size:11px">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--gold)">'+histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0)+' ⭐</td></tr></tfoot>'):''}
     </table>
+    </div>
   </div>
+</div>
   `;
 
   // NOW the DOM has pts-history-${clientId} — load history
   await loadPtsHistory(clientId);
+  // NFC after DOM ready
+  try{
+    const nfcSt=await apiCall('GET',`/clients/${clientId}/nfc-card`);
+    const nfcEl=v(`nfc-status-${clientId}`);
+    const nfcAct=v(`nfc-actions-${clientId}`);
+    if(nfcEl){
+      if(nfcSt&&nfcSt.card_uid){
+        nfcEl.innerHTML=`<span style="color:var(--emerald);font-weight:700">✔ Assigned</span> &nbsp;·&nbsp; <b style="color:var(--gold)">${nfcSt.membership_id||'—'}</b> &nbsp;·&nbsp; ${nfcSt.issued_date||'—'}`;
+        if(nfcAct)nfcAct.innerHTML=`<span style="background:#e8f5ee;color:var(--emerald);font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px">✔ Card Active</span><button onclick="showNfcRegister(${clientId})" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600">Replace Card</button>`;
+      } else {
+        nfcEl.innerHTML='<span style="color:var(--rose);font-weight:600">✗ Not Assigned</span>';
+      }
+    }
+  }catch(e){}
 }
 
 
@@ -6359,4 +6330,4 @@ function clearBridalFilters(){
 
 </div>
 </body>
-</html> 
+</html>
