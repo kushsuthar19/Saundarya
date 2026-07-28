@@ -2999,11 +2999,11 @@ function showCfExclusive(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='none';
   v('cf-exclusive').style.display='block';
-  // Set start date to today, expiry to +12 months
-  const today=td();
-  const emStart=v('em-start');if(emStart)emStart.value=today;
+  // Only set dates if not already filled
+  const emStart=v('em-start');
+  if(emStart&&!emStart.value)emStart.value=td();
   const emExp=v('em-expiry');
-  if(emExp){
+  if(emExp&&!emExp.value){
     const d=new Date();d.setFullYear(d.getFullYear()+1);
     emExp.value=d.toISOString().split('T')[0];
   }
@@ -3155,7 +3155,7 @@ async function showClientProfile(clientId){
   const [c, mems, entries] = await Promise.all([
     apiCall('GET',`/clients/${clientId}`),
     apiCall('GET',`/clients/${clientId}/membership`),
-    apiCall('GET',`/entries?limit=50&client_id=${clientId}`).catch(()=>null)
+    c&&c.phone?apiCall('GET',`/entries?limit=50&phone=${encodeURIComponent(c.phone)}`).catch(()=>null):Promise.resolve([])
   ]);
   if(!c){v('cp-body').innerHTML='<div style="color:var(--rose);text-align:center;padding:20px">Failed to load client</div>';return;}
   const mem=mems&&mems[0];
@@ -3274,12 +3274,12 @@ async function updateExclusiveMember(clientId){
   const r=await apiCall('PUT',`/clients/${clientId}`,{
     name:nm,
     phone:v('em-phone')?.value||null,
-    birthday:v('em-dob')?.value||null,
-    anniversary:v('em-ann')?.value||null,
-    preferred_staff:v('em-pstaff')?.value||null,
-    preferences:v('em-notes')?.value||null,
-    gender:v('em-gender')?.value||null,
-    address:v('em-addr')?.value||null
+    birthday:(v('em-dob')?.value||'').trim()||null,
+    anniversary:(v('em-ann')?.value||'').trim()||null,
+    preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
+    preferences:(v('em-notes')?.value||'').trim()||null,
+    gender:(v('em-gender')?.value||'').trim()||null,
+    address:(v('em-addr')?.value||'').trim()||null
   });
   if(!r)return;
   toast('<i class="fas fa-check" style="color:var(--gold)"></i> Exclusive member updated!','var(--gold)');
@@ -5836,12 +5836,12 @@ async function convertToExclusive(clientId){
   // Step 1: Update existing client details
   await apiCall('PUT',`/clients/${clientId}`,{
     name:nm,phone:ph,
-    birthday:v('em-dob')?.value||null,
-    anniversary:v('em-ann')?.value||null,
-    preferred_staff:v('em-pstaff')?.value||null,
-    preferences:v('em-notes')?.value||null,
-    gender:v('em-gender')?.value||null,
-    address:v('em-addr')?.value||null
+    birthday:(v('em-dob')?.value||'').trim()||null,
+    anniversary:(v('em-ann')?.value||'').trim()||null,
+    preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
+    preferences:(v('em-notes')?.value||'').trim()||null,
+    gender:(v('em-gender')?.value||'').trim()||null,
+    address:(v('em-addr')?.value||'').trim()||null
   });
 
   // Step 2: Calculate past service points from joining date
@@ -5919,7 +5919,7 @@ async function _loadMemberProfile(clientId){
   // Calculate total points from history
   const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
 
-  // Pre-compute before template
+  // Pre-compute rows before template
   const histRowsHtml=histRows.map(e=>{
     const pts=Math.floor((e.net_total||0)/100);
     const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';
