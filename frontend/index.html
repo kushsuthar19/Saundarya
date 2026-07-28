@@ -5499,7 +5499,7 @@ async function loadBridalNotifications(){
           <div style="color:${color};font-weight:700;font-size:11px;margin-top:2px">${when}</div>
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
-            <button onclick="go(null,'bridal');setTimeout(()=>renderBridalList('','',${u.id}),300)" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
+            <button onclick="go(null,'bridal')" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
           </div>
         </div>
       </div>`);
