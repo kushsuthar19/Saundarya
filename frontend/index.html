@@ -5919,6 +5919,15 @@ async function _loadMemberProfile(clientId){
   // Calculate total points from history
   const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
 
+  // Pre-compute before template
+  const histRowsHtml=histRows.map(e=>{
+    const pts=Math.floor((e.net_total||0)/100);
+    const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';
+    const dt=String(e.entry_date||'').substring(0,10);
+    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3);white-space:nowrap">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';
+  }).join('');
+  const noHistHtml=histRows.length?'':'<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--ink4)">No service history</td></tr>';
+
   body.innerHTML=`
 <div style="font-family:'Inter',sans-serif">
 
@@ -6047,13 +6056,7 @@ async function _loadMemberProfile(clientId){
         <th style="padding:6px 8px;text-align:right;color:var(--ink3);font-weight:600">Pts</th>
       </tr></thead>
       <tbody>
-      \${histRows.map(e=>{
-        const pts=Math.floor((e.net_total||0)/100);
-        const svcs=(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';
-        const dt=String(e.entry_date||'').substring(0,10);
-        return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3);white-space:nowrap">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';
-      }).join('')}
-      \${!histRows.length?'<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--ink4)">No service history</td></tr>':''}
+      \${histRowsHtml}${noHistHtml}
       </tbody>
       ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:6px 8px;font-weight:700;font-size:11px">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--gold)">'+histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0)+' ⭐</td></tr></tfoot>'):''}
     </table>
