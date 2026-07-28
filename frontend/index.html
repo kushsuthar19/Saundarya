@@ -1254,7 +1254,7 @@ table tbody tr:hover td{background:var(--bg2)}
         </tr>
       </thead>
       <tbody id="br-lb">
-        <tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ink4)">Loading...</td></tr>
+        <tr><td colspan="11" style="text-align:center;padding:20px;color:var(--ink4)">Loading...</td></tr>
       </tbody>
     </table>
   </div>
@@ -1488,7 +1488,7 @@ table tbody tr:hover td{background:var(--bg2)}
     </div>
   </div>
   <div class="tbl-wrap"><div class="tbl-hd" style="background:var(--sky-l)"><div style="font-size:11px;font-weight:600;color:var(--sky);display:flex;align-items:center;gap:6px"><i class="fas fa-users"></i>All Clients</div></div>
-    <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Visits</th><th>Spent</th><th>Staff</th><th>Notes</th><th>Bridal / Notes</th><th>Visits</th><th>Total Spent</th><th>Action</th></tr></thead>
+    <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Visits</th><th>Spent</th><th>Staff</th><th>Notes</th><th>Action</th></tr></thead>
       <tbody id="cl-tbody"><tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:20px">No clients yet</td></tr></tbody>
     </table></div>
   </div>
@@ -2924,9 +2924,7 @@ async function saveExclusiveMember(){
   const fee=parseFloat(v('em-fee')?.value||1000);
 
   // Step 1: Create or get existing client
-  let client=null;
-  // Try creating - if phone exists, lookup existing client
-  client=await apiCall('POST','/clients',{
+  let client=await apiCall('POST','/clients',{
     name:nm, phone:ph,
     birthday:(v('em-dob')?.value||'').trim()||null,
     anniversary:(v('em-ann')?.value||'').trim()||null,
@@ -2936,23 +2934,8 @@ async function saveExclusiveMember(){
     gender:(v('em-gender')?.value||'').trim()||null,
     address:(v('em-addr')?.value||'').trim()||null
   });
-  if(!client&&ph){
-    // Phone may already exist - look up by phone
-    client=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(ph)}`);
-    if(client){
-      // Update existing client details
-      await apiCall('PUT',`/clients/${client.id}`,{
-        name:nm,
-        birthday:(v('em-dob')?.value||'').trim()||null,
-        anniversary:(v('em-ann')?.value||'').trim()||null,
-        preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
-        preferences:(v('em-notes')?.value||'').trim()||null,
-        gender:(v('em-gender')?.value||'').trim()||null,
-        address:(v('em-addr')?.value||'').trim()||null
-      });
-    }
-  }
-  if(!client){toast('Could not create or find client','var(--rose)');return;}
+  if(!client&&ph){client=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(ph)}`);if(client)await apiCall('PUT',`/clients/${client.id}`,{name:nm,birthday:(v('em-dob')?.value||'').trim()||null,anniversary:(v('em-ann')?.value||'').trim()||null,preferred_staff:(v('em-pstaff')?.value||'').trim()||null,preferences:(v('em-notes')?.value||'').trim()||null,gender:(v('em-gender')?.value||'').trim()||null,address:(v('em-addr')?.value||'').trim()||null});}
+  if(!client){toast('Could not save client','var(--rose)');return;}
 
   // Step 2: Enroll membership
   const startDate=(v('em-start')?.value||'').trim()||td();
@@ -3017,11 +3000,11 @@ function showCfExclusive(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='none';
   v('cf-exclusive').style.display='block';
-  // Only set dates if not already filled
-  const emStart=v('em-start');
-  if(emStart&&!emStart.value)emStart.value=td();
+  // Set start date to today, expiry to +12 months
+  const today=td();
+  const emStart=v('em-start');if(emStart)emStart.value=today;
   const emExp=v('em-expiry');
-  if(emExp&&!emExp.value){
+  if(emExp){
     const d=new Date();d.setFullYear(d.getFullYear()+1);
     emExp.value=d.toISOString().split('T')[0];
   }
@@ -3032,8 +3015,8 @@ async function renderClients(s){
   let url=`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`;
   if(_crmActiveType&&_crmActiveType!=='all') url+=`&client_type=${encodeURIComponent(_crmActiveType)}`;
   const rows=await apiCall('GET',url);
-  if(!rows){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
-  if(!rows.length){tb.innerHTML=`<tr><td colspan="8" style="text-align:center;color:var(--ink4);padding:20px">No ${_crmActiveType&&_crmActiveType!=='all'?_crmActiveType+' ':''} clients found</td></tr>`;return;}
+  if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:20px">No ${_crmActiveType&&_crmActiveType!=='all'?_crmActiveType+' ':''} clients found</td></tr>`;return;}
   const tg={'VIP':'p-bk','Regular':'p-nd','New':'p-lt','Bridal':'p-wa'};
   const typeBadge={'New':'<span style="background:#e8f5ee;color:var(--emerald);border:1px solid #b2dfdb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🟢 NEW</span>','Regular':'<span style="background:#e8f4ff;color:var(--sky);border:1px solid #bbdefb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🔵 REGULAR</span>','Exclusive':'<span style="background:#fff8e7;color:var(--amber);border:1px solid rgba(201,168,76,0.4);font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">⭐ EXCLUSIVE</span>'};
   tb.innerHTML=rows.map(c=>`<tr>
@@ -3173,7 +3156,7 @@ async function showClientProfile(clientId){
   const [c, mems, entries] = await Promise.all([
     apiCall('GET',`/clients/${clientId}`),
     apiCall('GET',`/clients/${clientId}/membership`),
-    c&&c.phone?apiCall('GET',`/entries?limit=50&phone=${encodeURIComponent(c.phone)}`).catch(()=>null):Promise.resolve([])
+    apiCall('GET',`/entries?limit=50&client_id=${clientId}`).catch(()=>null)
   ]);
   if(!c){v('cp-body').innerHTML='<div style="color:var(--rose);text-align:center;padding:20px">Failed to load client</div>';return;}
   const mem=mems&&mems[0];
@@ -3292,12 +3275,12 @@ async function updateExclusiveMember(clientId){
   const r=await apiCall('PUT',`/clients/${clientId}`,{
     name:nm,
     phone:v('em-phone')?.value||null,
-    birthday:(v('em-dob')?.value||'').trim()||null,
-    anniversary:(v('em-ann')?.value||'').trim()||null,
-    preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
-    preferences:(v('em-notes')?.value||'').trim()||null,
-    gender:(v('em-gender')?.value||'').trim()||null,
-    address:(v('em-addr')?.value||'').trim()||null
+    birthday:v('em-dob')?.value||null,
+    anniversary:v('em-ann')?.value||null,
+    preferred_staff:v('em-pstaff')?.value||null,
+    preferences:v('em-notes')?.value||null,
+    gender:v('em-gender')?.value||null,
+    address:v('em-addr')?.value||null
   });
   if(!r)return;
   toast('<i class="fas fa-check" style="color:var(--gold)"></i> Exclusive member updated!','var(--gold)');
@@ -4538,11 +4521,11 @@ async function deleteStaff(id,name){
 // SALARY CALCULATOR — Shows what owner needs to pay, NOT a payment button
 async function renderSalary(){
   const tb=v('sal-tbody');if(!tb)return;
-  tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  tb.innerHTML='<tr><td colspan="11" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
   const rowsRaw=await apiCall('GET','/staff');
   const rows=rowsRaw?rowsRaw.filter(s=>s.role!=='Owner'):rowsRaw;
-  if(!rows){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
-  if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
+  if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
+  if(!rows.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
   const month=v('sal-month')?.value||tM();
   const [yr,mo]=month.split('-').map(Number);
   const daysInMonth=new Date(yr,mo,0).getDate();
@@ -5499,7 +5482,7 @@ async function loadBridalNotifications(){
           <div style="color:${color};font-weight:700;font-size:11px;margin-top:2px">${when}</div>
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
-            <button onclick="go(null,'bridal')" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
+            <button onclick="go(null,'bridal');setTimeout(()=>renderBridalList('','',${u.id}),300)" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
           </div>
         </div>
       </div>`);
@@ -5854,12 +5837,12 @@ async function convertToExclusive(clientId){
   // Step 1: Update existing client details
   await apiCall('PUT',`/clients/${clientId}`,{
     name:nm,phone:ph,
-    birthday:(v('em-dob')?.value||'').trim()||null,
-    anniversary:(v('em-ann')?.value||'').trim()||null,
-    preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
-    preferences:(v('em-notes')?.value||'').trim()||null,
-    gender:(v('em-gender')?.value||'').trim()||null,
-    address:(v('em-addr')?.value||'').trim()||null
+    birthday:v('em-dob')?.value||null,
+    anniversary:v('em-ann')?.value||null,
+    preferred_staff:v('em-pstaff')?.value||null,
+    preferences:v('em-notes')?.value||null,
+    gender:v('em-gender')?.value||null,
+    address:v('em-addr')?.value||null
   });
 
   // Step 2: Calculate past service points from joining date
@@ -5936,14 +5919,7 @@ async function _loadMemberProfile(clientId){
 
   // Calculate total points from history
   const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
-
-  // Pre-compute rows before template
-  const histRowsHtml=histRows.map(e=>{
-    const pts=Math.floor((e.net_total||0)/100);
-    const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';
-    const dt=String(e.entry_date||'').substring(0,10);
-    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3);white-space:nowrap">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';
-  }).join('');
+  const histRowsHtml=histRows.map(e=>{const pts=Math.floor((e.net_total||0)/100);const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';const dt=String(e.entry_date||'').substring(0,10);return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3)">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';}).join('');
   const noHistHtml=histRows.length?'':'<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--ink4)">No service history</td></tr>';
 
   body.innerHTML=`
