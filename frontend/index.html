@@ -1254,7 +1254,7 @@ table tbody tr:hover td{background:var(--bg2)}
         </tr>
       </thead>
       <tbody id="br-lb">
-        <tr><td colspan="11" style="text-align:center;padding:20px;color:var(--ink4)">Loading...</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:20px;color:var(--ink4)">Loading...</td></tr>
       </tbody>
     </table>
   </div>
@@ -1488,7 +1488,7 @@ table tbody tr:hover td{background:var(--bg2)}
     </div>
   </div>
   <div class="tbl-wrap"><div class="tbl-hd" style="background:var(--sky-l)"><div style="font-size:11px;font-weight:600;color:var(--sky);display:flex;align-items:center;gap:6px"><i class="fas fa-users"></i>All Clients</div></div>
-    <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Birthday</th><th>Skin</th><th>Hair</th><th>Tag</th><th>Bridal / Notes</th><th>Visits</th><th>Total Spent</th><th>Action</th></tr></thead>
+    <div class="ow"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Visits</th><th>Spent</th><th>Staff</th><th>Notes</th><th>Bridal / Notes</th><th>Visits</th><th>Total Spent</th><th>Action</th></tr></thead>
       <tbody id="cl-tbody"><tr><td colspan="10" style="text-align:center;color:var(--ink4);padding:20px">No clients yet</td></tr></tbody>
     </table></div>
   </div>
@@ -2923,8 +2923,10 @@ async function saveExclusiveMember(){
   const payMethod=v('em-pay')?.value||'Cash';
   const fee=parseFloat(v('em-fee')?.value||1000);
 
-  // Step 1: Create client
-  const client=await apiCall('POST','/clients',{
+  // Step 1: Create or get existing client
+  let client=null;
+  // Try creating - if phone exists, lookup existing client
+  client=await apiCall('POST','/clients',{
     name:nm, phone:ph,
     birthday:(v('em-dob')?.value||'').trim()||null,
     anniversary:(v('em-ann')?.value||'').trim()||null,
@@ -2934,7 +2936,23 @@ async function saveExclusiveMember(){
     gender:(v('em-gender')?.value||'').trim()||null,
     address:(v('em-addr')?.value||'').trim()||null
   });
-  if(!client){return;}
+  if(!client&&ph){
+    // Phone may already exist - look up by phone
+    client=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(ph)}`);
+    if(client){
+      // Update existing client details
+      await apiCall('PUT',`/clients/${client.id}`,{
+        name:nm,
+        birthday:(v('em-dob')?.value||'').trim()||null,
+        anniversary:(v('em-ann')?.value||'').trim()||null,
+        preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
+        preferences:(v('em-notes')?.value||'').trim()||null,
+        gender:(v('em-gender')?.value||'').trim()||null,
+        address:(v('em-addr')?.value||'').trim()||null
+      });
+    }
+  }
+  if(!client){toast('Could not create or find client','var(--rose)');return;}
 
   // Step 2: Enroll membership
   const startDate=(v('em-start')?.value||'').trim()||td();
@@ -3014,14 +3032,14 @@ async function renderClients(s){
   let url=`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`;
   if(_crmActiveType&&_crmActiveType!=='all') url+=`&client_type=${encodeURIComponent(_crmActiveType)}`;
   const rows=await apiCall('GET',url);
-  if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
-  if(!rows.length){tb.innerHTML=`<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:20px">No ${_crmActiveType&&_crmActiveType!=='all'?_crmActiveType+' ':''} clients found</td></tr>`;return;}
+  if(!rows){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--rose);padding:20px">Failed</td></tr>';return;}
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="8" style="text-align:center;color:var(--ink4);padding:20px">No ${_crmActiveType&&_crmActiveType!=='all'?_crmActiveType+' ':''} clients found</td></tr>`;return;}
   const tg={'VIP':'p-bk','Regular':'p-nd','New':'p-lt','Bridal':'p-wa'};
   const typeBadge={'New':'<span style="background:#e8f5ee;color:var(--emerald);border:1px solid #b2dfdb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🟢 NEW</span>','Regular':'<span style="background:#e8f4ff;color:var(--sky);border:1px solid #bbdefb;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">🔵 REGULAR</span>','Exclusive':'<span style="background:#fff8e7;color:var(--amber);border:1px solid rgba(201,168,76,0.4);font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">⭐ EXCLUSIVE</span>'};
   tb.innerHTML=rows.map(c=>`<tr>
     <td><b>${c.name}</b>${typeBadge[c.client_type||'New']||typeBadge['New']}</td><td>${c.phone||'—'}</td><td>${c.email||'—'}</td>
-    <td>${String(c.birthday||'').substring(0,10)||'—'}</td><td><span class="pill ${tg[c.tag]||'p-lt'}">${c.tag||'Regular'}</span></td>
     <td>${c.visit_count||c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
+    <td>${c.preferred_staff||'—'}</td><td>${c.preferences||'—'}</td>
     <td style="white-space:nowrap">
       ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
       <div style="position:relative;display:inline-block">
@@ -4520,11 +4538,11 @@ async function deleteStaff(id,name){
 // SALARY CALCULATOR — Shows what owner needs to pay, NOT a payment button
 async function renderSalary(){
   const tb=v('sal-tbody');if(!tb)return;
-  tb.innerHTML='<tr><td colspan="11" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
   const rowsRaw=await apiCall('GET','/staff');
   const rows=rowsRaw?rowsRaw.filter(s=>s.role!=='Owner'):rowsRaw;
-  if(!rows){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
-  if(!rows.length){tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
+  if(!rows){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--rose);padding:16px">Failed to load</td></tr>';return;}
+  if(!rows.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--ink4);padding:16px">No staff registered</td></tr>';return;}
   const month=v('sal-month')?.value||tM();
   const [yr,mo]=month.split('-').map(Number);
   const daysInMonth=new Date(yr,mo,0).getDate();
@@ -5425,7 +5443,7 @@ async function loadBridalNotifications(){
   const tomStr=tomDate.toISOString().split('T')[0];
   const validDates=[todayStr,tomStr];
 
-  const bookings=await apiCall('GET',`/bridal?limit=200`).catch(()=>null);
+  const bookings=await apiCall('GET',`/bridal?limit=200&status=Active`).catch(()=>null);
   if(!bookings||!bookings.length)return;
 
   const upcoming=[];
