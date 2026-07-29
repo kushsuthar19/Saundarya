@@ -2970,7 +2970,14 @@ async function saveExclusiveMember(){
   const mem=await apiCall('POST',`/clients/${client.id}/membership`,{
     fee_paid:fee,start_date:startDate,expiry_date:expiryDate,past_points:pastPts
   });
-  if(!mem){toast('Membership enrollment failed. Client details saved.','var(--amber)');renderClients('');return;}
+  if(!mem){
+    const existMems2=await apiCall('GET',`/clients/${client.id}/membership`);
+    if(existMems2&&existMems2.length&&existMems2[0].status==='Active'){
+      toast('<i class="fas fa-crown" style="color:var(--gold)"></i> '+nm+' already has Membership ID: '+existMems2[0].membership_id,'var(--gold)');
+    }
+    // else: apiCall already showed the real server error above — don't overwrite it
+    _crmActiveType='Exclusive';renderClients('');return;
+  }
 
   // Step 4: Auto Daily Entry for membership fee
   await apiCall('POST','/entries',{
@@ -3133,6 +3140,13 @@ async function editClient(id){
     set('em-addr', c.address);
     set('em-pstaff', c.preferred_staff);
     set('em-notes', c.preferences);
+    // Pre-fill the real membership start/expiry dates (not today/+1yr defaults)
+    const mems=await apiCall('GET',`/clients/${id}/membership`);
+    const activeMem=mems&&mems.find(m=>m.status==='Active');
+    if(activeMem){
+      set('em-start', String(activeMem.start_date||'').substring(0,10));
+      set('em-expiry', String(activeMem.expiry_date||'').substring(0,10));
+    }
     // Change save button to Update
     const btn=cf?.querySelector('.btn-gold');
     if(btn){btn.innerHTML='<i class="fas fa-save"></i> Update Member';btn.setAttribute('onclick',`updateExclusiveMember(${id})`);}
@@ -3310,6 +3324,16 @@ async function updateExclusiveMember(clientId){
     address:(v('em-addr')?.value||'').trim()||null
   });
   if(!r)return;
+  // Persist membership start/expiry date edits (separate endpoint — client
+  // fields and membership fields live in different tables)
+  const startDate=(v('em-start')?.value||'').trim();
+  const expiryDate=(v('em-expiry')?.value||'').trim();
+  if(startDate||expiryDate){
+    await apiCall('PUT',`/clients/${clientId}/membership`,{
+      start_date:startDate||null,
+      expiry_date:expiryDate||null
+    });
+  }
   toast('<i class="fas fa-check" style="color:var(--gold)"></i> Exclusive member updated!','var(--gold)');
   const cf=v('cf');
   const btn=cf?.querySelector('.btn-gold');
@@ -5888,7 +5912,19 @@ async function convertToExclusive(clientId){
     expiry_date:expiryDate||null,
     past_points:pastPts
   });
-  if(!mem){toast('Membership enrollment failed','var(--rose)');return;}
+  if(!mem){
+    // Membership may already exist — fetch and show it
+    const existMems=await apiCall('GET',`/clients/${clientId}/membership`);
+    if(existMems&&existMems.length&&existMems[0].status==='Active'){
+      toast('<i class="fas fa-crown" style="color:var(--gold)"></i> '+nm+' already has Membership ID: '+existMems[0].membership_id+' — details updated!','var(--gold)');
+      _crmActiveType='Exclusive';renderClients('');renderDailyView();updateDash();
+      document.querySelectorAll('.crm-tab').forEach(t=>{t.style.color='var(--ink3)';t.style.borderBottomColor='transparent';});
+      const exclTab=document.querySelector('.crm-tab[onclick*="Exclusive"]');
+      if(exclTab){exclTab.style.color='var(--sky)';exclTab.style.borderBottomColor='var(--sky)';}
+    }
+    // else: apiCall already showed the real server error above — don't overwrite it
+    return;
+  }
 
   // Step 4: Auto Daily Entry for fee
   await apiCall('POST','/entries',{
@@ -5997,7 +6033,7 @@ async function _loadMemberProfile(clientId){
 
   <!-- ACTION BUTTONS -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    <button onclick="editClient(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-edit" style="color:var(--teal)"></i> Edit</button>
+    <button onclick="closeInvModal();editClient(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-edit" style="color:var(--teal)"></i> Edit</button>
     <button onclick="renewMembership(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-sync" style="color:var(--sky)"></i> Renew</button>
     ${client.phone?`<a href="tel:${client.phone}" style="flex:1;min-width:100px;background:#25D366;border:none;border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;text-decoration:none"><i class="fab fa-whatsapp"></i> Call</a>`:''}
     <button onclick="deleteClient(${clientId},'${client.name.replace(/'/g,'')}')" style="background:#fff;border:1px solid var(--rose);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:11px;color:var(--rose);display:flex;align-items:center;gap:5px"><i class="fas fa-trash"></i></button>
@@ -6081,7 +6117,7 @@ async function _loadMemberProfile(clientId){
         <th style="padding:6px 8px;text-align:right;color:var(--ink3);font-weight:600">Pts</th>
       </tr></thead>
       <tbody>
-      \${histRowsHtml}${noHistHtml}
+      ${histRowsHtml}${noHistHtml}
       </tbody>
       ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:6px 8px;font-weight:700;font-size:11px">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--gold)">'+histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0)+' ⭐</td></tr></tfoot>'):''}
     </table>

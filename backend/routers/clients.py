@@ -36,10 +36,14 @@ async def _get_client(client_id: int, cursor) -> dict:
 
 
 async def _next_membership_id(cursor) -> str:
-    await cursor.execute("SELECT COUNT(*) FROM memberships")
+    # MAX-based (not COUNT-based) so a deleted membership row can't cause a
+    # regenerated ID to collide with an existing one.
+    await cursor.execute(
+        "SELECT NVL(MAX(TO_NUMBER(SUBSTR(membership_id,4))),0) FROM memberships WHERE membership_id LIKE 'SBC%'"
+    )
     row = await cursor.fetchone()
-    count = (row[0] if row else 0) + 1
-    return f"SBC{str(count).zfill(3)}"
+    nxt = (row[0] if row else 0) + 1
+    return f"SBC{str(int(nxt)).zfill(3)}"
 
 
 # ── list clients ─────────────────────────────────────────────────────────────
@@ -496,7 +500,6 @@ async def create_membership(
     if await cursor.fetchone():
         raise HTTPException(status_code=400, detail="Client already has active membership")
 
-    mem_id = await _next_membership_id(cursor)
     start = date.today()
     # Use provided start_date if given
     if data.get('start_date'):
@@ -513,24 +516,49 @@ async def create_membership(
             expiry = _dt.strptime(data['expiry_date'], '%Y-%m-%d').date()
         except Exception:
             pass
-    # Starting points = 20 gift + any past service points
-    past_pts = int(data.get('past_points', 0) or 0)
+
+    # Starting points = 20 gift + past service points. Computed server-side
+    # from this client's own service history (client_id, not phone) so it
+    # doesn't depend on the frontend calculating/sending the right number.
+    await cursor.execute(
+        """SELECT NVL(SUM(FLOOR(net_total/100)),0) FROM daily_entries
+           WHERE client_id=:1 AND entry_date < TO_DATE(:2,'YYYY-MM-DD')
+             AND NVL(visit_type,'x')!='Membership'""",
+        [client_id, start.strftime('%Y-%m-%d')]
+    )
+    pp_row = await cursor.fetchone()
+    past_pts = int(pp_row[0] or 0) if pp_row else 0
     starting_pts = 20 + past_pts
 
-    await cursor.execute(
-        """INSERT INTO memberships
-               (client_id, membership_id, status, fee_paid, start_date, expiry_date,
-                beauty_points, lifetime_points, notes)
-           VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:6,:7)
-           RETURNING id INTO :8""",
-        [client_id, mem_id, data.get('fee_paid', 1000),
-         start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
-         starting_pts,
-         data.get('notes', ''),
-         cursor.var(oracledb.NUMBER)]
-    )
-    new_mem_id = cursor.bindvars[-1].getvalue()
-    new_mem_db_id = int(new_mem_id[0] if isinstance(new_mem_id, list) else new_mem_id)
+    # Membership IDs can collide if a prior row was deleted; retry a couple
+    # times on a unique-constraint violation instead of surfacing a raw 500.
+    new_mem_db_id = None
+    last_err = None
+    for _attempt in range(3):
+        mem_id = await _next_membership_id(cursor)
+        try:
+            await cursor.execute(
+                """INSERT INTO memberships
+                       (client_id, membership_id, status, fee_paid, start_date, expiry_date,
+                        beauty_points, lifetime_points, notes)
+                   VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:6,:7)
+                   RETURNING id INTO :8""",
+                [client_id, mem_id, data.get('fee_paid', 1000),
+                 start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
+                 starting_pts,
+                 data.get('notes', ''),
+                 cursor.var(oracledb.NUMBER)]
+            )
+            new_mem_id = cursor.bindvars[-1].getvalue()
+            new_mem_db_id = int(new_mem_id[0] if isinstance(new_mem_id, list) else new_mem_id)
+            break
+        except oracledb.IntegrityError as e:
+            last_err = e
+            continue
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create membership: {str(e)}")
+    if new_mem_db_id is None:
+        raise HTTPException(status_code=500, detail=f"Failed to create membership after retries: {str(last_err)}")
     await db.commit()
     # Log the 20 gift points
     # Log 20 gift points
@@ -541,13 +569,12 @@ async def create_membership(
         [new_mem_db_id]
     )
     # Log past service points if any
-    past_pts_val = int(data.get('past_points', 0) or 0)
-    if past_pts_val > 0:
+    if past_pts > 0:
         await cursor.execute(
             """INSERT INTO beauty_points_log
                    (membership_id, entry_type, points, reference_inv, notes)
                VALUES (:1,'add',:2,'PAST','Points from past services before joining')""",
-            [new_mem_db_id, past_pts_val]
+            [new_mem_db_id, past_pts]
         )
     # Sync DB with correct starting balance
     await cursor.execute(
@@ -625,6 +652,53 @@ async def renew_membership(
     )
     await db.commit()
     return {"renewed": True, "new_expiry": new_expiry}
+
+
+@router.put("/{client_id}/membership")
+async def update_membership_dates(
+    client_id: int,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Edit an existing active membership's start_date/expiry_date."""
+    cursor = db.cursor()
+    await cursor.execute(
+        "SELECT id FROM memberships WHERE client_id=:1 AND status='Active'",
+        [client_id]
+    )
+    row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="No active membership found")
+    mem_db_id = row[0]
+
+    from datetime import datetime as _dt
+    fields = []
+    values = []
+    if data.get('start_date'):
+        try:
+            _dt.strptime(data['start_date'], '%Y-%m-%d')
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid start_date, expected YYYY-MM-DD")
+        fields.append(f"start_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+        values.append(data['start_date'])
+    if data.get('expiry_date'):
+        try:
+            _dt.strptime(data['expiry_date'], '%Y-%m-%d')
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid expiry_date, expected YYYY-MM-DD")
+        fields.append(f"expiry_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+        values.append(data['expiry_date'])
+    if not fields:
+        raise HTTPException(status_code=400, detail="No valid date fields provided")
+
+    values.append(mem_db_id)
+    await cursor.execute(
+        f"UPDATE memberships SET {','.join(fields)} WHERE id=:{len(values)}",
+        values
+    )
+    await db.commit()
+    return {"updated": True}
 
 
 @router.put("/{client_id}/membership/points")
