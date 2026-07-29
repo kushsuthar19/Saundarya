@@ -726,14 +726,27 @@ async def update_points(
         if points > true_balance:
             raise HTTPException(status_code=400, detail=f"Insufficient points. Balance: {true_balance}")
 
+    # 'set' means "make the balance equal to `points`" — the ledger only
+    # understands add/redeem deltas, so convert the target into a delta
+    # here rather than inserting a raw 'set' row (which the SUM in
+    # log_balance would otherwise silently treat as another addition).
+    log_action = action
+    log_points = points
+    if action == 'set':
+        delta = points - true_balance
+        if delta == 0:
+            return {"beauty_points": true_balance, "lifetime_points": row[2]}
+        log_action = 'add' if delta > 0 else 'redeem'
+        log_points = abs(delta)
+
     # Insert into log FIRST
     await cursor.execute(
         """INSERT INTO beauty_points_log
                (membership_id, entry_type, points, reference_inv, notes)
            VALUES (:1,:2,:3,:4,:5)""",
-        [mem_id, action, points,
+        [mem_id, log_action, log_points,
          data.get('invoice', '') or '',
-         data.get('notes', '') or '']
+         (data.get('notes', '') or '') + (f' (balance set to {points})' if action=='set' else '')]
     )
     # Sync DB beauty_points from log (source of truth)
     await db.commit()
