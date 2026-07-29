@@ -2923,35 +2923,39 @@ async function saveExclusiveMember(){
   const payMethod=v('em-pay')?.value||'Cash';
   const fee=parseFloat(v('em-fee')?.value||1000);
 
-  // Step 1: Create client or find existing by phone
+  // Step 1: Create client — if phone exists find them
+  const _bday=(v('em-dob')?.value||'').trim()||null;
+  const _ann=(v('em-ann')?.value||'').trim()||null;
+  const _pstaff=(v('em-pstaff')?.value||'').trim()||null;
+  const _prefs=(v('em-notes')?.value||'').trim()||null;
+  const _gender=(v('em-gender')?.value||'').trim()||null;
+  const _addr=(v('em-addr')?.value||'').trim()||null;
   let client=await apiCall('POST','/clients',{
-    name:nm, phone:ph,
-    birthday:(v('em-dob')?.value||'').trim()||null,
-    anniversary:(v('em-ann')?.value||'').trim()||null,
-    preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
-    preferences:(v('em-notes')?.value||'').trim()||null,
-    client_type:'Exclusive',
-    gender:(v('em-gender')?.value||'').trim()||null,
-    address:(v('em-addr')?.value||'').trim()||null
+    name:nm,phone:ph,birthday:_bday,anniversary:_ann,
+    preferred_staff:_pstaff,preferences:_prefs,
+    client_type:'Exclusive',gender:_gender,address:_addr
   });
   if(!client){
-    // Phone exists — find and update existing client
+    // Phone already exists — look up and update
     client=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(ph)}`);
     if(client){
       await apiCall('PUT',`/clients/${client.id}`,{
-        name:nm,
-        birthday:(v('em-dob')?.value||'').trim()||null,
-        anniversary:(v('em-ann')?.value||'').trim()||null,
-        preferred_staff:(v('em-pstaff')?.value||'').trim()||null,
-        preferences:(v('em-notes')?.value||'').trim()||null,
-        gender:(v('em-gender')?.value||'').trim()||null,
-        address:(v('em-addr')?.value||'').trim()||null
+        name:nm,birthday:_bday,anniversary:_ann,
+        preferred_staff:_pstaff,preferences:_prefs,
+        gender:_gender,address:_addr
       });
+      toast('Client found — updating details and enrolling membership...','var(--sky)');
     }
   }
-  if(!client){toast('Could not save client. Check details.','var(--rose)');return;}
+  if(!client){toast('Could not save client. Please check the details.','var(--rose)');return;}
+  // Check if already has active membership
+  const existingMem=await apiCall('GET',`/clients/${client.id}/membership`);
+  if(existingMem&&existingMem.length&&existingMem[0].status==='Active'){
+    toast('This client already has an active membership! ID: '+existingMem[0].membership_id,'var(--amber)');
+    renderClients('');return;
+  }
 
-  // Step 2: Calculate past points before joining
+  // Step 2: Calculate past service points before joining
   const startDate=(v('em-start')?.value||'').trim()||td();
   const expiryDate=(v('em-expiry')?.value||'').trim()||null;
   let pastPts=0;
@@ -2962,14 +2966,11 @@ async function saveExclusiveMember(){
       pastPts=rel.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
     }
   }
-  // Step 3: Enroll membership with past points
+  // Step 3: Enroll membership with 20 gift + past points
   const mem=await apiCall('POST',`/clients/${client.id}/membership`,{
-    fee_paid:fee,
-    start_date:startDate,
-    expiry_date:expiryDate,
-    past_points:pastPts
+    fee_paid:fee,start_date:startDate,expiry_date:expiryDate,past_points:pastPts
   });
-  if(!mem){toast('Client saved but membership enrollment failed','var(--amber)');renderClients('');return;}
+  if(!mem){toast('Membership enrollment failed. Client details saved.','var(--amber)');renderClients('');return;}
 
   // Step 4: Auto Daily Entry for membership fee
   await apiCall('POST','/entries',{
@@ -2988,9 +2989,11 @@ async function saveExclusiveMember(){
   ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const ef=v('em-fee');if(ef)ef.value='1000';
   v('cf').style.display='none';
-  renderClients('');
-  renderDailyView();
-  updateDash();
+  _crmActiveType='Exclusive';renderClients('');
+  renderDailyView();updateDash();
+  document.querySelectorAll('.crm-tab').forEach(t=>{t.style.color='var(--ink3)';t.style.borderBottomColor='transparent';});
+  const exTab=document.querySelector('.crm-tab[onclick*="Exclusive"]');
+  if(exTab){exTab.style.color='var(--sky)';exTab.style.borderBottomColor='var(--sky)';}
 }
 function toggleCF(){
   const f=v('cf');if(!f)return;
@@ -3024,7 +3027,7 @@ function showCfExclusive(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='none';
   v('cf-exclusive').style.display='block';
-  // Only set dates if empty
+  // Only set dates if empty — allow user to edit
   const emStart=v('em-start');
   if(emStart&&!emStart.value)emStart.value=td();
   const emExp=v('em-expiry');
@@ -5907,7 +5910,11 @@ async function convertToExclusive(clientId){
   const ef=v('em-fee');if(ef)ef.value='1000';
   const pp=document.getElementById('pts-preview-note');if(pp)pp.remove();
   if(cf)cf.style.display='none';
-  renderClients('');renderDailyView();updateDash();
+  _crmActiveType='Exclusive';renderClients('');renderDailyView();updateDash();
+  // Switch to Exclusive tab visually
+  document.querySelectorAll('.crm-tab').forEach(t=>{t.style.color='var(--ink3)';t.style.borderBottomColor='transparent';});
+  const exclTab=document.querySelector('.crm-tab[onclick*="Exclusive"]');
+  if(exclTab){exclTab.style.color='var(--sky)';exclTab.style.borderBottomColor='var(--sky)';}
 }
 
 
