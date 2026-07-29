@@ -5959,135 +5959,145 @@ async function _loadMemberProfile(clientId){
 
   body.innerHTML=`
 <div style="font-family:'Inter',sans-serif">
+<style>
+  .smp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r12,12px);padding:16px;margin-bottom:12px;box-shadow:var(--shadow-sm,0 1px 3px rgba(0,0,0,.06))}
+  .smp-eyebrow{display:flex;align-items:center;gap:9px;font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+  .smp-eyebrow .smp-ic{width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+  .smp-btn{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:10px 6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--ink);transition:transform .12s ease,box-shadow .12s ease;text-decoration:none}
+  .smp-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm,0 4px 10px rgba(0,0,0,.1))}
+  .smp-info{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+  .smp-info:last-child{border-bottom:none}
+  .smp-info .smp-ic{width:30px;height:30px;border-radius:9px;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:11px;flex-shrink:0}
+  .smp-info .smp-k{font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em}
+  .smp-info .smp-v{font-size:12px;font-weight:600;color:var(--ink)}
+</style>
 
-  <!-- PREMIUM HEADER -->
-  <div style="background:linear-gradient(135deg,#1a0a00,#3d1a00,#1a0a00);border-radius:14px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(201,168,76,.15)"></div>
-    <div style="position:absolute;bottom:-20px;left:-20px;width:80px;height:80px;border-radius:50%;background:rgba(201,168,76,.1)"></div>
-    <div style="display:flex;align-items:center;gap:14px;position:relative">
-      <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#c9a84c,#f5d78e);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 12px rgba(201,168,76,.4)">⭐</div>
+  <!-- HEADER -->
+  <div style="background:linear-gradient(135deg,#1a0a00,#3d1a00,#1a0a00);border-radius:var(--r16,16px);padding:22px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 10px 28px rgba(201,168,76,.18)">
+    <div style="position:absolute;top:-30px;right:-30px;width:140px;height:140px;border-radius:50%;background:rgba(201,168,76,.15)"></div>
+    <div style="position:absolute;bottom:-30px;left:-20px;width:90px;height:90px;border-radius:50%;background:rgba(201,168,76,.1)"></div>
+    <div style="display:flex;align-items:flex-start;gap:14px;position:relative">
+      <div style="width:58px;height:58px;border-radius:16px;background:linear-gradient(135deg,#c9a84c,#f5d78e);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 14px rgba(201,168,76,.4)">⭐</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:9px;color:#f5d78e;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px">Saundarya Exclusive Member</div>
-        <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:2px">${client.name}</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <span style="color:#f5d78e;font-size:11px;font-weight:600">${mem?.membership_id||'—'}</span>
-          <span style="color:rgba(255,255,255,.5);font-size:10px">📞 ${client.phone||'—'}</span>
-          ${mem?.expiry_date?`<span style="background:rgba(201,168,76,.2);color:#f5d78e;font-size:9px;padding:2px 8px;border-radius:10px;border:1px solid rgba(201,168,76,.4)">Valid till ${mem.expiry_date}</span>`:''}
+        <div style="font-size:9px;color:#f5d78e;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px">Saundarya Exclusive Member</div>
+        <div style="font-size:21px;font-weight:700;color:#fff;margin-bottom:6px;line-height:1.2">${client.name}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="background:rgba(255,255,255,.1);color:#f5d78e;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px">${mem?.membership_id||'—'}</span>
+          <span style="color:rgba(255,255,255,.55);font-size:10px"><i class="fas fa-phone" style="margin-right:4px"></i>${client.phone||'—'}</span>
         </div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:36px;font-weight:800;color:#f5d78e;line-height:1" id="pts-big-${clientId}">${mem?.beauty_points||0}</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em">points</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:2px" id="pts-breakdown-${clientId}">available</div>
+        <div style="font-size:38px;font-weight:800;color:#f5d78e;line-height:1" id="pts-big-${clientId}">${mem?.beauty_points||0}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-top:2px">points available</div>
+        <div id="pts-breakdown-${clientId}"></div>
       </div>
+    </div>
+
+    <!-- Validity -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;position:relative">
+      <span style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);font-size:9px;padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,.1)"><i class="fas fa-calendar-check" style="margin-right:5px;color:#f5d78e"></i>Joined ${String(mem?.start_date||'—').substring(0,10)}</span>
+      <span style="background:rgba(201,168,76,.18);color:#f5d78e;font-size:9px;padding:4px 10px;border-radius:20px;border:1px solid rgba(201,168,76,.4)"><i class="fas fa-hourglass-half" style="margin-right:5px"></i>Valid till ${String(mem?.expiry_date||'—').substring(0,10)}</span>
     </div>
 
     <!-- Stats row -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px;position:relative">
-      <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;text-align:center">
-        <div style="font-size:15px;font-weight:700;color:#fff">${histRows.length}</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:1px">Visits</div>
+      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:16px;font-weight:700;color:#fff">${histRows.length}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:2px">Visits</div>
       </div>
-      <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;text-align:center">
+      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px;text-align:center">
         <div style="font-size:15px;font-weight:700;color:#f5d78e">${fmt(client.total_spent||0)}</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:1px">Total Spent</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:2px">Total Spent</div>
       </div>
-      <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;text-align:center">
-        <div style="font-size:15px;font-weight:700;color:#fff">${mem?.status||'—'}</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:1px">Status</div>
+      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px;text-align:center">
+        <div style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:${mem?.status==='Active'?'#6ee7b7':'#fca5a5'}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>${mem?.status||'—'}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:2px">Status</div>
       </div>
     </div>
   </div>
 
-  <!-- ACTION BUTTONS -->
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    <button onclick="closeInvModal();editClient(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-edit" style="color:var(--teal)"></i> Edit</button>
-    <button onclick="renewMembership(${clientId})" style="flex:1;min-width:100px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:5px"><i class="fas fa-sync" style="color:var(--sky)"></i> Renew</button>
-    ${client.phone?`<a href="tel:${client.phone}" style="flex:1;min-width:100px;background:#25D366;border:none;border-radius:8px;padding:8px;cursor:pointer;font-size:11px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;text-decoration:none"><i class="fab fa-whatsapp"></i> Call</a>`:''}
-    <button onclick="deleteClient(${clientId},'${client.name.replace(/'/g,'')}')" style="background:#fff;border:1px solid var(--rose);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:11px;color:var(--rose);display:flex;align-items:center;gap:5px"><i class="fas fa-trash"></i></button>
+  <!-- ACTIONS -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+    <button class="smp-btn" onclick="closeInvModal();editClient(${clientId})"><i class="fas fa-edit" style="color:var(--teal)"></i> Edit</button>
+    <button class="smp-btn" style="border-color:var(--rose);color:var(--rose)" onclick="deleteClient(${clientId},'${client.name.replace(/'/g,'')}')"><i class="fas fa-trash"></i> Delete</button>
+    ${client.phone?`<a class="smp-btn" href="tel:${client.phone}" style="background:#25D366;border-color:#25D366;color:#fff"><i class="fab fa-whatsapp"></i> Call</a>`:'<span></span>'}
+    <button class="smp-btn" style="background:var(--gold);border-color:var(--gold);color:#fff" onclick="renewMembership(${clientId})"><i class="fas fa-sync"></i> Renew</button>
   </div>
 
-  <!-- CLIENT INFO -->
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-    <div style="font-size:9px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">👤 Member Details</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
-      ${client.gender?`<div><span style="color:var(--ink3)">Gender:</span> <b>${client.gender}</b></div>`:''}
-      ${client.birthday?`<div><span style="color:var(--ink3)">Birthday:</span> <b>${String(client.birthday).substring(0,10)}</b></div>`:''}
-      ${client.anniversary?`<div><span style="color:var(--ink3)">Anniversary:</span> <b>${String(client.anniversary).substring(0,10)}</b></div>`:''}
-      ${client.preferred_staff?`<div><span style="color:var(--ink3)">Preferred:</span> <b>${client.preferred_staff}</b></div>`:''}
-      ${client.address?`<div style="grid-column:1/-1"><span style="color:var(--ink3)">Address:</span> <b>${client.address}</b></div>`:''}
-      ${client.preferences?`<div style="grid-column:1/-1"><span style="color:var(--ink3)">Notes:</span> <b>${client.preferences}</b></div>`:''}
-    </div>
+  <!-- MEMBER DETAILS -->
+  <div class="smp-card">
+    <div class="smp-eyebrow"><span class="smp-ic" style="background:var(--sky-l);color:var(--sky)"><i class="fas fa-id-card"></i></span>Member Details</div>
+    ${client.anniversary?`<div class="smp-info"><span class="smp-ic"><i class="fas fa-heart"></i></span><div><div class="smp-k">Anniversary</div><div class="smp-v">${String(client.anniversary).substring(0,10)}</div></div></div>`:''}
+    ${client.birthday?`<div class="smp-info"><span class="smp-ic"><i class="fas fa-birthday-cake"></i></span><div><div class="smp-k">Birthday</div><div class="smp-v">${String(client.birthday).substring(0,10)}</div></div></div>`:''}
+    ${client.gender?`<div class="smp-info"><span class="smp-ic"><i class="fas fa-venus-mars"></i></span><div><div class="smp-k">Gender</div><div class="smp-v">${client.gender}</div></div></div>`:''}
+    ${client.preferred_staff?`<div class="smp-info"><span class="smp-ic"><i class="fas fa-user-friends"></i></span><div><div class="smp-k">Preferred Staff</div><div class="smp-v">${client.preferred_staff}</div></div></div>`:''}
+    ${client.address?`<div class="smp-info"><span class="smp-ic"><i class="fas fa-map-marker-alt"></i></span><div><div class="smp-k">Address</div><div class="smp-v">${client.address}</div></div></div>`:''}
+    ${client.preferences?`<div class="smp-info"><span class="smp-ic"><i class="fas fa-sticky-note"></i></span><div><div class="smp-k">Notes</div><div class="smp-v">${client.preferences}</div></div></div>`:''}
   </div>
 
-  <!-- QUICK REDEEM (prominent) -->
-  <div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:2px solid var(--gold);border-radius:10px;padding:12px;margin-bottom:12px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:16px">⭐</span>
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em">Beauty Points — Redeem</div>
-        <div style="font-size:10px;color:var(--ink3)">₹100 spent = 1 point · 20 joining gift</div>
-      </div>
-    </div>
+  <!-- QUICK REDEEM (prominent, functionality unchanged) -->
+  <div class="smp-card" style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:2px solid var(--gold)">
+    <div class="smp-eyebrow" style="color:var(--amber);margin-bottom:2px"><span class="smp-ic" style="background:var(--gold-l);color:var(--amber)">⭐</span>Beauty Points — Redeem</div>
+    <div style="font-size:10px;color:var(--ink3);margin:0 0 10px 33px">₹100 spent = 1 point · 20 joining gift</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <span style="font-size:20px;font-weight:800;color:var(--rose)">−</span>
-      <input type="number" id="pts-redeem-amt" placeholder="Points" min="1" style="width:80px;border:2px solid var(--rose);border-radius:6px;padding:5px 8px;font-size:13px;font-weight:700;text-align:center">
-      <input type="text" id="pts-redeem-note" placeholder="What for? (e.g. haircut discount)" style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
-      <button onclick="redeemPoints(${clientId})" style="background:var(--rose);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700">Redeem</button>
+      <input type="number" id="pts-redeem-amt" placeholder="Points" min="1" style="width:80px;border:2px solid var(--rose);border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;text-align:center">
+      <input type="text" id="pts-redeem-note" placeholder="What for? (e.g. haircut discount)" style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:11px">
+      <button class="smp-btn" style="background:var(--rose);border-color:var(--rose);color:#fff;padding:8px 16px;flex:none" onclick="redeemPoints(${clientId})">Redeem</button>
     </div>
     ${_role==='admin'?`
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(201,168,76,.3);display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <select id="pts-action" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(201,168,76,.3);display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select id="pts-action" style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:11px">
         <option value="add">+ Add Points</option>
         <option value="set">= Set Balance</option>
       </select>
-      <input type="number" id="pts-amount" placeholder="Points" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
-      <input type="text" id="pts-notes" placeholder="Reason" style="flex:1;min-width:80px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
-      <button onclick="savePoints(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600">Save</button>
+      <input type="number" id="pts-amount" placeholder="Points" style="width:70px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:11px">
+      <input type="text" id="pts-notes" placeholder="Reason" style="flex:1;min-width:80px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:11px">
+      <button class="smp-btn" style="background:var(--gold);border-color:var(--gold);color:#fff;padding:6px 14px;flex:none" onclick="savePoints(${clientId})">Save</button>
     </div>`:''}
   </div>
 
-  <!-- NFC CARD -->
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-    <div style="font-size:9px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💳 Membership Card</div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div id="nfc-status-${clientId}" style="flex:1;font-size:11px;color:var(--ink3)">Loading...</div>
+  <!-- MEMBERSHIP CARD (functionality unchanged) -->
+  <div class="smp-card">
+    <div class="smp-eyebrow"><span class="smp-ic" style="background:var(--teal-l);color:var(--teal)"><i class="fas fa-credit-card"></i></span>Membership Card</div>
+    <div style="background:linear-gradient(135deg,#1a0a00,#3d1a00);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div id="nfc-status-${clientId}" style="flex:1;font-size:11px;color:rgba(255,255,255,.75)">Loading...</div>
       <div id="nfc-actions-${clientId}" style="display:flex;gap:6px">
-        <button onclick="showNfcRegister(${clientId})" style="background:var(--sky);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600"><i class="fas fa-credit-card"></i> Register Card</button>
+        <button class="smp-btn" style="background:var(--sky);border-color:var(--sky);color:#fff" onclick="showNfcRegister(${clientId})"><i class="fas fa-credit-card"></i> Register Card</button>
       </div>
     </div>
-    <div id="nfc-register-wrap-${clientId}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    <div id="nfc-register-wrap-${clientId}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="nfc-uid-input-${clientId}" placeholder="Enter Card UID" style="flex:1;min-width:160px;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px">
-        <button onclick="saveNfcCard(${clientId})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600">Link Card</button>
-        <button onclick="v('nfc-register-wrap-${clientId}').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:10px;color:var(--ink3)">Cancel</button>
+        <input type="text" id="nfc-uid-input-${clientId}" placeholder="Enter Card UID" style="flex:1;min-width:160px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px">
+        <button class="smp-btn" style="background:var(--emerald);border-color:var(--emerald);color:#fff;flex:none" onclick="saveNfcCard(${clientId})">Link Card</button>
+        <button class="smp-btn" style="flex:none" onclick="v('nfc-register-wrap-${clientId}').style.display='none'">Cancel</button>
       </div>
     </div>
   </div>
 
-  <!-- POINTS HISTORY -->
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-    <div style="font-size:9px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">📋 Points History</div>
-    <div id="pts-history-${clientId}" style="max-height:160px;overflow-y:auto">
-      <div style="text-align:center;padding:12px;color:var(--ink4);font-size:11px"><i class="fas fa-spinner fa-spin"></i></div>
+  <!-- POINTS HISTORY (rows rendered by loadPtsHistory, unchanged) -->
+  <div class="smp-card">
+    <div class="smp-eyebrow"><span class="smp-ic" style="background:var(--gold-l);color:var(--amber)"><i class="fas fa-receipt"></i></span>Points History</div>
+    <div id="pts-history-${clientId}" style="max-height:200px;overflow-y:auto">
+      <div style="text-align:center;padding:14px;color:var(--ink4);font-size:11px"><i class="fas fa-spinner fa-spin"></i></div>
     </div>
   </div>
 
   <!-- SERVICE HISTORY -->
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px">
-    <div style="font-size:9px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px"><i class="fas fa-history" style="color:var(--sky)"></i> Service History (${histRows.length})</div>
+  <div class="smp-card" style="padding:16px 0 0 0">
+    <div class="smp-eyebrow" style="padding:0 16px"><span class="smp-ic" style="background:var(--sky-l);color:var(--sky)"><i class="fas fa-history"></i></span>Service History (${histRows.length})</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="border-bottom:2px solid var(--border)">
-        <th style="padding:6px 8px;text-align:left;color:var(--ink3);font-weight:600">Date</th>
-        <th style="padding:6px 8px;text-align:left;color:var(--ink3);font-weight:600">Services</th>
-        <th style="padding:6px 8px;text-align:right;color:var(--ink3);font-weight:600">Bill</th>
-        <th style="padding:6px 8px;text-align:right;color:var(--ink3);font-weight:600">Pts</th>
+      <thead><tr style="background:var(--bg)">
+        <th style="padding:8px 16px;text-align:left;color:var(--ink3);font-weight:600">Date</th>
+        <th style="padding:8px 8px;text-align:left;color:var(--ink3);font-weight:600">Services</th>
+        <th style="padding:8px 8px;text-align:right;color:var(--ink3);font-weight:600">Bill</th>
+        <th style="padding:8px 16px;text-align:right;color:var(--ink3);font-weight:600">Pts</th>
       </tr></thead>
       <tbody>
       ${histRowsHtml}${noHistHtml}
       </tbody>
-      ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:6px 8px;font-weight:700;font-size:11px">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--gold)">'+histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0)+' ⭐</td></tr></tfoot>'):''}
+      ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:8px 16px;font-weight:700;font-size:11px">Total</td><td style="padding:8px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--gold)">'+histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0)+' ⭐</td></tr></tfoot>'):''}
     </table>
     </div>
   </div>
@@ -6177,11 +6187,8 @@ async function loadPtsHistory(clientId){
   // Update breakdown
   const bd=v(`pts-breakdown-${clientId}`);
   if(bd)bd.innerHTML=`
-    <div style="font-size:11px;color:var(--ink2);line-height:1.8">
-      <div>✅ Total earned: <b style="color:var(--emerald)">+${totalAdded} pts</b></div>
-      <div>💸 Total redeemed: <b style="color:var(--rose)">−${totalRedeemed} pts</b></div>
-      <div style="border-top:1px solid rgba(0,0,0,.1);margin-top:3px;padding-top:3px;font-weight:700;color:var(--gold)">Balance: ${currentBalance} pts</div>
-      <div style="font-size:10px;color:var(--amber)">₹100 = 1 point per service</div>
+    <div style="font-size:9px;color:rgba(255,255,255,.55);line-height:1.6">
+      <div>+${totalAdded} earned · −${totalRedeemed} used</div>
     </div>`;
 
   // Render history rows
