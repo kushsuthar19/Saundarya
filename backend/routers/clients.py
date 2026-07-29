@@ -517,18 +517,11 @@ async def create_membership(
         except Exception:
             pass
 
-    # Starting points = 20 gift + past service points. Computed server-side
-    # from this client's own service history (client_id, not phone) so it
-    # doesn't depend on the frontend calculating/sending the right number.
-    await cursor.execute(
-        """SELECT NVL(SUM(FLOOR(net_total/100)),0) FROM daily_entries
-           WHERE client_id=:1 AND entry_date < TO_DATE(:2,'YYYY-MM-DD')
-             AND NVL(visit_type,'x')!='Membership'""",
-        [client_id, start.strftime('%Y-%m-%d')]
-    )
-    pp_row = await cursor.fetchone()
-    past_pts = int(pp_row[0] or 0) if pp_row else 0
-    starting_pts = 20 + past_pts
+    # Starting points = 20 joining gift only. Points only accrue from
+    # visits AFTER the join date (handled automatically in entries.py
+    # whenever a new daily entry is created for an Active member).
+    past_pts = 0
+    starting_pts = 20
 
     # Membership IDs can collide if a prior row was deleted; retry a couple
     # times on a unique-constraint violation instead of surfacing a raw 500.
@@ -541,11 +534,11 @@ async def create_membership(
                 """INSERT INTO memberships
                        (client_id, membership_id, status, fee_paid, start_date, expiry_date,
                         beauty_points, lifetime_points, notes)
-                   VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:6,:7)
-                   RETURNING id INTO :8""",
+                   VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8)
+                   RETURNING id INTO :9""",
                 [client_id, mem_id, data.get('fee_paid', 1000),
                  start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
-                 starting_pts,
+                 starting_pts, starting_pts,
                  data.get('notes', ''),
                  cursor.var(oracledb.NUMBER)]
             )
@@ -578,8 +571,8 @@ async def create_membership(
         )
     # Sync DB with correct starting balance
     await cursor.execute(
-        "UPDATE memberships SET beauty_points=:1, lifetime_points=:1 WHERE id=:2",
-        [starting_pts, new_mem_db_id]
+        "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+        [starting_pts, starting_pts, new_mem_db_id]
     )
     await db.commit()
     await cursor.execute(
