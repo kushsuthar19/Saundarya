@@ -4401,7 +4401,7 @@ async function loadStaffDetail(staffId){
     <div style="background:#f0fff8;border:1px solid #b2dfdb;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Base Salary</div>
       <div style="font-size:14px;font-weight:700;color:var(--emerald)">${fmt(sum.base_earned)}</div>
-      <div style="font-size:10px;color:var(--ink3)">${sum.effective_days} days × ${fmt(sum.per_day_salary)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${sum.chargeable_absent_days>0?`${sum.chargeable_absent_days} day${sum.chargeable_absent_days>1?'s':''} beyond ${sum.free_holidays} free (−${fmt(sum.absence_deduction)})`:`All absences within ${sum.free_holidays} free holidays`}</div>
     </div>
     <div style="background:#f0f8ff;border:1px solid #bbdefb;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Commission</div>
@@ -4595,14 +4595,19 @@ async function renderSalary(){
   const [yr,mo]=month.split('-').map(Number);
   const daysInMonth=new Date(yr,mo,0).getDate();
   tb.innerHTML=rows.map(s=>{
-    const perDay=daysInMonth>0?(s.base_salary||0)/daysInMonth:0;
+    const baseSalary=s.base_salary||0;
+    const perDay=daysInMonth>0?baseSalary/daysInMonth:0;
     // Half day deduction
     const halfDayCount=s.half_day_count||0;
     const dp=s.monthly_days_present||s.days_present||0;
     const effectiveDays = dp >= halfDayCount
       ? dp - (halfDayCount * 0.5)
       : dp + (halfDayCount * 0.5);
-    const baseEarned=Math.round(perDay*Math.max(0,effectiveDays));
+    // First 2 fully-absent days/month are free (paid holiday); beyond that,
+    // deduct per-day. Half-days still deduct half a day's pay separately.
+    const fullAbsentDays=Math.max(0,daysInMonth-dp);
+    const chargeableAbsentDays=Math.max(0,fullAbsentDays-2);
+    const baseEarned=Math.round(baseSalary-(halfDayCount*perDay*0.5)-(chargeableAbsentDays*perDay));
     // Morning duty: ₹150 per morning duty day
     const morningDutyPay=(s.morning_duty_count||0)*150;
     // Commission based on MONTHLY revenue (not all-time)
@@ -4634,6 +4639,7 @@ async function renderSalary(){
       <td>
         ${fmt(baseEarned)}
         ${halfDayCount>0?`<br><small style="color:var(--ink3)">−${fmt(Math.round(perDay*halfDayCount*0.5))} half day</small>`:''}
+        ${chargeableAbsentDays>0?`<br><small style="color:var(--rose)">−${fmt(Math.round(perDay*chargeableAbsentDays))} (${chargeableAbsentDays} day${chargeableAbsentDays>1?'s':''} beyond 2 free)</small>`:''}
       </td>
       <td>${s.total_services||0}<br><small style="color:var(--ink3)">${fmt(workDone)}</small></td>
       <td>
@@ -5423,11 +5429,16 @@ async function renderStaffPerfReport(){
   if(!rows.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--ink4);padding:16px">No staff data</td></tr>';return;}
   tb.innerHTML=rows.map(s=>{
     const daysInMo=s.days_in_month||30;
-    const perDay=(s.base_salary||0)/daysInMo;
+    const baseSalary=s.base_salary||0;
+    const perDay=baseSalary/daysInMo;
     const dp=s.present_days||0;
     const halfDays=s.half_day_count||0;
     const effDays=dp>=halfDays?dp-(halfDays*0.5):dp+(halfDays*0.5);
-    const baseEarned=Math.round(perDay*Math.max(0,effDays));
+    // First 2 fully-absent days/month are free (paid holiday); beyond that,
+    // deduct per-day. Half-days still deduct half a day's pay separately.
+    const fullAbsentDays=Math.max(0,daysInMo-dp);
+    const chargeableAbsentDays=Math.max(0,fullAbsentDays-2);
+    const baseEarned=Math.round(baseSalary-(halfDays*perDay*0.5)-(chargeableAbsentDays*perDay));
     const morningPay=(s.morning_duty_count||0)*150;
     const monthRev=s.monthly_revenue||0;
     const commPct=monthRev>=100000?0.03:0.02;

@@ -345,13 +345,22 @@ async def staff_month_detail(
         })
 
     # Salary calculation — SAME formula as frontend
+    # Policy: the first 2 fully-absent days each month are paid holidays
+    # (no deduction). Each additional fully-absent day beyond that is
+    # deducted at the per-day rate. Half-days still deduct half a day's
+    # pay as before — this is separate from the holiday allowance.
+    FREE_HOLIDAYS_PER_MONTH = 2
     per_day = (staff_info['base_salary'] or 0) / days_in_month if days_in_month else 0
     dp = present_count
     if dp >= half_day_count:
         effective_days = dp - (half_day_count * 0.5)
     else:
         effective_days = dp + (half_day_count * 0.5)
-    base_earned = round(per_day * max(0, effective_days))
+    full_absent_days = max(0, days_in_month - dp)
+    chargeable_absent_days = max(0, full_absent_days - FREE_HOLIDAYS_PER_MONTH)
+    half_day_deduction = half_day_count * per_day * 0.5
+    absence_deduction = chargeable_absent_days * per_day
+    base_earned = round((staff_info['base_salary'] or 0) - half_day_deduction - absence_deduction)
     morning_pay = morning_duty_count * 150
     comm_pct = 0.03 if monthly_revenue >= 100000 else 0.02
     commission = round(monthly_revenue * comm_pct)
@@ -368,6 +377,10 @@ async def staff_month_detail(
             "morning_duty_count": morning_duty_count,
             "effective_days": effective_days,
             "per_day_salary": round(per_day),
+            "full_absent_days": full_absent_days,
+            "free_holidays": FREE_HOLIDAYS_PER_MONTH,
+            "chargeable_absent_days": chargeable_absent_days,
+            "absence_deduction": round(absence_deduction),
             "base_earned": base_earned,
             "monthly_revenue": monthly_revenue,
             "commission_pct": comm_pct,
