@@ -3662,7 +3662,6 @@ async function saveBridal(type){
   } else { // sider
     name=v('sd-n').value.trim();if(!name){toast('Enter name','var(--rose)');return;}
     phone=v('sd-ph')?.value||null;wdate=v('sd-dt')?.value||null;
-    advPayMethod=v('sd-pay-method')?.value||'Cash';
     // Calculate total from sider table - reads the package select value
     let sdTot=0;
     v('sd-body')?.querySelectorAll('tr').forEach(r=>{
@@ -3714,7 +3713,7 @@ async function saveBridal(type){
     advPayMethod=v('gr-pay-method')?.value||'Cash';
   } else {
     bookingDate=v('sd-bkd')?.value||td();
-    if(!advPayMethod)advPayMethod=v('sd-pay-method')?.value||'Cash';
+    advPayMethod=v('sd-pay-method')?.value||'Cash';
   }
   const payload={
     booking_type:type==='bride'?'Bride':type==='groom'?'Groom':'Sider',
