@@ -8,6 +8,7 @@ PDF invoice generation — fixed all issues:
 6. Booked functions highlighted in table
 """
 import io
+import os
 from datetime import date, datetime
 from typing import List, Dict, Any
 
@@ -16,10 +17,14 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle,
-    Paragraph, Spacer, PageBreak
+    Paragraph, Spacer, PageBreak, Image
 )
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+
+LOGO_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(__file__), "..", "..", "frontend", "logo.jpg"
+))
 
 DARK_GREEN  = colors.HexColor("#1A4A3A")
 GOLD        = colors.HexColor("#9A7B2C")
@@ -44,12 +49,18 @@ def SB(name, **kw):
 
 
 def _header(booking_type=""):
-    logo = [
-        Paragraph("<b>Saundarya</b>",
-                  S("ln", fontName="Helvetica-Bold", fontSize=26, textColor=GOLD)),
-        Paragraph("Beauty Care",
-                  S("ls", fontSize=9, textColor=TEXT_GRAY, leading=13)),
-    ]
+    if os.path.exists(LOGO_PATH):
+        logo_img = Image(LOGO_PATH, width=26*mm, height=25*mm)
+        logo_img.hAlign = "LEFT"
+        logo = [logo_img]
+    else:
+        # Fallback if the logo file is missing — keep invoices working
+        logo = [
+            Paragraph("<b>Saundarya</b>",
+                      S("ln", fontName="Helvetica-Bold", fontSize=26, textColor=GOLD)),
+            Paragraph("Beauty Care",
+                      S("ls", fontSize=9, textColor=TEXT_GRAY, leading=13)),
+        ]
     # Booking type shown in phone box on right
     phone = [
         Paragraph("96621 35422",
