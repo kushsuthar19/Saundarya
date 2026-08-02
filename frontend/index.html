@@ -5186,18 +5186,47 @@ async function renderPendingDues(){
 }
 
 async function recordPayment(bookingId,clientName,balanceDue){
-  const amtStr=prompt('Record payment for '+clientName+'\nBalance due: '+fmt(balanceDue)+'\n\nEnter amount received (₹):');
-  if(!amtStr)return;
-  const amt=parseFloat(amtStr);
-  if(isNaN(amt)||amt<=0){toast('Invalid amount','var(--rose)');return;}
+  const modal=v('inv-modal');if(!modal)return;
+  const safeName=String(clientName||'').replace(/'/g,'');
+  modal.innerHTML=`
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 24px;width:380px;max-width:94vw;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;color:var(--ink)"><i class="fas fa-rupee-sign" style="color:var(--emerald)"></i> Record Payment</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:14px">${safeName} · Balance due: <b style="color:var(--rose)">${fmt(balanceDue)}</b></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Amount Received (₹)</label>
+        <input id="pay-amt" type="number" value="${balanceDue}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;font-weight:600;background:var(--surface);margin-top:4px"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Payment Date</label>
+        <input id="pay-date" type="date" value="${td()}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);margin-top:4px"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Payment Method</label>
+        <select id="pay-method" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);margin-top:4px">
+          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Card">Card</option>
+        </select></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="submitBridalPayment(${bookingId},'${safeName}',${balanceDue})" style="background:var(--emerald);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-check"></i> Save Payment</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
+}
+
+async function submitBridalPayment(bookingId,clientName,balanceDue){
+  const amt=parseFloat(v('pay-amt')?.value||0);
+  const payDate=v('pay-date')?.value||td();
+  const payMethod=v('pay-method')?.value||'Cash';
+  if(isNaN(amt)||amt<=0){toast('Enter a valid amount','var(--rose)');return;}
   if(amt>balanceDue){if(!confirm('Amount exceeds balance. Continue?'))return;}
-  const r=await apiCall('PATCH','/bridal/'+bookingId+'/payment?amount='+amt);
+  const r=await apiCall('PATCH',`/bridal/${bookingId}/payment?amount=${amt}&pay_method=${encodeURIComponent(payMethod)}&entry_date=${encodeURIComponent(payDate)}`);
   if(!r)return;
+  closeInvModal();
   toast('<i class="fas fa-check-circle"></i> ₹'+Math.round(amt).toLocaleString('en-IN')+' recorded for '+clientName+'. Balance: '+fmt(r.new_balance_due),'var(--emerald)');
   if(r.new_balance_due===0){
     toast('<i class="fas fa-star" style="color:var(--gold)"></i> '+clientName+' — FULLY PAID! Booking Completed.','var(--gold)');
   }
   renderPendingDues();updateRevKpis();updateDash();
+  if(typeof renderBridalList==='function')renderBridalList();
+  if(typeof loadAllNotifications==='function')loadAllNotifications();
 }
 async function renderRevCalendar(){
   const monthVal=v('rv-cal-month')?.value;
@@ -5486,7 +5515,8 @@ async function loadBridalNotifications(){
             booking_type:b.booking_type||'Bridal',
             pkg:b.package_name||b.booking_type||'—',
             fn_name:fn.function_name||fn.name||'Function',
-            fn_date:fd, isToday:fd===todayStr, id:b.id
+            fn_date:fd, isToday:fd===todayStr, id:b.id,
+            job_no:b.job_no||'', balance_due:b.balance_due||0
           });
         }
       });
@@ -5499,7 +5529,8 @@ async function loadBridalNotifications(){
           booking_type:b.booking_type||'Bridal',
           pkg:b.package_name||b.booking_type||'—',
           fn_name:'Wedding Day 💍',
-          fn_date:wd, isToday:wd===todayStr, id:b.id
+          fn_date:wd, isToday:wd===todayStr, id:b.id,
+          job_no:b.job_no||'', balance_due:b.balance_due||0
         });
       }
     }catch(e){}
@@ -5523,10 +5554,16 @@ async function loadBridalNotifications(){
           <div class="notif-text" style="font-weight:700;font-size:12px">${u.name}</div>
           <div style="font-size:11px;color:var(--ink2);margin-top:2px">${u.fn_name} — ${u.booking_type} · ${u.pkg}</div>
           <div style="font-size:10px;color:var(--ink3);margin-top:1px">📞 ${u.phone} · 📅 ${u.fn_date}</div>
-          <div style="color:${color};font-weight:700;font-size:11px;margin-top:2px">${when}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+            <span style="color:${color};font-weight:700;font-size:11px">${when}</span>
+            ${u.balance_due>0?`<span style="background:var(--rose-l);color:var(--rose);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px">Due ${fmt(u.balance_due)}</span>`:`<span style="background:var(--emerald-l);color:var(--emerald);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px">✔ Paid</span>`}
+          </div>
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
-            <button onclick="go(null,'bridal');setTimeout(()=>renderBridalList('','',${u.id}),300)" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
+            <button onclick="v('notif-panel').classList.remove('show');showBridalDetail(${u.id})" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
+            ${u.balance_due>0?`<button onclick="v('notif-panel').classList.remove('show');recordPayment(${u.id},'${String(u.name).replace(/'/g,'')}',${u.balance_due})" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">💰 Pay</button>`:''}
+            <button onclick="v('notif-panel').classList.remove('show');go(null,'bridal');setTimeout(()=>editBridal(${u.id}),300)" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">✏️ Edit</button>
+            <button onclick="v('notif-panel').classList.remove('show');deleteBridal(${u.id},'${String(u.job_no).replace(/'/g,'')}').then(()=>loadAllNotifications())" style="background:var(--surface);color:var(--rose);border:1px solid var(--rose);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">🗑️ Delete</button>
           </div>
         </div>
       </div>`);

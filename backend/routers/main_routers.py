@@ -858,22 +858,29 @@ async def delete_bridal(
 async def record_advance_payment(
     booking_id: int,
     amount: float,
+    pay_method: str = "Cash",
+    entry_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
-    """Record an advance/due payment. Reduces balance_due, increases advance_paid."""
+    """Record an advance/due payment. Reduces balance_due, increases advance_paid,
+    and mirrors it into daily_entries so it's counted in revenue reports
+    (Today's Revenue, payment split, etc.) the same way the initial advance is."""
     if amount <= 0:
         raise HTTPException(400, "Amount must be positive")
     cursor = db.cursor()
     # Get current booking
     await cursor.execute(
-        "SELECT advance_paid, balance_due, pkg_amount, transport, discount FROM bridal_bookings WHERE id=:1",
+        """SELECT advance_paid, balance_due, pkg_amount, transport, discount,
+                  client_name, phone, booking_type
+           FROM bridal_bookings WHERE id=:1""",
         [booking_id]
     )
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(404, "Booking not found")
-    advance_paid, balance_due, pkg_amount, transport, discount = row
+    (advance_paid, balance_due, pkg_amount, transport, discount,
+     client_name, phone, booking_type) = row
     new_advance = float(advance_paid or 0) + amount
     new_balance = max(0, float(balance_due or 0) - amount)
     # If fully paid, mark completed
@@ -885,6 +892,42 @@ async def record_advance_payment(
         [new_advance, new_balance, new_status, booking_id]
     )
     await db.commit()
+
+    # Mirror into daily_entries so this due payment shows up in daily/monthly
+    # revenue reports, not just on the bridal booking itself.
+    try:
+        edate = entry_date or date.today().strftime('%Y-%m-%d')
+        cl_id = None
+        if phone:
+            await cursor.execute("SELECT id FROM clients WHERE phone=:1", [phone])
+            cl_row = await cursor.fetchone()
+            if cl_row:
+                cl_id = cl_row[0]
+        if not cl_id:
+            await cursor.execute(
+                """INSERT INTO clients (name,phone,source,client_type,visit_count,total_spent)
+                   VALUES (:1,:2,'Bridal','New',0,0) RETURNING id INTO :3""",
+                [client_name, phone, cursor.var(oracledb.NUMBER)]
+            )
+            cl_id = int(cursor.bindvars[-1].getvalue()[0])
+        await cursor.execute("SELECT seq_inv.NEXTVAL FROM DUAL")
+        seq_row = await cursor.fetchone()
+        inv_no = f"BR-DUE-{seq_row[0]}"
+        await cursor.execute(
+            """INSERT INTO daily_entries
+               (inv_no,client_id,client_name,phone,entry_date,visit_type,
+                services,gross_total,discount,net_total,pay_method,remarks,created_by)
+               VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),'Bridal Due Payment',
+                       :6,:7,0,:8,:9,:10,:11)""",
+            [inv_no, cl_id, f"{client_name} (Bridal Due - {booking_type or 'Bride'})", phone, edate,
+             f"Due payment for booking #{booking_id}", amount, amount, pay_method,
+             f"Bridal due payment for booking #{booking_id}",
+             int(current_user["id"])]
+        )
+        await db.commit()
+    except Exception:
+        pass  # Don't fail the payment record if the daily-entry mirror fails
+
     return {
         "booking_id": booking_id,
         "amount_paid": amount,
