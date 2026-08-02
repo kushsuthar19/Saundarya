@@ -606,6 +606,19 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
     fn_rows = await cursor.fetchall()
     fn_cols = [d[0].lower() for d in cursor.description]
     booking["functions"] = [dict(zip(fn_cols, r)) for r in fn_rows]
+    booking["payments"] = []
+    try:
+        await cursor.execute(
+            """SELECT id, payment_type, amount, pay_method,
+                      TO_CHAR(payment_date,'YYYY-MM-DD') as payment_date, notes
+               FROM bridal_payments WHERE booking_id=:1 ORDER BY payment_date, id""",
+            [booking_id]
+        )
+        pay_rows = await cursor.fetchall()
+        pay_cols = [d[0].lower() for d in cursor.description]
+        booking["payments"] = [dict(zip(pay_cols, r)) for r in pay_rows]
+    except Exception:
+        pass  # bridal_payments table not migrated yet — degrade gracefully
     return booking
 
 
@@ -715,6 +728,19 @@ async def create_bridal(
                  cursor.var(_oracledb.NUMBER)]
             )
             await db.commit()
+
+            # Log this as the booking's "Advance" payment so the invoice can
+            # show exactly when the advance was paid.
+            try:
+                await cursor.execute(
+                    """INSERT INTO bridal_payments
+                           (booking_id, payment_type, amount, pay_method, payment_date, notes, created_by)
+                       VALUES (:1,'Advance',:2,:3,TO_DATE(:4,'YYYY-MM-DD'),'Advance paid at booking',:5)""",
+                    [new_id, adv_amount, pay_m, entry_date_str, int(current_user["id"])]
+                )
+                await db.commit()
+            except Exception:
+                pass  # bridal_payments table not migrated yet — degrade gracefully
         except Exception as _e:
             pass  # Don't fail bridal save if daily entry fails
 
@@ -927,6 +953,23 @@ async def record_advance_payment(
         await db.commit()
     except Exception:
         pass  # Don't fail the payment record if the daily-entry mirror fails
+
+    # Log this payment on the booking's own payment history, so the invoice
+    # can show every payment date (advance + each due payment) separately.
+    try:
+        pay_type = "Final Payment" if new_balance == 0 else "Due Payment"
+        await cursor.execute(
+            """INSERT INTO bridal_payments
+                   (booking_id, payment_type, amount, pay_method, payment_date, notes, created_by)
+               VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7)""",
+            [booking_id, pay_type, amount, pay_method,
+             entry_date or date.today().strftime('%Y-%m-%d'),
+             f"Balance after this payment: {new_balance}",
+             int(current_user["id"])]
+        )
+        await db.commit()
+    except Exception:
+        pass  # bridal_payments table not migrated yet — degrade gracefully
 
     return {
         "booking_id": booking_id,

@@ -362,6 +362,47 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     story.append(fn_tbl)
     story.append(Spacer(1, 5*mm))
 
+    # Payment history — when the advance was paid, and when each due
+    # payment (if any) was paid, so this isn't just a single snapshot.
+    payments = booking.get("payments") or []
+    if payments:
+        PH = SB("ph", fontSize=9, textColor=WHITE, alignment=TA_CENTER)
+        pay_data = [[
+            Paragraph("<b>Date</b>",   PH),
+            Paragraph("<b>Type</b>",   PH),
+            Paragraph("<b>Method</b>", PH),
+            Paragraph("<b>Amount</b>", PH),
+        ]]
+        for p in payments:
+            pd = p.get("payment_date")
+            if isinstance(pd, date):
+                pd_str = pd.strftime("%d/%m/%Y")
+            elif pd:
+                try:    pd_str = datetime.strptime(str(pd)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+                except: pd_str = str(pd)
+            else:
+                pd_str = ""
+            pay_data.append([
+                Paragraph(pd_str, S("pd", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(p.get("payment_type") or "", S("pt", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(p.get("pay_method") or "", S("pm", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(f"Rs.{int(p.get('amount') or 0):,}",
+                          SB("pa", fontSize=9, alignment=TA_CENTER)),
+            ])
+        pay_tbl = Table(pay_data, colWidths=[42*mm, 46*mm, 42*mm, 46*mm])
+        pay_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),(-1,0),  DARK_GREEN),
+            ("TEXTCOLOR",     (0,0),(-1,0),  WHITE),
+            ("GRID",          (0,0),(-1,-1), 0.4, MED_GRAY),
+            ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
+            ("TOPPADDING",    (0,0),(-1,-1), 4),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+        ]))
+        story.append(Paragraph("<b>Payment History</b>", SB("phh", fontSize=10, textColor=DARK_GREEN)))
+        story.append(Spacer(1, 2*mm))
+        story.append(pay_tbl)
+        story.append(Spacer(1, 5*mm))
+
     # Billing
     pkg_amt   = float(booking.get("pkg_amount",  0))
     transport = float(booking.get("transport",   0))

@@ -367,6 +367,15 @@ class BridalFunctionOut(BaseModel):
     artist_name: Optional[str]
 
 
+class BridalPaymentOut(BaseModel):
+    id: int
+    payment_type: str
+    amount: float
+    pay_method: Optional[str]
+    payment_date: Optional[date]
+    notes: Optional[str]
+
+
 class BridalOut(BaseModel):
     id: int
     job_no: str
@@ -385,6 +394,7 @@ class BridalOut(BaseModel):
     status: str
     wa_sent: int
     functions: List[BridalFunctionOut] = []
+    payments: List[BridalPaymentOut] = []
     created_at: Optional[datetime]
 
 

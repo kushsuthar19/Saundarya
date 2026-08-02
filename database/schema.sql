@@ -242,6 +242,20 @@ CREATE INDEX idx_items_entry ON entry_items(entry_id);
     );
     CREATE INDEX idx_br_funcs_booking ON bridal_functions(booking_id);
 
+    CREATE SEQUENCE seq_br_pay START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+    CREATE TABLE bridal_payments (
+        id             NUMBER DEFAULT seq_br_pay.NEXTVAL PRIMARY KEY,
+        booking_id     NUMBER NOT NULL REFERENCES bridal_bookings(id) ON DELETE CASCADE,
+        payment_type   VARCHAR2(30) DEFAULT 'Advance',
+        amount         NUMBER(10,2) DEFAULT 0,
+        pay_method     VARCHAR2(30) DEFAULT 'Cash',
+        payment_date   DATE NOT NULL,
+        notes          VARCHAR2(500),
+        created_by     NUMBER REFERENCES users(id),
+        created_at     TIMESTAMP DEFAULT SYSTIMESTAMP
+    );
+    CREATE INDEX idx_br_pay_booking ON bridal_payments(booking_id);
+
 -- ============================================================
 -- SALARY PAYMENTS
 -- ============================================================
