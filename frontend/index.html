@@ -6067,17 +6067,24 @@ async function _loadMemberProfile(clientId){
     histRows=await apiCall('GET',`/entries?limit=100&phone=${encodeURIComponent(client.phone)}`)||[];
   }
 
-  // Points are only earned on real services, from the join date onward —
-  // the membership enrollment fee itself (visit_type 'Membership') never
-  // earns points, matching the backend's beauty_points_log (available points).
-  const memStart=mem&&mem.start_date?String(mem.start_date).substring(0,10):null;
-  const _ptsFor=e=>{
-    if(e.visit_type==='Membership')return 0;
-    if(memStart&&String(e.entry_date||'').substring(0,10)<memStart)return 0;
-    return Math.floor((e.net_total||0)/100);
-  };
-  const totalPtsEarned=histRows.reduce((s,e)=>s+_ptsFor(e),0);
-  const histRowsHtml=histRows.map(e=>{const pts=_ptsFor(e);const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';const dt=String(e.entry_date||'').substring(0,10);return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3)">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';}).join('');
+  // Pull the real points ledger — this is the SAME source of truth the
+  // "Available Points" number at the top comes from (mem.beauty_points),
+  // so Service History pts are read from it instead of being re-guessed
+  // from net_total. That guarantees the two numbers can never drift apart.
+  let ptsLogs=[];
+  if(mem){
+    ptsLogs=await apiCall('GET',`/clients/${clientId}/membership/points-log`)||[];
+  }
+  const _ptsByInv={};
+  ptsLogs.forEach(l=>{
+    if(l.entry_type==='redeem')return;
+    const m=/Service:\s*(\S+)/.exec(l.notes||'');
+    if(m)_ptsByInv[m[1]]=(_ptsByInv[m[1]]||0)+(l.points||0);
+  });
+  // Total earned (gift + all service points, before any redemptions) —
+  // matches Available Points exactly whenever nothing has been redeemed.
+  const totalPtsEarned=ptsLogs.reduce((s,l)=>l.entry_type!=='redeem'?s+(l.points||0):s,0);
+  const histRowsHtml=histRows.map(e=>{const pts=_ptsByInv[e.inv_no]||0;const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';const dt=String(e.entry_date||'').substring(0,10);return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3)">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';}).join('');
   const noHistHtml=histRows.length?'':'<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--ink4)">No service history</td></tr>';
 
   body.innerHTML=`
