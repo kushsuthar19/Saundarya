@@ -207,8 +207,11 @@ async def create_entry(
         except Exception:
             pass
 
-    # Auto-add beauty points if Exclusive member (₹100 = 1 point)
-    pts_to_add = int(net // 100)
+    # Auto-add beauty points if Exclusive member (₹100 = 1 point).
+    # The membership enrollment fee itself never earns points — only the
+    # 20 joining gift points apply at signup; everything else accrues from
+    # real services booked after the join date.
+    pts_to_add = int(net // 100) if data.visit_type != 'Membership' else 0
     if pts_to_add > 0 and client_id:
         try:
             # Log points earned first — :1=pts, :2=inv_no string, :3=client_id
@@ -381,7 +384,7 @@ async def delete_entry(
     try:
         # Step 1: Read entry details BEFORE deleting
         await cursor.execute(
-            """SELECT client_id, phone, net_total, entry_date
+            """SELECT client_id, phone, net_total, entry_date, visit_type
                FROM daily_entries WHERE id=:1""",
             [entry_id]
         )
@@ -390,6 +393,7 @@ async def delete_entry(
         phone = row[1] if row else None
         net_total = float(row[2] or 0) if row else 0
         entry_date = row[3] if row else None
+        visit_type = row[4] if row else None
 
         # Step 2: Delete entry items and entry
         await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
@@ -437,7 +441,8 @@ async def delete_entry(
                 pass  # Don't fail delete if stats update fails
 
             # Step 4: Reverse beauty points earned from this entry
-            pts_to_remove = int(net_total // 100)
+            # (Membership-fee entries never earned points, so nothing to reverse)
+            pts_to_remove = int(net_total // 100) if visit_type != 'Membership' else 0
             if pts_to_remove > 0:
                 try:
                     # Log the reversal

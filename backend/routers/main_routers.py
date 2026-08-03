@@ -345,10 +345,11 @@ async def staff_month_detail(
         })
 
     # Salary calculation — SAME formula as frontend
-    # Policy: the first 2 fully-absent days each month are paid holidays
-    # (no deduction). Each additional fully-absent day beyond that is
-    # deducted at the per-day rate. Half-days still deduct half a day's
-    # pay as before — this is separate from the holiday allowance.
+    # Policy: the first 2 absent-day-equivalents each month are paid
+    # holidays (no deduction). Two half-days combine into one full
+    # absent-day-equivalent (e.g. half + half = 1 day). Only the
+    # equivalent days beyond the free allowance are deducted, at the
+    # per-day rate.
     FREE_HOLIDAYS_PER_MONTH = 2
     per_day = (staff_info['base_salary'] or 0) / days_in_month if days_in_month else 0
     dp = present_count
@@ -357,10 +358,10 @@ async def staff_month_detail(
     else:
         effective_days = dp + (half_day_count * 0.5)
     full_absent_days = max(0, days_in_month - dp)
-    chargeable_absent_days = max(0, full_absent_days - FREE_HOLIDAYS_PER_MONTH)
-    half_day_deduction = half_day_count * per_day * 0.5
+    absent_equivalent_days = full_absent_days + (half_day_count * 0.5)
+    chargeable_absent_days = max(0, absent_equivalent_days - FREE_HOLIDAYS_PER_MONTH)
     absence_deduction = chargeable_absent_days * per_day
-    base_earned = round((staff_info['base_salary'] or 0) - half_day_deduction - absence_deduction)
+    base_earned = round((staff_info['base_salary'] or 0) - absence_deduction)
     morning_pay = morning_duty_count * 150
     comm_pct = 0.03 if monthly_revenue >= 100000 else 0.02
     commission = round(monthly_revenue * comm_pct)
@@ -378,6 +379,7 @@ async def staff_month_detail(
             "effective_days": effective_days,
             "per_day_salary": round(per_day),
             "full_absent_days": full_absent_days,
+            "absent_equivalent_days": absent_equivalent_days,
             "free_holidays": FREE_HOLIDAYS_PER_MONTH,
             "chargeable_absent_days": chargeable_absent_days,
             "absence_deduction": round(absence_deduction),
@@ -1407,6 +1409,63 @@ async def membership_expiry_alerts(
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
     return [dict(zip(cols, r)) for r in rows]
+
+
+@dash_router.get("/membership-inactivity")
+async def membership_inactivity_alerts(
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """
+    Exclusive members must visit at least once every 2 months (60 days) or
+    their membership is automatically discontinued and they revert to a
+    Regular client. Warns 15 days before that deadline; auto-converts once
+    the deadline has passed (checked whenever this endpoint is called).
+    """
+    cursor = db.cursor()
+
+    # Auto-discontinue memberships whose last visit was 60+ days ago
+    await cursor.execute(
+        """SELECT m.id, c.id, c.name
+           FROM memberships m
+           JOIN clients c ON c.id = m.client_id
+           WHERE m.status = 'Active'
+             AND NVL(c.last_visit, m.start_date) <= SYSDATE - 60"""
+    )
+    to_discontinue = await cursor.fetchall()
+    discontinued = []
+    for mem_id, client_id, name in to_discontinue:
+        await cursor.execute(
+            """UPDATE memberships SET status='Discontinued',
+                   notes = NVL(notes,'') || ' [Auto-discontinued: no visit in 2 months]'
+               WHERE id=:1""",
+            [mem_id]
+        )
+        await cursor.execute(
+            "UPDATE clients SET client_type='Regular' WHERE id=:1",
+            [client_id]
+        )
+        discontinued.append({"client_id": client_id, "name": name})
+    if to_discontinue:
+        await db.commit()
+
+    # Warn about still-Active members approaching the 60-day deadline
+    await cursor.execute(
+        """SELECT c.name, c.phone, m.membership_id, c.id as client_id,
+                  TO_CHAR(NVL(c.last_visit, m.start_date),'YYYY-MM-DD') as last_visit,
+                  TO_CHAR(NVL(c.last_visit, m.start_date) + 60,'YYYY-MM-DD') as visit_deadline,
+                  ROUND(NVL(c.last_visit, m.start_date) + 60 - SYSDATE) as days_left
+           FROM memberships m
+           JOIN clients c ON c.id = m.client_id
+           WHERE m.status = 'Active'
+             AND NVL(c.last_visit, m.start_date) <= SYSDATE - 45
+           ORDER BY days_left ASC"""
+    )
+    rows = await cursor.fetchall()
+    cols = [d[0].lower() for d in cursor.description]
+    warnings = [dict(zip(cols, r)) for r in rows]
+
+    return {"discontinued": discontinued, "warnings": warnings}
 
 
 # ════════════════════════════════════════════════

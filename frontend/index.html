@@ -4603,11 +4603,13 @@ async function renderSalary(){
     const effectiveDays = dp >= halfDayCount
       ? dp - (halfDayCount * 0.5)
       : dp + (halfDayCount * 0.5);
-    // First 2 fully-absent days/month are free (paid holiday); beyond that,
-    // deduct per-day. Half-days still deduct half a day's pay separately.
+    // First 2 absent-day-equivalents/month are free (paid holiday); two
+    // half-days combine into one full-day-equivalent. Only equivalent
+    // days beyond the free allowance are deducted, at the per-day rate.
     const fullAbsentDays=Math.max(0,daysInMonth-dp);
-    const chargeableAbsentDays=Math.max(0,fullAbsentDays-2);
-    const baseEarned=Math.round(baseSalary-(halfDayCount*perDay*0.5)-(chargeableAbsentDays*perDay));
+    const absentEquivDays=fullAbsentDays+(halfDayCount*0.5);
+    const chargeableAbsentDays=Math.max(0,absentEquivDays-2);
+    const baseEarned=Math.round(baseSalary-(chargeableAbsentDays*perDay));
     // Morning duty: ₹150 per morning duty day
     const morningDutyPay=(s.morning_duty_count||0)*150;
     // Commission based on MONTHLY revenue (not all-time)
@@ -4638,7 +4640,6 @@ async function renderSalary(){
       <td>${fmt(perDay)}</td>
       <td>
         ${fmt(baseEarned)}
-        ${halfDayCount>0?`<br><small style="color:var(--ink3)">−${fmt(Math.round(perDay*halfDayCount*0.5))} half day</small>`:''}
         ${chargeableAbsentDays>0?`<br><small style="color:var(--rose)">−${fmt(Math.round(perDay*chargeableAbsentDays))} (${chargeableAbsentDays} day${chargeableAbsentDays>1?'s':''} beyond 2 free)</small>`:''}
       </td>
       <td>${s.total_services||0}<br><small style="color:var(--ink3)">${fmt(workDone)}</small></td>
@@ -5434,11 +5435,13 @@ async function renderStaffPerfReport(){
     const dp=s.present_days||0;
     const halfDays=s.half_day_count||0;
     const effDays=dp>=halfDays?dp-(halfDays*0.5):dp+(halfDays*0.5);
-    // First 2 fully-absent days/month are free (paid holiday); beyond that,
-    // deduct per-day. Half-days still deduct half a day's pay separately.
+    // First 2 absent-day-equivalents/month are free (paid holiday); two
+    // half-days combine into one full-day-equivalent. Only equivalent
+    // days beyond the free allowance are deducted, at the per-day rate.
     const fullAbsentDays=Math.max(0,daysInMo-dp);
-    const chargeableAbsentDays=Math.max(0,fullAbsentDays-2);
-    const baseEarned=Math.round(baseSalary-(halfDays*perDay*0.5)-(chargeableAbsentDays*perDay));
+    const absentEquivDays=fullAbsentDays+(halfDays*0.5);
+    const chargeableAbsentDays=Math.max(0,absentEquivDays-2);
+    const baseEarned=Math.round(baseSalary-(chargeableAbsentDays*perDay));
     const morningPay=(s.morning_duty_count||0)*150;
     const monthRev=s.monthly_revenue||0;
     const commPct=monthRev>=100000?0.03:0.02;
@@ -5471,6 +5474,7 @@ async function initApp(){
 async function loadAllNotifications(){
   clearNotifs();
   try{await loadMemNotifications();}catch(e){}
+  try{await loadMemInactivityNotifications();}catch(e){}
   let bridalCount=0,apptCount=0;
   try{bridalCount=await loadBridalNotifications()||0;}catch(e){}
   try{apptCount=await loadApptNotifications()||0;}catch(e){}
@@ -5903,6 +5907,45 @@ async function loadMemNotifications(){
   }
 }
 
+async function loadMemInactivityNotifications(){
+  if(_role!=='admin')return;
+  const res=await apiCall('GET','/dashboard/membership-inactivity');
+  if(!res)return;
+  const {discontinued=[],warnings=[]}=res;
+  if(discontinued.length){
+    discontinued.forEach(d=>{
+      toast(`⚠️ ${d.name}'s Exclusive membership was auto-discontinued (no visit in 2 months) — moved to Regular`,'var(--rose)');
+    });
+    // Refresh views that show client_type / membership status
+    renderClients('');updateDash();
+  }
+  if(!warnings.length)return;
+  const list=v('notif-list');
+  if(list){
+    const pip=v('notif-pip');if(pip)pip.style.display='block';
+    const notifItems=warnings.map(w=>{
+      const days=Math.round(w.days_left||0);
+      const color=days<=3?'var(--rose)':days<=7?'var(--amber)':'var(--teal)';
+      const phoneClean=(w.phone||'').replace(/[^0-9]/g,'');
+      return `<div class="notif-item" style="border-left:3px solid ${color};animation:notifSlideIn .3s ease">
+        <div class="notif-ico" style="background:#fff8e7">
+          <i class="fas fa-calendar-times" style="color:${color}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="notif-text" style="font-weight:700;font-size:12px">${w.name} — ${w.membership_id}</div>
+          <div style="font-size:10px;color:var(--ink3);margin-top:1px">📞 ${w.phone||'—'} · Last visit: ${w.last_visit}</div>
+          <div style="color:${color};font-weight:700;font-size:11px;margin-top:2px">Visit needed by ${w.visit_deadline} (${days}d left) or membership auto-discontinues</div>
+          <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
+            ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
+            <button onclick="openWaModal('${w.phone||''}','${w.name}','Hello ${w.name}! We miss you at Saundarya 💛 Your Exclusive Membership (${w.membership_id}) requires at least one visit every 2 months. Please visit us by ${w.visit_deadline} to keep your membership active. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">WA</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    list.insertAdjacentHTML('afterbegin', notifItems);
+  }
+}
+
 
 async function giveMembership(clientId, clientName){
   // Load existing client details to pre-fill the form
@@ -6024,9 +6067,17 @@ async function _loadMemberProfile(clientId){
     histRows=await apiCall('GET',`/entries?limit=100&phone=${encodeURIComponent(client.phone)}`)||[];
   }
 
-  // Calculate total points from history
-  const totalPtsEarned=histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0);
-  const histRowsHtml=histRows.map(e=>{const pts=Math.floor((e.net_total||0)/100);const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';const dt=String(e.entry_date||'').substring(0,10);return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3)">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';}).join('');
+  // Points are only earned on real services, from the join date onward —
+  // the membership enrollment fee itself (visit_type 'Membership') never
+  // earns points, matching the backend's beauty_points_log (available points).
+  const memStart=mem&&mem.start_date?String(mem.start_date).substring(0,10):null;
+  const _ptsFor=e=>{
+    if(e.visit_type==='Membership')return 0;
+    if(memStart&&String(e.entry_date||'').substring(0,10)<memStart)return 0;
+    return Math.floor((e.net_total||0)/100);
+  };
+  const totalPtsEarned=histRows.reduce((s,e)=>s+_ptsFor(e),0);
+  const histRowsHtml=histRows.map(e=>{const pts=_ptsFor(e);const svcs=e.services||(e.items||[]).map(i=>i.service_name||i.name||'').filter(Boolean).join(', ')||e.visit_type||'—';const dt=String(e.entry_date||'').substring(0,10);return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;color:var(--ink3)">'+dt+'</td><td style="padding:6px 8px">'+svcs+'</td><td style="padding:6px 8px;text-align:right;font-weight:600">'+fmt(e.net_total||0)+'</td><td style="padding:6px 8px;text-align:right;color:var(--emerald);font-weight:700">+'+pts+'</td></tr>';}).join('');
   const noHistHtml=histRows.length?'':'<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--ink4)">No service history</td></tr>';
 
   body.innerHTML=`
@@ -6169,7 +6220,7 @@ async function _loadMemberProfile(clientId){
       <tbody>
       ${histRowsHtml}${noHistHtml}
       </tbody>
-      ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:8px 16px;font-weight:700;font-size:11px">Total</td><td style="padding:8px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--gold)">'+histRows.reduce((s,e)=>s+Math.floor((e.net_total||0)/100),0)+' ⭐</td></tr></tfoot>'):''}
+      ${histRows.length?('<tfoot><tr style="background:var(--bg)"><td colspan="2" style="padding:8px 16px;font-weight:700;font-size:11px">Total</td><td style="padding:8px 8px;text-align:right;font-weight:700;color:var(--emerald)">'+fmt(histRows.reduce((s,e)=>s+(e.net_total||0),0))+'</td><td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--gold)">'+totalPtsEarned+' ⭐</td></tr></tfoot>'):''}
     </table>
     </div>
   </div>
