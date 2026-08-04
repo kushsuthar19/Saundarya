@@ -722,8 +722,8 @@ def generate_sider_invoice(booking: Dict[str, Any],
 
     total_amount = 0.0
     for i, fn in enumerate(functions, 1):
-        # Data stored as: person_count=person_name, function_name=event, pkg_detail=package, artist_name=amount
-        person_nm = str(fn.get("person_count") or "").strip() or "—"
+        # Data stored as: person_name=person's name, function_name=event, pkg_detail=package, artist_name=amount
+        person_nm = str(fn.get("person_name") or "").strip() or "—"
         func_nm   = str(fn.get("function_name") or "").strip() or "—"
         pkg_nm    = str(fn.get("pkg_detail") or "").strip() or "—"
 

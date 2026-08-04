@@ -3696,7 +3696,7 @@ async function saveBridal(type){
           function_name:funcName||'-',   // function/event name e.g. Ghrashanti
           fn_date:dateInput?.value||null,
           fn_time:timeInput?.value||null,
-          person_count:String(personName||'-'), // person name stored here
+          person_name:personName||'-',   // person's name (text column)
           pkg_detail:pkgName,                   // clean package name e.g. UHD Makeup
           artist_name:String(selVal||0)         // amount stored here for PDF
         });
@@ -4073,7 +4073,7 @@ async function showBridalDetail(id){
           <td style="padding:6px 10px;font-weight:600;color:${color}">${f.function_name||'—'}</td>
           <td style="padding:6px 10px">${f.fn_date||'—'}</td>
           <td style="padding:6px 10px">${f.fn_time||'—'}</td>
-          <td style="padding:6px 10px">${f.person_count||'—'}</td>
+          <td style="padding:6px 10px">${f.person_name||f.person_count||'—'}</td>
           <td style="padding:6px 10px">${f.pkg_detail||'—'}</td>
         </tr>`).join('')}</tbody>
       </table>

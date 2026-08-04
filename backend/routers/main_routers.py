@@ -613,14 +613,25 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
         raise HTTPException(404, "Bridal booking not found")
     cols = [d[0].lower() for d in cursor.description]
     booking = dict(zip(cols, row))
-    await cursor.execute(
-        """SELECT id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_name
-           FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
-        [booking_id]
-    )
+    try:
+        await cursor.execute(
+            """SELECT id, function_name, fn_date, fn_time, person_count, person_name,
+                      pkg_detail, artist_name
+               FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
+            [booking_id]
+        )
+    except oracledb.DatabaseError:
+        # person_name column not migrated yet on this DB — fall back gracefully
+        await cursor.execute(
+            """SELECT id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_name
+               FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
+            [booking_id]
+        )
     fn_rows = await cursor.fetchall()
     fn_cols = [d[0].lower() for d in cursor.description]
     booking["functions"] = [dict(zip(fn_cols, r)) for r in fn_rows]
+    for f in booking["functions"]:
+        f.setdefault("person_name", None)
     booking["payments"] = []
     try:
         await cursor.execute(
@@ -688,14 +699,26 @@ async def create_bridal(
 
     for fn in data.functions:
         fnd = str(fn.fn_date) if fn.fn_date else None
-        await cursor.execute(
-            """INSERT INTO bridal_functions
-               (booking_id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_id, artist_name)
-               VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8)""",
-            [new_id, fn.function_name, fnd, fn.fn_time or None,
-             fn.person_count or None, fn.pkg_detail or None,
-             fn.artist_id, fn.artist_name or None]
-        )
+        try:
+            await cursor.execute(
+                """INSERT INTO bridal_functions
+                   (booking_id, function_name, fn_date, fn_time, person_count, person_name,
+                    pkg_detail, artist_id, artist_name)
+                   VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8,:9)""",
+                [new_id, fn.function_name, fnd, fn.fn_time or None,
+                 fn.person_count or None, fn.person_name or None, fn.pkg_detail or None,
+                 fn.artist_id, fn.artist_name or None]
+            )
+        except oracledb.DatabaseError:
+            # person_name column not migrated yet on this DB — fall back gracefully
+            await cursor.execute(
+                """INSERT INTO bridal_functions
+                   (booking_id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_id, artist_name)
+                   VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8)""",
+                [new_id, fn.function_name, fnd, fn.fn_time or None,
+                 fn.person_count or None, fn.pkg_detail or None,
+                 fn.artist_id, fn.artist_name or None]
+            )
 
     await db.commit()
 

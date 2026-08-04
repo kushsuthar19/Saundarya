@@ -235,6 +235,7 @@ CREATE INDEX idx_items_entry ON entry_items(entry_id);
         fn_date        DATE,
         fn_time        VARCHAR2(10),
         person_count   NUMBER,
+        person_name    VARCHAR2(100),
         pkg_detail     VARCHAR2(200),
         artist_id      NUMBER REFERENCES staff(id),
         artist_name    VARCHAR2(100),

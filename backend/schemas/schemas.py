@@ -288,7 +288,8 @@ class BridalFunction(BaseModel):
     function_name: Optional[str] = None
     fn_date: Optional[date] = None
     fn_time: Optional[str] = None
-    person_count: Optional[int] = None   # NUMBER in Oracle
+    person_count: Optional[int] = None   # NUMBER in Oracle — Bride/Groom headcount
+    person_name: Optional[str] = None    # VARCHAR2 in Oracle — Sider/Guest person's name
     pkg_detail: Optional[str] = None
     artist_id: Optional[int] = None
     artist_name: Optional[str] = None
@@ -300,7 +301,7 @@ class BridalFunction(BaseModel):
             return None
         return v
 
-    @field_validator("fn_time", "pkg_detail", "artist_name", mode="before")
+    @field_validator("fn_time", "pkg_detail", "artist_name", "person_name", mode="before")
     @classmethod
     def coerce_str(cls, v):
         return None if v == "" else v
@@ -363,6 +364,7 @@ class BridalFunctionOut(BaseModel):
     fn_date: Optional[date]
     fn_time: Optional[str]
     person_count: Optional[int]   # NUMBER in Oracle
+    person_name: Optional[str] = None
     pkg_detail: Optional[str]
     artist_name: Optional[str]
 
