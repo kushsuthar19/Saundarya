@@ -601,18 +601,29 @@ async def _next_job_no(booking_type: str, cursor) -> str:
 
 
 async def _get_bridal(booking_id: int, cursor) -> dict:
-    await cursor.execute(
-        """SELECT id, job_no, booking_type, client_name, phone, wedding_date, venue,
-                  reference, package_name, pkg_amount, transport, discount, advance_paid,
-                  balance_due, status, wa_sent, created_at
-           FROM bridal_bookings WHERE id=:1""",
-        [booking_id]
-    )
+    try:
+        await cursor.execute(
+            """SELECT id, job_no, booking_type, client_name, phone, booking_date, wedding_date,
+                      venue, reference, package_name, pkg_amount, transport, discount,
+                      advance_paid, balance_due, status, wa_sent, created_at
+               FROM bridal_bookings WHERE id=:1""",
+            [booking_id]
+        )
+    except oracledb.DatabaseError:
+        # booking_date column not migrated yet on this DB — fall back gracefully
+        await cursor.execute(
+            """SELECT id, job_no, booking_type, client_name, phone, wedding_date, venue,
+                      reference, package_name, pkg_amount, transport, discount, advance_paid,
+                      balance_due, status, wa_sent, created_at
+               FROM bridal_bookings WHERE id=:1""",
+            [booking_id]
+        )
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(404, "Bridal booking not found")
     cols = [d[0].lower() for d in cursor.description]
     booking = dict(zip(cols, row))
+    booking.setdefault("booking_date", None)
     try:
         await cursor.execute(
             """SELECT id, function_name, fn_date, fn_time, person_count, person_name,
@@ -681,20 +692,38 @@ async def create_bridal(
     job_no = await _next_job_no(data.booking_type, cursor)
     balance = max(0, data.pkg_amount + data.transport - data.discount - data.advance_paid)
     wd = str(data.wedding_date) if data.wedding_date else None
+    bd = str(data.booking_date) if data.booking_date else date.today().strftime('%Y-%m-%d')
 
-    await cursor.execute(
-        """INSERT INTO bridal_bookings
-           (job_no, booking_type, client_name, phone, wedding_date, venue, reference,
-            package_name, pkg_amount, transport, discount, advance_paid, balance_due,
-            notes, created_by)
-           VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9,:10,:11,:12,:13,:14,:15)
-           RETURNING id INTO :16""",
-        [job_no, data.booking_type, data.client_name, data.phone, wd,
-         data.venue, data.reference, data.package_name,
-         data.pkg_amount, data.transport, data.discount, data.advance_paid,
-         balance, data.notes, int(current_user["id"]),
-         cursor.var(oracledb.NUMBER)]
-    )
+    try:
+        await cursor.execute(
+            """INSERT INTO bridal_bookings
+               (job_no, booking_type, client_name, phone, booking_date, wedding_date, venue,
+                reference, package_name, pkg_amount, transport, discount, advance_paid,
+                balance_due, notes, created_by)
+               VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),TO_DATE(:6,'YYYY-MM-DD'),:7,:8,:9,
+                       :10,:11,:12,:13,:14,:15,:16)
+               RETURNING id INTO :17""",
+            [job_no, data.booking_type, data.client_name, data.phone, bd, wd,
+             data.venue, data.reference, data.package_name,
+             data.pkg_amount, data.transport, data.discount, data.advance_paid,
+             balance, data.notes, int(current_user["id"]),
+             cursor.var(oracledb.NUMBER)]
+        )
+    except oracledb.DatabaseError:
+        # booking_date column not migrated yet on this DB — fall back gracefully
+        await cursor.execute(
+            """INSERT INTO bridal_bookings
+               (job_no, booking_type, client_name, phone, wedding_date, venue, reference,
+                package_name, pkg_amount, transport, discount, advance_paid, balance_due,
+                notes, created_by)
+               VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9,:10,:11,:12,:13,:14,:15)
+               RETURNING id INTO :16""",
+            [job_no, data.booking_type, data.client_name, data.phone, wd,
+             data.venue, data.reference, data.package_name,
+             data.pkg_amount, data.transport, data.discount, data.advance_paid,
+             balance, data.notes, int(current_user["id"]),
+             cursor.var(oracledb.NUMBER)]
+        )
     new_id = int(cursor.bindvars[-1].getvalue()[0])
 
     for fn in data.functions:
@@ -866,28 +895,46 @@ async def edit_bridal(
     cursor = db.cursor()
     # Fetch current values first so we can tell if the advance amount is
     # being increased by this edit (vs. just re-saving the same number).
-    await cursor.execute(
-        "SELECT client_name, phone, advance_paid, booking_type FROM bridal_bookings WHERE id=:1",
-        [booking_id]
-    )
-    prev_row = await cursor.fetchone()
-    if not prev_row:
-        raise HTTPException(404, "Bridal booking not found")
-    prev_client_name, prev_phone, prev_advance, prev_type = prev_row
+    prev_booking_date = None
+    try:
+        await cursor.execute(
+            "SELECT client_name, phone, advance_paid, booking_type, booking_date FROM bridal_bookings WHERE id=:1",
+            [booking_id]
+        )
+        prev_row = await cursor.fetchone()
+        if not prev_row:
+            raise HTTPException(404, "Bridal booking not found")
+        prev_client_name, prev_phone, prev_advance, prev_type, prev_booking_date = prev_row
+    except oracledb.DatabaseError:
+        # booking_date column not migrated yet on this DB — fall back gracefully
+        await cursor.execute(
+            "SELECT client_name, phone, advance_paid, booking_type FROM bridal_bookings WHERE id=:1",
+            [booking_id]
+        )
+        prev_row = await cursor.fetchone()
+        if not prev_row:
+            raise HTTPException(404, "Bridal booking not found")
+        prev_client_name, prev_phone, prev_advance, prev_type = prev_row
     prev_advance = float(prev_advance or 0)
 
-    fields = []
-    values = []
-    allowed = ['client_name','phone','wedding_date','venue','reference',
+    allowed = ['client_name','phone','booking_date','wedding_date','venue','reference',
                'package_name','pkg_amount','transport','discount',
                'advance_paid','status','notes']
-    for k, v2 in data.items():
-        if k in allowed:
-            if k == 'wedding_date' and v2:
-                fields.append(f"wedding_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
-            else:
-                fields.append(f"{k}=:{len(values)+1}")
-            values.append(v2)
+
+    def _build_fields(include_booking_date: bool):
+        fields, values = [], []
+        for k, v2 in data.items():
+            if k == 'booking_date' and not include_booking_date:
+                continue
+            if k in allowed:
+                if k in ('wedding_date', 'booking_date') and v2:
+                    fields.append(f"{k}=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+                else:
+                    fields.append(f"{k}=:{len(values)+1}")
+                values.append(v2)
+        return fields, values
+
+    fields, values = _build_fields(True)
     if not fields:
         return {"error": "No valid fields"}
     # Recalculate balance_due
@@ -900,23 +947,39 @@ async def edit_bridal(
     values.append(balance)
     fields.append(f"updated_at=SYSTIMESTAMP")
     values.append(booking_id)
-    await cursor.execute(
-        f"UPDATE bridal_bookings SET {','.join(fields)} WHERE id=:{len(values)}",
-        values
-    )
+    try:
+        await cursor.execute(
+            f"UPDATE bridal_bookings SET {','.join(fields)} WHERE id=:{len(values)}",
+            values
+        )
+    except oracledb.DatabaseError:
+        # booking_date column not migrated yet on this DB — retry without it
+        fields, values = _build_fields(False)
+        fields.append(f"balance_due=:{len(values)+1}")
+        values.append(balance)
+        fields.append(f"updated_at=SYSTIMESTAMP")
+        values.append(booking_id)
+        await cursor.execute(
+            f"UPDATE bridal_bookings SET {','.join(fields)} WHERE id=:{len(values)}",
+            values
+        )
     await db.commit()
 
     # If this edit raised the advance amount, log the increase as revenue —
     # same as when a booking is first created — so it actually shows up in
     # Daily Entries/reports instead of silently vanishing. (A decrease is
     # treated as a data correction, not a refund, so it isn't reversed here.)
+    # The adjustment entry is dated to this booking's Booking Date (the date
+    # the advance was actually paid), not today, and function/event dates
+    # are never touched by this.
     new_advance = float(adv or 0)
     if new_advance > prev_advance:
         delta = new_advance - prev_advance
         try:
             client_name = data.get('client_name') or prev_client_name
             phone = data.get('phone', prev_phone)
-            today_str = date.today().strftime('%Y-%m-%d')
+            entry_bkd = data.get('booking_date') or (str(prev_booking_date)[:10] if prev_booking_date else None)
+            entry_date_str = entry_bkd or date.today().strftime('%Y-%m-%d')
             btype = prev_type or 'Bride'
 
             cl_id = None
@@ -943,7 +1006,7 @@ async def edit_bridal(
                     services,gross_total,discount,net_total,pay_method,remarks,created_by)
                    VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),'Bridal Advance',
                            :6,:7,0,:8,:9,:10,:11)""",
-                [adv_inv, cl_id, f"{client_name} (Bridal Advance - {btype})", phone, today_str,
+                [adv_inv, cl_id, f"{client_name} (Bridal Advance - {btype})", phone, entry_date_str,
                  f"Bridal Advance adjustment (Job: {booking_id})",
                  delta, delta, 'Cash',
                  f"Advance increased on edit for booking #{booking_id}",
@@ -956,7 +1019,7 @@ async def edit_bridal(
                     """INSERT INTO bridal_payments
                            (booking_id, payment_type, amount, pay_method, payment_date, notes, created_by)
                        VALUES (:1,'Advance',:2,'Cash',TO_DATE(:3,'YYYY-MM-DD'),'Advance updated via booking edit',:4)""",
-                    [booking_id, delta, today_str, int(current_user["id"])]
+                    [booking_id, delta, entry_date_str, int(current_user["id"])]
                 )
                 await db.commit()
             except Exception:

@@ -206,6 +206,7 @@ CREATE INDEX idx_items_entry ON entry_items(entry_id);
         booking_type   VARCHAR2(20) DEFAULT 'Bride',
         client_name    VARCHAR2(100) NOT NULL,
         phone          VARCHAR2(20),
+        booking_date   DATE,
         wedding_date   DATE,
         venue          VARCHAR2(200),
         reference      VARCHAR2(200),

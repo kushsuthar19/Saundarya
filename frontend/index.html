@@ -3751,6 +3751,7 @@ async function editBridal(id){
   // Open edit modal
   const modal=v('inv-modal');if(!modal)return;
   const wd=b.wedding_date||'';const wdFormatted=wd?wd.substring(0,10):'';
+  const bkd=b.booking_date||'';const bkdFormatted=bkd?bkd.substring(0,10):'';
   modal.innerHTML=`
   <div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
   <div style="background:var(--surface);border-radius:var(--r12);padding:24px 28px;width:600px;max-width:96vw;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
@@ -3765,6 +3766,8 @@ async function editBridal(id){
         <input id="eb-phone" value="${b.phone||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Wedding Date</label>
         <input id="eb-wdate" type="date" value="${wdFormatted}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Booking Date <span style="font-weight:400;color:var(--ink4)">(when advance was paid)</span></label>
+        <input id="eb-bkd" type="date" value="${bkdFormatted}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Venue</label>
         <input id="eb-venue" value="${b.venue||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Reference</label>
@@ -3801,6 +3804,7 @@ async function saveBridalEdit(id){
     client_name:v('eb-name')?.value||'',
     phone:v('eb-phone')?.value||null,
     wedding_date:v('eb-wdate')?.value||null,
+    booking_date:v('eb-bkd')?.value||null,
     venue:v('eb-venue')?.value||null,
     reference:v('eb-ref')?.value||null,
     package_name:v('eb-pkg')?.value||null,
@@ -3983,7 +3987,7 @@ async function renderBridalList(search, typeF){
         html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')} br-row" style="transition:background .1s" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
           <td style="padding:8px 14px 8px 32px"><span style="font-size:10px;color:var(--ink3)">${b.job_no}</span></td>
           <td><span class="pill ${tc[b.booking_type]||'p-lt'}" style="font-size:10px">${b.booking_type}</span></td>
-          <td style="font-size:10px;color:var(--ink3)">${String(b.created_at||'—').substring(0,10)}</td>
+          <td style="font-size:10px;color:var(--ink3)">${String(b.booking_date||b.created_at||'—').substring(0,10)}</td>
           <td><b style="font-size:12px">${b.client_name}</b></td>
           <td style="font-size:11px;color:var(--ink3)">${b.phone||'—'}</td>
           <td style="font-size:11px">${b.wedding_date||'—'}</td>
@@ -4055,6 +4059,7 @@ async function showBridalDetail(id){
     <!-- Client Info -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--border);border-radius:var(--r8);padding:12px;margin-bottom:16px;font-size:12px">
       <div><span style="color:var(--ink3)">Phone:</span> <b>${b.phone||'—'}</b></div>
+      <div><span style="color:var(--ink3)">Booked On:</span> <b>${String(b.booking_date||b.created_at||'—').substring(0,10)}</b></div>
       <div><span style="color:var(--ink3)">Wedding Date:</span> <b>${b.wedding_date||'—'}</b></div>
       <div><span style="color:var(--ink3)">Venue:</span> <b>${b.venue||'—'}</b></div>
       <div><span style="color:var(--ink3)">Reference:</span> <b>${b.reference||'—'}</b></div>

@@ -384,6 +384,7 @@ class BridalOut(BaseModel):
     booking_type: str
     client_name: str
     phone: Optional[str]
+    booking_date: Optional[date] = None
     wedding_date: Optional[date]
     venue: Optional[str]
     reference: Optional[str]
