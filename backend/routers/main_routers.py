@@ -864,6 +864,18 @@ async def edit_bridal(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
+    # Fetch current values first so we can tell if the advance amount is
+    # being increased by this edit (vs. just re-saving the same number).
+    await cursor.execute(
+        "SELECT client_name, phone, advance_paid, booking_type FROM bridal_bookings WHERE id=:1",
+        [booking_id]
+    )
+    prev_row = await cursor.fetchone()
+    if not prev_row:
+        raise HTTPException(404, "Bridal booking not found")
+    prev_client_name, prev_phone, prev_advance, prev_type = prev_row
+    prev_advance = float(prev_advance or 0)
+
     fields = []
     values = []
     allowed = ['client_name','phone','wedding_date','venue','reference',
@@ -893,6 +905,65 @@ async def edit_bridal(
         values
     )
     await db.commit()
+
+    # If this edit raised the advance amount, log the increase as revenue —
+    # same as when a booking is first created — so it actually shows up in
+    # Daily Entries/reports instead of silently vanishing. (A decrease is
+    # treated as a data correction, not a refund, so it isn't reversed here.)
+    new_advance = float(adv or 0)
+    if new_advance > prev_advance:
+        delta = new_advance - prev_advance
+        try:
+            client_name = data.get('client_name') or prev_client_name
+            phone = data.get('phone', prev_phone)
+            today_str = date.today().strftime('%Y-%m-%d')
+            btype = prev_type or 'Bride'
+
+            cl_id = None
+            if phone:
+                await cursor.execute("SELECT id FROM clients WHERE phone=:1", [phone])
+                cl_row = await cursor.fetchone()
+                if cl_row:
+                    cl_id = cl_row[0]
+            if not cl_id and client_name:
+                await cursor.execute(
+                    """INSERT INTO clients (name,phone,source,client_type,visit_count,total_spent)
+                       VALUES (:1,:2,'Bridal','New',0,0) RETURNING id INTO :3""",
+                    [client_name, phone, cursor.var(oracledb.NUMBER)]
+                )
+                cl_id = int(cursor.bindvars[-1].getvalue()[0])
+
+            await cursor.execute("SELECT seq_inv.NEXTVAL FROM DUAL")
+            inv_row = await cursor.fetchone()
+            adv_inv = f"BR-ADJ-{inv_row[0]}"
+
+            await cursor.execute(
+                """INSERT INTO daily_entries
+                   (inv_no,client_id,client_name,phone,entry_date,visit_type,
+                    services,gross_total,discount,net_total,pay_method,remarks,created_by)
+                   VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),'Bridal Advance',
+                           :6,:7,0,:8,:9,:10,:11)""",
+                [adv_inv, cl_id, f"{client_name} (Bridal Advance - {btype})", phone, today_str,
+                 f"Bridal Advance adjustment (Job: {booking_id})",
+                 delta, delta, 'Cash',
+                 f"Advance increased on edit for booking #{booking_id}",
+                 int(current_user["id"])]
+            )
+            await db.commit()
+
+            try:
+                await cursor.execute(
+                    """INSERT INTO bridal_payments
+                           (booking_id, payment_type, amount, pay_method, payment_date, notes, created_by)
+                       VALUES (:1,'Advance',:2,'Cash',TO_DATE(:3,'YYYY-MM-DD'),'Advance updated via booking edit',:4)""",
+                    [booking_id, delta, today_str, int(current_user["id"])]
+                )
+                await db.commit()
+            except Exception:
+                pass  # bridal_payments table not migrated yet — degrade gracefully
+        except Exception:
+            pass  # Don't fail the booking edit if the revenue log fails
+
     return {"updated": booking_id, "balance_due": balance}
 
 @bridal_router.delete("/{booking_id}")
