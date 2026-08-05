@@ -965,25 +965,27 @@ async def edit_bridal(
         )
     await db.commit()
 
-    # If the Booking Date itself was changed, move the ORIGINAL advance Daily
-    # Entry (created when this booking was first saved, inv_no "BR-ADV-{id}")
-    # to that new date — this is what makes "Booked On" edits actually show
-    # up on the right day in Daily Entries, independent of any amount change.
+    # If the Booking Date itself was changed, move every advance Daily Entry
+    # tied to this booking — the original one from creation (inv_no
+    # "BR-ADV-{id}") AND any later "advance increased" adjustment entries
+    # (inv_no "BR-ADJ-*") both tag their services column with "(Job: {id})",
+    # so match on that instead of one specific inv_no pattern.
     new_bkd = data.get('booking_date')
     prev_bkd_str = str(prev_booking_date)[:10] if prev_booking_date else None
     if new_bkd and new_bkd != prev_bkd_str:
         try:
             await cursor.execute(
-                "UPDATE daily_entries SET entry_date=TO_DATE(:1,'YYYY-MM-DD') WHERE inv_no=:2",
-                [new_bkd, f"BR-ADV-{booking_id}"]
+                """UPDATE daily_entries SET entry_date=TO_DATE(:1,'YYYY-MM-DD')
+                   WHERE visit_type='Bridal Advance' AND services LIKE :2""",
+                [new_bkd, f"%(Job: {booking_id})%"]
             )
             await db.commit()
         except Exception:
-            pass  # No original advance entry (e.g. booking had ₹0 advance) — nothing to move
+            pass  # No advance entry exists yet (e.g. booking had ₹0 advance) — nothing to move
         try:
             await cursor.execute(
                 """UPDATE bridal_payments SET payment_date=TO_DATE(:1,'YYYY-MM-DD')
-                   WHERE booking_id=:2 AND payment_type='Advance' AND notes='Advance paid at booking'""",
+                   WHERE booking_id=:2 AND payment_type='Advance'""",
                 [new_bkd, booking_id]
             )
             await db.commit()
