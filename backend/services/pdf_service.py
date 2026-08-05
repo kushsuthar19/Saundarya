@@ -667,30 +667,30 @@ def generate_sider_invoice(booking: Dict[str, Any],
     story.append(_header("Sider / Guest"))
     story.append(Spacer(1, 4*mm))
 
-    # Job No + Date
+    # Job No + Booked On (the actual date the booking/advance was made, not
+    # the PDF-generation date — functions can span several different dates
+    # for a Sider group, so a single "Event Date" up top would be misleading)
     today  = datetime.now().strftime("%d/%m/%Y")
     job_no = booking.get("job_no", "")
+    bkd = booking.get("booking_date") or booking.get("created_at")
+    if isinstance(bkd, (date, datetime)):
+        bkd_str = bkd.strftime("%d/%m/%Y")
+    elif bkd:
+        try:    bkd_str = datetime.strptime(str(bkd)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except: bkd_str = str(bkd)[:10]
+    else:
+        bkd_str = today
     story.append(Table([[
         Paragraph(f"<b>Job No.:</b>  {job_no}", SB("jn", fontSize=11)),
-        Paragraph(f"<b>Date:</b>  {today}", SB("jd", fontSize=11, alignment=TA_RIGHT)),
+        Paragraph(f"<b>Booked On:</b>  {bkd_str}", SB("jd", fontSize=11, alignment=TA_RIGHT)),
     ]], colWidths=[95*mm, 87*mm]))
     story.append(Spacer(1, 3*mm))
 
     # Client info (compact)
-    wd = booking.get("wedding_date")
-    if isinstance(wd, date):
-        wd_str = wd.strftime("%d/%m/%Y")
-    elif wd:
-        try:    wd_str = datetime.strptime(str(wd)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
-        except: wd_str = str(wd)
-    else:
-        wd_str = "—"
-
     info = Table([[
         Paragraph(f"<b>Client Group:</b>  {booking.get('client_name','')}", S("ci1")),
-        Paragraph(f"<b>Phone:</b>  {booking.get('phone') or '—'}", S("ci2")),
-        Paragraph(f"<b>Event Date:</b>  {wd_str}", S("ci3", alignment=TA_RIGHT)),
-    ]], colWidths=[80*mm, 50*mm, 52*mm])
+        Paragraph(f"<b>Phone:</b>  {booking.get('phone') or '—'}", S("ci2", alignment=TA_RIGHT)),
+    ]], colWidths=[95*mm, 87*mm])
     info.setStyle(TableStyle([
         ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
         ("TOPPADDING",    (0,0),(-1,-1), 6),

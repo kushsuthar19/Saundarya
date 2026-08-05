@@ -965,6 +965,31 @@ async def edit_bridal(
         )
     await db.commit()
 
+    # If the Booking Date itself was changed, move the ORIGINAL advance Daily
+    # Entry (created when this booking was first saved, inv_no "BR-ADV-{id}")
+    # to that new date — this is what makes "Booked On" edits actually show
+    # up on the right day in Daily Entries, independent of any amount change.
+    new_bkd = data.get('booking_date')
+    prev_bkd_str = str(prev_booking_date)[:10] if prev_booking_date else None
+    if new_bkd and new_bkd != prev_bkd_str:
+        try:
+            await cursor.execute(
+                "UPDATE daily_entries SET entry_date=TO_DATE(:1,'YYYY-MM-DD') WHERE inv_no=:2",
+                [new_bkd, f"BR-ADV-{booking_id}"]
+            )
+            await db.commit()
+        except Exception:
+            pass  # No original advance entry (e.g. booking had ₹0 advance) — nothing to move
+        try:
+            await cursor.execute(
+                """UPDATE bridal_payments SET payment_date=TO_DATE(:1,'YYYY-MM-DD')
+                   WHERE booking_id=:2 AND payment_type='Advance' AND notes='Advance paid at booking'""",
+                [new_bkd, booking_id]
+            )
+            await db.commit()
+        except Exception:
+            pass  # bridal_payments table not migrated yet — degrade gracefully
+
     # If this edit raised the advance amount, log the increase as revenue —
     # same as when a booking is first created — so it actually shows up in
     # Daily Entries/reports instead of silently vanishing. (A decrease is
