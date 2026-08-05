@@ -1145,8 +1145,9 @@ table tbody tr:hover td{background:var(--bg2)}
       <div class="fg">
         <div class="fl"><label>Group Name / Contact</label><input type="text" id="sd-n"></div>
         <div class="fl"><label>Phone</label><input type="tel" id="sd-ph"></div>
+        <div class="fl"><label><i class="fas fa-calendar-check"></i>Booking Date <span style="font-weight:400;color:var(--ink4)">(when advance was paid)</span></label><input type="date" id="sd-bkd"></div>
         <div class="fl"><label>Linked Wedding</label><input type="text" id="sd-lw"></div>
-        <div class="fl"><label>Date</label><input type="date" id="sd-dt"></div>
+        <div class="fl"><label>Event Date</label><input type="date" id="sd-dt"></div>
       </div>
       <div class="ow" style="margin-top:12px"><table class="ptable"><thead><tr><th>#</th><th>Person Name</th><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
         <tbody id="sd-body"><tr>
@@ -3840,7 +3841,7 @@ function clearBridal(type){
     grBill();
   }
   if(!type||type==='sider'){
-    ['sd-n','sd-ph','sd-dt','sd-tr','sd-di','sd-ad','sd-total-override'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['sd-n','sd-ph','sd-bkd','sd-dt','sd-tr','sd-di','sd-ad','sd-total-override'].forEach(id=>{const el=v(id);if(el)el.value='';});
     sdBill();
   }
 }
