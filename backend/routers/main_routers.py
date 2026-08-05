@@ -5,7 +5,7 @@ import hashlib
 import hmac
 from datetime import date
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 import oracledb
 
 from backend.core.config import settings
@@ -19,7 +19,7 @@ from backend.schemas.schemas import (
     DashboardStats, RevenueStats, SalaryPaymentCreate,
 )
 from backend.services.pdf_service import generate_bridal_invoice, generate_sider_invoice
-from backend.services.whatsapp_service import send_whatsapp_message, build_bridal_invoice_message
+from backend.services.whatsapp_service import send_whatsapp_message, send_whatsapp_document, build_bridal_invoice_message
 from backend.core.security import hash_password
 
 
@@ -916,6 +916,31 @@ async def bridal_whatsapp(
         raise HTTPException(400, "No phone number")
     message = build_bridal_invoice_message(booking)
     result = await send_whatsapp_message(booking["phone"], message)
+    if result["success"]:
+        await cursor.execute(
+            "UPDATE bridal_bookings SET wa_sent=1 WHERE id=:1", [booking_id]
+        )
+        await db.commit()
+    return result
+
+
+@bridal_router.post("/{booking_id}/whatsapp/pdf")
+async def bridal_whatsapp_pdf(
+    booking_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Send the actual invoice PDF as a WhatsApp document — not a link."""
+    cursor = db.cursor()
+    booking = await _get_bridal(booking_id, cursor)
+    if not booking.get("phone"):
+        raise HTTPException(400, "No phone number")
+    doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/bridal/{booking_id}/pdf/public?token={_bridal_pdf_token(booking_id)}"
+    result = await send_whatsapp_document(
+        booking["phone"], doc_url, f"Invoice_{booking['job_no']}.pdf",
+        caption=f"Invoice for {booking['job_no']} — Saundarya Beauty Care"
+    )
     if result["success"]:
         await cursor.execute(
             "UPDATE bridal_bookings SET wa_sent=1 WHERE id=:1", [booking_id]

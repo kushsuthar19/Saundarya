@@ -90,6 +90,54 @@ async def send_whatsapp_message(phone: str, message: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+async def send_whatsapp_document(phone: str, document_url: str, filename: str, caption: str = "") -> dict:
+    """Send an actual file (e.g. an invoice PDF) as a WhatsApp document message
+    — not just a link. document_url must be a publicly reachable URL; the WA
+    provider fetches it server-side and attaches it as a real file in the chat.
+    Returns {'success': bool, 'error': str|None}."""
+    if not settings.WA_TOKEN or not settings.WA_API_URL:
+        return {"success": False, "error": "WhatsApp not configured. Set WA_TOKEN and WA_API_URL in .env"}
+
+    phone = _format_phone(phone)
+    provider = settings.WA_PROVIDER.lower()
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            if provider == "ultramsg":
+                resp = await client.post(
+                    f"{settings.WA_API_URL}/{settings.WA_INSTANCE_ID}/messages/document",
+                    data={
+                        "token": settings.WA_TOKEN, "to": phone,
+                        "document": document_url, "filename": filename, "caption": caption,
+                    },
+                )
+                data = resp.json()
+                success = data.get("sent") == "true" or resp.status_code == 200
+                return {"success": success, "error": None if success else data.get("error")}
+
+            elif provider == "meta":
+                url = f"https://graph.facebook.com/v18.0/{settings.WA_INSTANCE_ID}/messages"
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": phone.replace("+", ""),
+                    "type": "document",
+                    "document": {"link": document_url, "filename": filename, "caption": caption},
+                }
+                resp = await client.post(
+                    url, json=payload,
+                    headers={"Authorization": f"Bearer {settings.WA_TOKEN}"},
+                )
+                success = resp.status_code == 200
+                return {"success": success, "error": None if success else resp.text[:200]}
+
+            else:
+                return {"success": False, "error": f"{provider} doesn't support sending files, only text messages"}
+
+    except Exception as e:
+        logger.error(f"WhatsApp document send error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 def build_daily_invoice_message(entry: dict, items: list) -> str:
     """Build WhatsApp invoice message for daily entry."""
     lines = [
