@@ -3065,12 +3065,16 @@ async function renderClients(s){
     </td>
   </tr>`).join('');
 }
-function openWaModal(phone,name,defaultMsg,invoiceUrl){
+function openWaModal(phone,name,defaultMsg,invoiceUrl,pdfPath,pdfName){
   const modal=v('inv-modal');if(!modal)return;
   const cleanPhone=(phone||'').replace(/[^0-9]/g,'');
   const withCode=cleanPhone.startsWith('91')?cleanPhone:'91'+cleanPhone;
   const REVIEW='https://g.page/r/YOUR_REVIEW_LINK/review';
   const invBtn=invoiceUrl?`<button onclick="addToWaMsg('Invoice: ${invoiceUrl}')" style="background:var(--teal);color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:11px">+ Add Invoice Link</button>`:'';
+  // WhatsApp's wa.me web link can only pre-fill text — it has no way to
+  // auto-attach a file. So instead: one-click download the invoice PDF
+  // right here, then drag/attach it into WhatsApp yourself after it opens.
+  const pdfBtn=pdfPath?`<button onclick="apiDownload('${pdfPath}','${pdfName||'Invoice.pdf'}')" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-file-pdf"></i> Download Invoice PDF</button>`:'';
   modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
   <div style="background:var(--surface);border-radius:var(--r12);padding:24px;width:480px;max-width:95vw;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
     <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:14px">Send WhatsApp to ${name||''}</div>
@@ -3089,6 +3093,7 @@ function openWaModal(phone,name,defaultMsg,invoiceUrl){
         <button onclick="addToWaMsg('Google Review: ${REVIEW}')" style="background:#4285F4;color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:11px">+ Google Review</button>
       </div>
     </div>
+    ${pdfBtn?`<div style="margin-bottom:14px">${pdfBtn}<div style="font-size:10px;color:var(--ink3);margin-top:6px">Downloads now — attach it inside WhatsApp after it opens (WhatsApp doesn't allow auto-attaching files via this link).</div></div>`:''}
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
       <button onclick="sendWaFromModal()" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600">Send WhatsApp</button>
@@ -4136,7 +4141,7 @@ async function sendBridalWa(id){
   const b=await apiCall('GET',`/bridal/${id}`);
   if(!b){return;}
   if(!b.phone){toast('No phone number for this booking','var(--rose)');return;}
-  openWaModal(b.phone,b.client_name,'Hello '+b.client_name+'! Thank you for booking with Saundarya Beauty Care. Your bridal booking ('+b.job_no+') is confirmed. For any queries, please contact us. - Saundarya Beauty Care & Academy, Vadodara');
+  openWaModal(b.phone,b.client_name,'Hello '+b.client_name+'! Thank you for booking with Saundarya Beauty Care. Your bridal booking ('+b.job_no+') is confirmed. For any queries, please contact us. - Saundarya Beauty Care & Academy, Vadodara',null,`/bridal/${id}/pdf`,`${b.job_no}.pdf`);
 }
 function sendBridalWaFromList(id){sendBridalWa(id);}
 
