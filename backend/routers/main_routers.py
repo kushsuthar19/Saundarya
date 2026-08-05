@@ -1,11 +1,14 @@
 """
 Appointments, Staff, Attendance, Bridal Bookings, Revenue, Reports routers.
 """
+import hashlib
+import hmac
 from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 import oracledb
 
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import get_current_user, require_admin
 from backend.schemas.schemas import (
@@ -18,6 +21,17 @@ from backend.schemas.schemas import (
 from backend.services.pdf_service import generate_bridal_invoice, generate_sider_invoice
 from backend.services.whatsapp_service import send_whatsapp_message, build_bridal_invoice_message
 from backend.core.security import hash_password
+
+
+def _bridal_pdf_token(booking_id: int) -> str:
+    """Deterministic, unguessable token for sharing a booking's invoice PDF
+    without requiring the recipient to log in — derived from SECRET_KEY so
+    it can't be forged, and needs no DB storage since it's recomputed."""
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        f"bridal-pdf-{booking_id}".encode(),
+        hashlib.sha256
+    ).hexdigest()[:24]
 
 # ════════════════════════════════
 # APPOINTMENTS
@@ -656,6 +670,7 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
         booking["payments"] = [dict(zip(pay_cols, r)) for r in pay_rows]
     except Exception:
         pass  # bridal_payments table not migrated yet — degrade gracefully
+    booking["pdf_token"] = _bridal_pdf_token(booking_id)
     return booking
 
 
@@ -862,6 +877,30 @@ async def bridal_invoice_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@bridal_router.get("/{booking_id}/pdf/public")
+async def bridal_invoice_pdf_public(
+    booking_id: int,
+    token: str = Query(...),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Unauthenticated invoice download for sharing via WhatsApp/SMS —
+    only works with the correct signed token for this exact booking."""
+    if token != _bridal_pdf_token(booking_id):
+        raise HTTPException(status_code=403, detail="Invalid or expired link")
+    cursor = db.cursor()
+    booking = await _get_bridal(booking_id, cursor)
+    if booking.get("booking_type") == "Sider":
+        pdf_bytes = generate_sider_invoice(booking, booking["functions"])
+    else:
+        pdf_bytes = generate_bridal_invoice(booking, booking["functions"])
+    filename = f"Invoice_{booking['job_no']}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
     )
 
 

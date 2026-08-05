@@ -4149,7 +4149,11 @@ async function sendBridalWa(id){
   const b=await apiCall('GET',`/bridal/${id}`);
   if(!b){return;}
   if(!b.phone){toast('No phone number for this booking','var(--rose)');return;}
-  openWaModal(b.phone,b.client_name,'Hello '+b.client_name+'! Thank you for booking with Saundarya Beauty Care. Your bridal booking ('+b.job_no+') is confirmed. For any queries, please contact us. - Saundarya Beauty Care & Academy, Vadodara',null,`/bridal/${id}/pdf`,`${b.job_no}.pdf`);
+  // Public, no-login-required link so the customer can actually open it
+  // from WhatsApp on their own phone (the regular /pdf endpoint needs an
+  // admin auth token, so it would 401 for them).
+  const shareUrl=b.pdf_token?(window.location.origin+API+`/bridal/${id}/pdf/public?token=${b.pdf_token}`):null;
+  openWaModal(b.phone,b.client_name,'Hello '+b.client_name+'! Thank you for booking with Saundarya Beauty Care. Your bridal booking ('+b.job_no+') is confirmed. For any queries, please contact us. - Saundarya Beauty Care & Academy, Vadodara',shareUrl,`/bridal/${id}/pdf`,`${b.job_no}.pdf`);
 }
 function sendBridalWaFromList(id){sendBridalWa(id);}
 

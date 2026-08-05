@@ -398,6 +398,7 @@ class BridalOut(BaseModel):
     wa_sent: int
     functions: List[BridalFunctionOut] = []
     payments: List[BridalPaymentOut] = []
+    pdf_token: Optional[str] = None
     created_at: Optional[datetime]
 
 
