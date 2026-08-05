@@ -1173,7 +1173,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Advance (₹)</label><input type="number" id="sd-ad" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Advance Payment</label><select id="sd-pay-method" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px"><option value="Cash">Cash</option><option value="GPay/UPI">GPay / UPI</option><option value="Card">Card</option></select></div>
       </div>
-      <div class="bill-box"><div class="bill-row"><span class="bl">Total</span><span class="br" id="sb-t">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="sb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="sb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="sb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="sb-due">₹0</span></div></div>
+      <div class="bill-box"><div class="bill-row"><span class="bl">Total</span><span style="display:flex;align-items:center;gap:6px"><span class="br" id="sb-t">₹0</span><input type="number" id="sd-total-override" placeholder="Edit total" title="Type to override the auto-calculated total; clear to go back to auto" style="width:90px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:11px" oninput="sdBill()"></span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="sb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="sb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="sb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="sb-due">₹0</span></div></div>
       <div class="ar">
         <button class="btn btn-sky" onclick="saveBridal('sider')"><i class="fas fa-save"></i>Save Sider Booking</button>
         <button class="btn btn-teal" onclick="previewBridalInv('sider')"><i class="fas fa-print"></i>Preview Invoice</button>
@@ -3672,6 +3672,9 @@ async function saveBridal(type){
       // Use manual override if entered, else use package price
       sdTot+=(amtVal>0?amtVal:selVal);
     });
+    // Total-field override wins over the auto-summed row total (same as sdBill())
+    const sdTotOverride=parseFloat(v('sd-total-override')?.value);
+    if(sdTotOverride>0)sdTot=sdTotOverride;
     total=sdTot;transport=parseFloat(v('sd-tr')?.value)||0;
     discount=parseFloat(v('sd-di')?.value)||0;advance=parseFloat(v('sd-ad')?.value)||0;
     pkgName='';
@@ -3833,7 +3836,7 @@ function clearBridal(type){
     grBill();
   }
   if(!type||type==='sider'){
-    ['sd-n','sd-ph','sd-dt','sd-tr','sd-di','sd-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['sd-n','sd-ph','sd-dt','sd-tr','sd-di','sd-ad','sd-total-override'].forEach(id=>{const el=v(id);if(el)el.value='';});
     sdBill();
   }
 }
@@ -4220,6 +4223,10 @@ function sdBill(){
     // Manual amount overrides if > 0, else use package select price
     tot+=(manualAmt>0?manualAmt:selPrice);
   });
+  // Total override: if the admin typed a value into the Total field, that
+  // wins over the auto-summed row total; clearing it goes back to auto.
+  const totOverride=parseFloat(v('sd-total-override')?.value);
+  if(totOverride>0)tot=totOverride;
   const tr2=parseFloat(v('sd-tr')?.value)||0,di=parseFloat(v('sd-di')?.value)||0,ad=parseFloat(v('sd-ad')?.value)||0;
   const due=Math.max(0,tot+tr2-di-ad);
   const st=v('sb-t');if(st)st.textContent=fmt(tot);
@@ -5555,7 +5562,7 @@ async function loadBridalNotifications(){
             booking_type:b.booking_type||'Bridal',
             pkg:b.package_name||b.booking_type||'—',
             fn_name:fn.function_name||fn.name||'Function',
-            fn_date:fd, isToday:fd===todayStr, id:b.id,
+            fn_date:fd, fn_time:fn.fn_time||fn.time||'', isToday:fd===todayStr, id:b.id,
             job_no:b.job_no||'', balance_due:b.balance_due||0
           });
         }
@@ -5593,7 +5600,7 @@ async function loadBridalNotifications(){
         <div style="flex:1;min-width:0">
           <div class="notif-text" style="font-weight:700;font-size:12px">${u.name}</div>
           <div style="font-size:11px;color:var(--ink2);margin-top:2px">${u.fn_name} — ${u.booking_type} · ${u.pkg}</div>
-          <div style="font-size:10px;color:var(--ink3);margin-top:1px">📞 ${u.phone} · 📅 ${u.fn_date}</div>
+          <div style="font-size:10px;color:var(--ink3);margin-top:1px">📞 ${u.phone} · 📅 ${u.fn_date}${u.fn_time?' · 🕐 '+u.fn_time:''}</div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
             <span style="color:${color};font-weight:700;font-size:11px">${when}</span>
             ${u.balance_due>0?`<span style="background:var(--rose-l);color:var(--rose);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px">Due ${fmt(u.balance_due)}</span>`:`<span style="background:var(--emerald-l);color:var(--emerald);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px">✔ Paid</span>`}
