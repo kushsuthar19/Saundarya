@@ -3072,9 +3072,10 @@ function openWaModal(phone,name,defaultMsg,invoiceUrl,pdfPath,pdfName){
   const REVIEW='https://g.page/r/YOUR_REVIEW_LINK/review';
   const invBtn=invoiceUrl?`<button onclick="addToWaMsg('Invoice: ${invoiceUrl}')" style="background:var(--teal);color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:11px">+ Add Invoice Link</button>`:'';
   // WhatsApp's wa.me web link can only pre-fill text — it has no way to
-  // auto-attach a file. So instead: one-click download the invoice PDF
-  // right here, then drag/attach it into WhatsApp yourself after it opens.
-  const pdfBtn=pdfPath?`<button onclick="apiDownload('${pdfPath}','${pdfName||'Invoice.pdf'}')" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-file-pdf"></i> Download Invoice PDF</button>`:'';
+  // auto-attach a file. So this button downloads the invoice PDF AND notes
+  // it in the message in one click; you still attach the downloaded file
+  // inside WhatsApp yourself once it opens (that hand-off can't be skipped).
+  const pdfBtn=pdfPath?`<button onclick="attachInvoicePdf('${pdfPath}','${(pdfName||'Invoice.pdf').replace(/'/g,'')}')" style="background:var(--amber);color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:11px">+ Invoice PDF</button>`:'';
   modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
   <div style="background:var(--surface);border-radius:var(--r12);padding:24px;width:480px;max-width:95vw;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
     <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:14px">Send WhatsApp to ${name||''}</div>
@@ -3090,10 +3091,11 @@ function openWaModal(phone,name,defaultMsg,invoiceUrl,pdfPath,pdfName){
       <div style="font-size:10px;color:var(--ink3);margin-bottom:6px;font-weight:600">ADD TO MESSAGE:</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${invBtn}
+        ${pdfBtn}
         <button onclick="addToWaMsg('Google Review: ${REVIEW}')" style="background:#4285F4;color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:11px">+ Google Review</button>
       </div>
+      ${pdfBtn?`<div style="font-size:10px;color:var(--ink3);margin-top:6px">"+ Invoice PDF" downloads the file now — WhatsApp itself won't let a website auto-attach it, so drop the downloaded file in once WhatsApp opens.</div>`:''}
     </div>
-    ${pdfBtn?`<div style="margin-bottom:14px">${pdfBtn}<div style="font-size:10px;color:var(--ink3);margin-top:6px">Downloads now — attach it inside WhatsApp after it opens (WhatsApp doesn't allow auto-attaching files via this link).</div></div>`:''}
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
       <button onclick="sendWaFromModal()" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600">Send WhatsApp</button>
@@ -3105,6 +3107,12 @@ function openWaModal(phone,name,defaultMsg,invoiceUrl,pdfPath,pdfName){
 function addToWaMsg(text){
   const ta=v('wa-modal-msg');if(!ta)return;
   ta.value=(ta.value?ta.value+'\\n':'')+text;
+}
+
+function attachInvoicePdf(pdfPath,pdfName){
+  apiDownload(pdfPath,pdfName);
+  addToWaMsg('📎 Invoice PDF attached ('+pdfName+')');
+  toast('Invoice downloaded — attach it in WhatsApp after it opens','var(--amber)');
 }
 
 function sendWaFromModal(){
