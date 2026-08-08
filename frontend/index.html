@@ -6192,11 +6192,12 @@ async function _loadMemberProfile(clientId){
   </div>
 
   <!-- ACTIONS -->
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
     <button class="smp-btn" onclick="closeInvModal();editClient(${clientId})"><i class="fas fa-edit" style="color:var(--teal)"></i> Edit</button>
     <button class="smp-btn" style="border-color:var(--rose);color:var(--rose)" onclick="deleteClient(${clientId},'${client.name.replace(/'/g,'')}')"><i class="fas fa-trash"></i> Delete</button>
     ${client.phone?`<a class="smp-btn" href="tel:${client.phone}" style="background:#25D366;border-color:#25D366;color:#fff"><i class="fab fa-whatsapp"></i> Call</a>`:'<span></span>'}
     <button class="smp-btn" style="background:var(--gold);border-color:var(--gold);color:#fff" onclick="renewMembership(${clientId})"><i class="fas fa-sync"></i> Renew</button>
+    <button class="smp-btn" style="background:var(--teal);border-color:var(--teal);color:#fff" onclick="closeInvModal();fillDailyEntryForClient('${client.name.replace(/'/g,'')}','${client.phone||''}')"><i class="fas fa-receipt"></i> New Bill</button>
   </div>
 
   <!-- MEMBER DETAILS -->
@@ -6288,7 +6289,7 @@ async function _loadMemberProfile(clientId){
     const nfcAct=v(`nfc-actions-${clientId}`);
     if(nfcEl){
       if(nfcSt&&nfcSt.card_uid){
-        nfcEl.innerHTML=`<span style="color:var(--emerald);font-weight:700">✔ Assigned</span> &nbsp;·&nbsp; <b style="color:var(--gold)">${nfcSt.membership_id||'—'}</b> &nbsp;·&nbsp; ${nfcSt.issued_date||'—'}`;
+        nfcEl.innerHTML=`<span style="color:var(--emerald);font-weight:700">✔ Assigned</span> &nbsp;·&nbsp; <b style="color:var(--gold)">${nfcSt.membership_id||'—'}</b> &nbsp;·&nbsp; UID: <code style="background:rgba(255,255,255,.15);padding:1px 5px;border-radius:4px">${nfcSt.card_uid}</code> &nbsp;·&nbsp; ${nfcSt.issued_date||'—'}`;
         if(nfcAct)nfcAct.innerHTML=`<span style="background:#e8f5ee;color:var(--emerald);font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px">✔ Card Active</span><button onclick="showNfcRegister(${clientId})" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:10px;font-weight:600">Replace Card</button>`;
       } else {
         nfcEl.innerHTML='<span style="color:var(--rose);font-weight:600">✗ Not Assigned</span>';
@@ -6390,16 +6391,15 @@ async function loadPtsHistory(clientId){
 // NFC CARD FUNCTIONS
 // ═══════════════════════════════════════════
 
-// NFC Reader (ACR122U) auto-fill Daily Entry
+// NFC Reader (ACR122U) — tap behavior depends on which section you're on:
+// on Daily Entry → fills the bill's Name/Phone; anywhere else → opens that
+// member's Exclusive Member Profile directly.
 // ACR122U acts like keyboard — types UID very fast then sends Enter
 (function initNfcReader(){
   let nfcBuffer='';
   let nfcTimer=null;
   const NFC_SPEED_MS=50; // keystrokes faster than this = NFC reader
   document.addEventListener('keydown', function(e){
-    // Only listen when daily entry section is visible
-    const deSection=v('sec-de');
-    if(!deSection||deSection.style.display==='none')return;
     // Ignore if user is typing in an input manually
     const tag=document.activeElement?.tagName;
     if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'){
@@ -6420,21 +6420,31 @@ async function loadPtsHistory(clientId){
   });
 })();
 
+function fillDailyEntryForClient(name,phone){
+  go('de');
+  setTimeout(()=>{
+    const nm=v('de-n');if(nm)nm.value=name||'';
+    const ph=v('de-ph');if(ph){ph.value=phone||'';detectClientByPhone(phone||'');}
+  },300);
+}
+
 async function handleNfcTap(uid){
   const r=await apiCall('GET',`/clients/card-search?uid=${encodeURIComponent(uid)}`);
   if(!r){
     toast('⚠️ Card not registered — please register this card to a member','var(--amber)');
     return;
   }
-  // Navigate to daily entry section
-  go('de');
-  // Fill daily entry form
-  setTimeout(()=>{
-    const nm=v('de-n');if(nm)nm.value=r.name||'';
-    const ph=v('de-ph');if(ph){ph.value=r.phone||'';detectClientByPhone(r.phone||'');}
-    // Show a toast with member info
+  const deSection=v('sec-de');
+  const onDailyEntry=!!(deSection&&deSection.style.display!=='none');
+  if(onDailyEntry){
+    // Already on Daily Entry — fill the bill directly, no navigation needed
+    fillDailyEntryForClient(r.name,r.phone);
     toast(`<i class="fas fa-credit-card" style="color:var(--gold)"></i> ⭐ <b>${r.name}</b> — ${r.membership_id} · ${r.beauty_points||0} pts · Card detected`,'var(--gold)');
-  },300);
+  } else {
+    // Any other section — show the member's profile directly
+    toast(`<i class="fas fa-credit-card" style="color:var(--gold)"></i> ⭐ <b>${r.name}</b> — ${r.membership_id} · ${r.beauty_points||0} pts · Card detected`,'var(--gold)');
+    showMemberProfile(r.id);
+  }
 }
 
 function showNfcRegister(clientId){
