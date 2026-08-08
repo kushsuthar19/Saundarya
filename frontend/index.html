@@ -6402,17 +6402,21 @@ async function loadPtsHistory(clientId){
   document.addEventListener('keydown', function(e){
     // Ignore if user is typing in an input manually
     const tag=document.activeElement?.tagName;
-    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'){
-      // Allow if it's the NFC register input
-      if(!document.activeElement?.id?.includes('nfc-uid-input'))return;
-    }
+    const registerInput=document.activeElement?.id?.includes('nfc-uid-input')?document.activeElement:null;
+    if((tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')&&!registerInput)return;
     if(nfcTimer)clearTimeout(nfcTimer);
     if(e.key==='Enter'&&nfcBuffer.length>4){
-      // Card tapped — search member
       const uid=nfcBuffer.trim();
       nfcBuffer='';
-      handleNfcTap(uid);
       e.preventDefault();
+      if(registerInput){
+        // Registering a brand-new card — just capture the UID into the
+        // field, don't look it up (it isn't linked to anyone yet).
+        registerInput.value=uid;
+        toast('Card UID captured — click "Link Card" to save it','var(--sky)');
+        return;
+      }
+      handleNfcTap(uid);
       return;
     }
     if(e.key.length===1){nfcBuffer+=e.key;}
