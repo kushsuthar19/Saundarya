@@ -6403,7 +6403,8 @@ async function loadPtsHistory(clientId){
     // Ignore if user is typing in an input manually
     const tag=document.activeElement?.tagName;
     const registerInput=document.activeElement?.id?.includes('nfc-uid-input')?document.activeElement:null;
-    if((tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')&&!registerInput)return;
+    const dailyEntryField=(document.activeElement?.id==='de-n'||document.activeElement?.id==='de-ph')?document.activeElement:null;
+    if((tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')&&!registerInput&&!dailyEntryField)return;
     if(nfcTimer)clearTimeout(nfcTimer);
     if(e.key==='Enter'&&nfcBuffer.length>4){
       const uid=nfcBuffer.trim();
@@ -6425,8 +6426,9 @@ async function loadPtsHistory(clientId){
 })();
 
 function fillDailyEntryForClient(name,phone){
-  go('de');
+  go('daily');
   setTimeout(()=>{
+    console.log('[NFC] fillDailyEntryForClient writing name=',name,'phone=',phone);
     const nm=v('de-n');if(nm)nm.value=name||'';
     const ph=v('de-ph');if(ph){ph.value=phone||'';detectClientByPhone(phone||'');}
   },300);
@@ -6438,8 +6440,9 @@ async function handleNfcTap(uid){
     toast('⚠️ Card not registered — please register this card to a member','var(--amber)');
     return;
   }
-  const deSection=v('sec-de');
+  const deSection=v('sec-daily');
   const onDailyEntry=!!(deSection&&deSection.style.display!=='none');
+  console.log('[NFC] tap detected — uid=',uid,'branch=',onDailyEntry?'daily-entry':'member-profile');
   if(onDailyEntry){
     // Already on Daily Entry — fill the bill directly, no navigation needed
     fillDailyEntryForClient(r.name,r.phone);
