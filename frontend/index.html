@@ -1378,6 +1378,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <input type="date" id="de-fd" class="fsel" onchange="renderDailyView()">
     <select class="fsel" id="de-ft" onchange="renderDailyView()"><option value="">All Types</option><option>Walk-in</option><option>Appointment</option></select>
     <select class="fsel" id="de-fp" onchange="renderDailyView()"><option value="">All Payments</option><option>Cash</option><option>UPI</option><option>Card</option></select>
+    <span id="de-fp-total" class="pill" style="display:none;align-self:center;background:var(--teal);color:#fff;font-size:11px;padding:6px 12px"></span>
   </div>
   <div id="daily-view"></div>
 </div>
@@ -3447,13 +3448,46 @@ function renderSelSvcs(){
   </tr>`).join('');
 }
 
+// Split pay_method strings look like "Split|Cash:750|UPI:250|Card:0" — pull out each leg.
+function parseSplitPay(pm){
+  if(!pm||!pm.startsWith('Split|'))return null;
+  let cash=0,upi=0,card=0;
+  pm.split('|').forEach(p=>{
+    if(p.startsWith('Cash:'))cash=parseFloat(p.slice(5))||0;
+    else if(p.startsWith('UPI:'))upi=parseFloat(p.slice(4))||0;
+    else if(p.startsWith('Card:'))card=parseFloat(p.slice(5))||0;
+  });
+  return {cash,upi,card};
+}
+
+function renderDeMethodTotal(rows,fp){
+  const el=v('de-fp-total');if(!el)return;
+  if(!fp){el.style.display='none';return;}
+  let cash=0,upi=0,card=0;
+  rows.forEach(e=>{
+    const pm=e.pay_method||'Cash',net=e.net_total||0;
+    const sp=parseSplitPay(pm);
+    if(sp){cash+=sp.cash;upi+=sp.upi;card+=sp.card;}
+    else if(pm==='Cash')cash+=net;
+    else if(pm==='UPI'||pm==='GPay')upi+=net;
+    else if(pm==='Card')card+=net;
+  });
+  const totals={Cash:cash,UPI:upi,GPay:upi,Card:card};
+  el.textContent=`${fp} Total: ${fmt(totals[fp]||0)}`;
+  el.style.display='inline-flex';
+}
+
 async function renderDailyView(){
   const dv=v('daily-view');if(!dv)return;
   const df=v('de-fd')?.value,ft=v('de-ft')?.value,fp=v('de-fp')?.value;
   dv.innerHTML='<div style="text-align:center;padding:30px;color:var(--ink4)"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
-  let qp='';if(df)qp+=`&entry_date=${df}`;if(ft)qp+=`&visit_type=${encodeURIComponent(ft)}`;if(fp)qp+=`&pay_method=${encodeURIComponent(fp)}`;
-  const rows=await apiCall('GET',`/entries?limit=200${qp}`);
-  if(!rows){dv.innerHTML='<div style="text-align:center;padding:30px;color:var(--rose)">Failed to load</div>';return;}
+  // Fetched without pay_method so Split bills (which straddle methods) are
+  // included when computing the per-method totals below.
+  let qp='';if(df)qp+=`&entry_date=${df}`;if(ft)qp+=`&visit_type=${encodeURIComponent(ft)}`;
+  const allRows=await apiCall('GET',`/entries?limit=200${qp}`);
+  if(!allRows){dv.innerHTML='<div style="text-align:center;padding:30px;color:var(--rose)">Failed to load</div>';return;}
+  renderDeMethodTotal(allRows,fp);
+  const rows=fp?allRows.filter(e=>(e.pay_method||'Cash')===fp):allRows;
   if(!rows.length){dv.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--ink4);padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r12)"><i class="fas fa-receipt" style="font-size:22px;margin-bottom:8px;display:block;opacity:.4"></i>No entries found</div>';return;}
   dv.innerHTML=rows.map(e=>`<div class="de-card" onclick='showInvoiceModal(${JSON.stringify(e)})'>
     <div class="de-card-top">
