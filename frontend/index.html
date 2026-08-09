@@ -6441,7 +6441,7 @@ async function handleNfcTap(uid){
     return;
   }
   const deSection=v('sec-daily');
-  const onDailyEntry=!!(deSection&&deSection.style.display!=='none');
+  const onDailyEntry=!!(deSection&&deSection.classList.contains('on'));
   console.log('[NFC] tap detected — uid=',uid,'branch=',onDailyEntry?'daily-entry':'member-profile');
   if(onDailyEntry){
     // Already on Daily Entry — fill the bill directly, no navigation needed
