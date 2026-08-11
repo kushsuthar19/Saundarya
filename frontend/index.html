@@ -3414,6 +3414,7 @@ async function saveDe(){
 function clearDe(){
   selectedSvcs=[];
   ['de-n','de-ph','de-nv','de-rem','de-disc','de-split-cash','de-split-upi','de-split-card'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  const chip=v('de-client-chip');if(chip)chip.remove();
   const spw=v('split-pay-wrap');if(spw)spw.style.display='none';
   v('de-dt').value=td();
   const tp=v('de-type');if(tp)tp.value='Walk-in';
@@ -5036,8 +5037,7 @@ async function updateDashSchedule(){
   </div>`).join('');
 }
 async function updateDashPaymentSplit(){
-  const donutContainer=v('dashDonut');if(!donutContainer)return;
-  const parent=donutContainer.parentElement;if(!parent)return;
+  const parent=v('dash-pay-donut-view');if(!parent)return;
   // Get TODAY's entries only
   const today=td();
   const rows=await apiCall('GET',`/entries?limit=200&entry_date=${today}`);
