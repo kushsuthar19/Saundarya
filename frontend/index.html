@@ -1268,7 +1268,7 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="nline teal"></div>
 
   <!-- CLIENT DETAILS -->
-  <div class="card"><div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-user"></i>Client Details</div></div><div class="card-body">
+  <div class="card"><div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-user"></i>Client Details</div><span id="nfc-bridge-status" style="font-size:9px;color:rgba(255,255,255,0.75);display:flex;align-items:center"><span class="status-dot" id="nfc-bridge-dot" style="background:#999"></span><span id="nfc-bridge-text">NFC: connecting…</span></span></div><div class="card-body">
     <div class="fg">
       <div class="fl"><label><i class="fas fa-user"></i>Client Name</label><input type="text" id="de-n" placeholder="Name (auto-adds to CRM)"></div>
       <div class="fl"><label><i class="fas fa-phone"></i>Phone (for WhatsApp)</label><input type="tel" id="de-ph" placeholder="+91 XXXXX XXXXX" oninput="if(this.value.replace(/[^0-9]/g,'').length>=8)detectClientByPhone(this.value)"></div>
@@ -6457,6 +6457,40 @@ async function loadPtsHistory(clientId){
     if(e.key.length===1){nfcBuffer+=e.key;}
     nfcTimer=setTimeout(()=>{nfcBuffer='';},NFC_SPEED_MS);
   });
+})();
+
+// NFC Bridge (nfc_bridge.py) — local WebSocket at ws://localhost:8765 pushes
+// card taps from the ACR122U straight to the browser, zero staff action
+// needed. Auto-connects on load, auto-reconnects if the bridge drops.
+(function initNfcBridge(){
+  let ws=null;
+  let reconnectTimer=null;
+  const NFC_BRIDGE_URL='ws://localhost:8765';
+  const NFC_RECONNECT_MS=3000;
+  function setNfcBridgeStatus(color,text){
+    const dot=v('nfc-bridge-dot');if(dot)dot.style.background=color;
+    const txt=v('nfc-bridge-text');if(txt)txt.textContent=text;
+  }
+  function scheduleReconnect(){
+    if(reconnectTimer)return;
+    reconnectTimer=setTimeout(()=>{reconnectTimer=null;connectNfcBridge();},NFC_RECONNECT_MS);
+  }
+  function connectNfcBridge(){
+    setNfcBridgeStatus('var(--amber)','NFC: connecting…');
+    try{ws=new WebSocket(NFC_BRIDGE_URL);}catch(err){setNfcBridgeStatus('var(--rose)','NFC: bridge offline');scheduleReconnect();return;}
+    ws.onmessage=(ev)=>{
+      let msg;
+      try{msg=JSON.parse(ev.data);}catch(err){return;}
+      if(msg.type==='status'){
+        setNfcBridgeStatus(msg.reader_connected?'var(--emerald)':'var(--amber)',msg.reader_connected?'NFC: ready':'NFC: reader not detected');
+      } else if(msg.type==='card_tap'&&msg.uid){
+        handleNfcTap(msg.uid);
+      }
+    };
+    ws.onclose=()=>{setNfcBridgeStatus('var(--rose)','NFC: bridge offline');scheduleReconnect();};
+    ws.onerror=()=>{if(ws)ws.close();};
+  }
+  connectNfcBridge();
 })();
 
 function fillDailyEntryForClient(name,phone){
