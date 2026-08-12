@@ -5253,7 +5253,6 @@ async function renderPendingDues(){
   if(ftype)filtered=filtered.filter(b=>b.booking_type===ftype);
   if(fmonth)filtered=filtered.filter(b=>(b.wedding_date||'').startsWith(fmonth));
 
-  // Sort (applied within each type group below)
   const sorters={
     balance_desc:(a,b)=>(b.balance_due||0)-(a.balance_due||0),
     balance_asc:(a,b)=>(a.balance_due||0)-(b.balance_due||0),
@@ -5264,28 +5263,11 @@ async function renderPendingDues(){
 
   if(!filtered.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:20px"><i class="fas fa-check-circle" style="color:var(--emerald)"></i> No pending dues found!</td></tr>';return;}
 
-  // Group by type
-  const groups={Bride:[],Groom:[],Sider:[]};
-  filtered.forEach(b=>{if(groups[b.booking_type])groups[b.booking_type].push(b);else groups['Bride'].push(b);});
-
-  let html_rows='';
   const typeColors={Bride:'var(--violet)',Groom:'var(--teal)',Sider:'var(--amber)'};
   const typePills={Bride:'p-bk',Groom:'p-nd',Sider:'p-wa'};
+  let html_rows='';
 
-  Object.entries(groups).forEach(([type,items])=>{
-    if(!items.length)return;
-    const total=items.reduce((s,b)=>s+(b.balance_due||0),0);
-    html_rows+=`<tr style="background:var(--surface)">
-      <td colspan="9" style="padding:8px 14px;border-top:2px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:12px;font-weight:700;color:${typeColors[type]}">${type}</span>
-          <span style="font-size:11px;color:var(--ink3)">${items.length} booking${items.length>1?'s':''}</span>
-          <span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--rose)">Total Due: ${fmt(total)}</span>
-        </div>
-      </td>
-    </tr>`;
-    items.forEach(b=>{
-      html_rows+=`<tr>
+  const rowHtml=(b)=>`<tr>
         <td style="padding-left:24px">${b.job_no}</td>
         <td><span class="pill ${typePills[b.booking_type]||'p-lt'}">${b.booking_type}</span></td>
         <td><b>${b.client_name}</b></td>
@@ -5304,8 +5286,40 @@ async function renderPendingDues(){
           </button>
         </td>
       </tr>`;
+
+  if(fsort){
+    // A sort is active — show one flat list across all types (the "whole
+    // bar" sorted together), instead of splitting into type sub-sections.
+    const total=filtered.reduce((s,b)=>s+(b.balance_due||0),0);
+    html_rows+=`<tr style="background:var(--surface)">
+      <td colspan="9" style="padding:8px 14px;border-top:2px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;font-weight:700;color:var(--ink)">All Pending Dues</span>
+          <span style="font-size:11px;color:var(--ink3)">${filtered.length} booking${filtered.length>1?'s':''}</span>
+          <span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--rose)">Total Due: ${fmt(total)}</span>
+        </div>
+      </td>
+    </tr>`;
+    filtered.forEach(b=>{html_rows+=rowHtml(b);});
+  } else {
+    // Default view — grouped by type, each with its own subtotal
+    const groups={Bride:[],Groom:[],Sider:[]};
+    filtered.forEach(b=>{if(groups[b.booking_type])groups[b.booking_type].push(b);else groups['Bride'].push(b);});
+    Object.entries(groups).forEach(([type,items])=>{
+      if(!items.length)return;
+      const total=items.reduce((s,b)=>s+(b.balance_due||0),0);
+      html_rows+=`<tr style="background:var(--surface)">
+        <td colspan="9" style="padding:8px 14px;border-top:2px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12px;font-weight:700;color:${typeColors[type]}">${type}</span>
+            <span style="font-size:11px;color:var(--ink3)">${items.length} booking${items.length>1?'s':''}</span>
+            <span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--rose)">Total Due: ${fmt(total)}</span>
+          </div>
+        </td>
+      </tr>`;
+      items.forEach(b=>{html_rows+=rowHtml(b);});
     });
-  });
+  }
   tb.innerHTML=html_rows;
 }
 
