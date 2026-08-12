@@ -94,11 +94,9 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
 END;
 /
-BEGIN
-  EXECUTE IMMEDIATE 'CREATE INDEX idx_mem_membership_id ON memberships(membership_id)';
-EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
-END;
-/
+-- No separate index on membership_id: the UNIQUE constraint above already
+-- creates one automatically (an explicit CREATE INDEX on the same column
+-- collides with it — ORA-01408, caught by testing this against a live DB).
 
 -- ── nfc_cards (one Active card per membership; UID → membership lookup) ────
 BEGIN
@@ -136,7 +134,7 @@ BEGIN
         entry_type     VARCHAR2(20) NOT NULL,
         -- entry_type: 'add' | 'redeem' | 'Earned' (mixed casing exists across
         -- the app's own INSERTs — left unconstrained here to match, not fixed)
-        points         NUMBER NOT NULL DEFAULT 0,
+        points         NUMBER DEFAULT 0 NOT NULL,
         reference_inv  VARCHAR2(50),
         notes          VARCHAR2(500),
         created_at     TIMESTAMP DEFAULT SYSTIMESTAMP
