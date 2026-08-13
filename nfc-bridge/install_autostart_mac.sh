@@ -7,7 +7,7 @@ set -e
 cd "$(dirname "$0")"
 
 APP_SRC="dist/NFC Bridge.app"
-APP_DST="/Applications/NFC Bridge.app"
+APP_DST="$HOME/Applications/NFC Bridge.app"
 PLIST_SRC="com.saundarya.nfcbridge.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/com.saundarya.nfcbridge.plist"
 
@@ -16,9 +16,10 @@ if [ ! -d "$APP_SRC" ]; then
   exit 1
 fi
 
-echo "Installing NFC Bridge to /Applications (may ask for your password)..."
-sudo rm -rf "$APP_DST"
-sudo cp -R "$APP_SRC" "$APP_DST"
+echo "Installing NFC Bridge to ~/Applications (no admin password needed)..."
+mkdir -p "$HOME/Applications"
+rm -rf "$APP_DST"
+cp -R "$APP_SRC" "$APP_DST"
 
 echo "Registering it to start at login..."
 mkdir -p "$HOME/Library/LaunchAgents"

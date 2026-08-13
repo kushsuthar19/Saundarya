@@ -49,7 +49,7 @@ own reader, repeat the one-time setup on that machine too.
    ```
    ./install_autostart_mac.sh
    ```
-   This copies the app to `/Applications` and registers it to start at
+   This copies the app to `~/Applications` (no admin password needed) and registers it to start at
    login. It also starts it immediately, so you don't need to restart.
 4. Plug in the ACR122U (if not already), open the Saundarya site, go to
    Daily Entry — the status dot should turn green within a few seconds.
