@@ -115,7 +115,8 @@ async def lookup_by_phone(
                        FROM beauty_points_log l WHERE l.membership_id=m.id), m.beauty_points) as beauty_points
            FROM clients c
            LEFT JOIN memberships m ON m.client_id=c.id AND m.status='Active'
-           WHERE c.phone=:1""",
+           WHERE SUBSTR(REGEXP_REPLACE(c.phone,'[^0-9]',''),-10) =
+                 SUBSTR(REGEXP_REPLACE(:1,'[^0-9]',''),-10)""",
         [phone]
     )
     row = await cursor.fetchone()
@@ -135,7 +136,11 @@ async def create_client(
 ):
     cursor = db.cursor()
     if data.phone:
-        await cursor.execute("SELECT id FROM clients WHERE phone = :1", [data.phone])
+        await cursor.execute(
+            """SELECT id FROM clients WHERE SUBSTR(REGEXP_REPLACE(phone,'[^0-9]',''),-10) =
+                                             SUBSTR(REGEXP_REPLACE(:1,'[^0-9]',''),-10)""",
+            [data.phone]
+        )
         if await cursor.fetchone():
             raise HTTPException(status_code=400, detail="Client with this phone already exists")
 

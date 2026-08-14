@@ -125,10 +125,18 @@ async def create_entry(
         for item in data.items
     )
 
-    # Find or create client
+    # Find or create client. Match on the last 10 digits only (not an exact
+    # string match) so "+91 98765 43210", "9876543210" and "98765-43210" all
+    # resolve to the SAME client — otherwise a formatting difference from a
+    # prior visit silently creates a duplicate "New" client record and the
+    # real one's Regular/Exclusive status + visit history never gets credited.
     client_id = None
     if data.phone:
-        await cursor.execute("SELECT id FROM clients WHERE phone = :1", [data.phone])
+        await cursor.execute(
+            """SELECT id FROM clients WHERE SUBSTR(REGEXP_REPLACE(phone,'[^0-9]',''),-10) =
+                                             SUBSTR(REGEXP_REPLACE(:1,'[^0-9]',''),-10)""",
+            [data.phone]
+        )
         row = await cursor.fetchone()
         if row:
             client_id = row[0]

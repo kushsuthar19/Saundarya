@@ -1271,7 +1271,7 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="card"><div class="card-hd teal"><div class="card-hd-t"><i class="fas fa-user"></i>Client Details</div><span id="nfc-bridge-status" style="font-size:9px;color:rgba(255,255,255,0.75);display:flex;align-items:center"><span class="status-dot" id="nfc-bridge-dot" style="background:#999"></span><span id="nfc-bridge-text">NFC: connecting…</span></span></div><div class="card-body">
     <div class="fg">
       <div class="fl"><label><i class="fas fa-user"></i>Client Name</label><input type="text" id="de-n" placeholder="Name (auto-adds to CRM)"></div>
-      <div class="fl"><label><i class="fas fa-phone"></i>Phone (for WhatsApp)</label><input type="tel" id="de-ph" placeholder="+91 XXXXX XXXXX" oninput="if(this.value.replace(/[^0-9]/g,'').length>=8)detectClientByPhone(this.value)"></div>
+      <div class="fl"><label><i class="fas fa-phone"></i>Phone (for WhatsApp)</label><input type="tel" id="de-ph" placeholder="+91 XXXXX XXXXX" oninput="handleDePhoneInput(this.value)"></div>
       <div class="fl"><label><i class="fas fa-calendar"></i>Date</label><input type="date" id="de-dt"></div>
       <div class="fl"><label><i class="fas fa-walking"></i>Visit Type</label><select id="de-type"><option>Walk-in</option><option>Appointment</option></select></div>
     </div>
@@ -3469,6 +3469,15 @@ function parseSplitPay(pm){
   return {cash,upi,card};
 }
 
+// Bridal advance/due payments and the membership fee use "GPay/UPI" as the
+// literal pay_method string (their dropdown only offers Cash/GPay-UPI/Card),
+// while regular Daily Entry bills use plain "UPI" — both mean the same
+// method, so both must count as UPI here or those amounts silently drop
+// out of the total (that's why advance/membership money wasn't being counted).
+function isUpiMethod(pm){
+  return pm==='UPI'||pm==='GPay'||pm==='GPay/UPI';
+}
+
 function renderDeMethodTotal(rows,fp){
   const el=v('de-fp-total');if(!el)return;
   if(!fp){el.style.display='none';return;}
@@ -3478,7 +3487,7 @@ function renderDeMethodTotal(rows,fp){
     const sp=parseSplitPay(pm);
     if(sp){cash+=sp.cash;upi+=sp.upi;card+=sp.card;}
     else if(pm==='Cash')cash+=net;
-    else if(pm==='UPI'||pm==='GPay')upi+=net;
+    else if(isUpiMethod(pm))upi+=net;
     else if(pm==='Card')card+=net;
   });
   const totals={Cash:cash,UPI:upi,GPay:upi,Card:card};
@@ -3496,7 +3505,10 @@ async function renderDailyView(){
   const allRows=await apiCall('GET',`/entries?limit=200${qp}`);
   if(!allRows){dv.innerHTML='<div style="text-align:center;padding:30px;color:var(--rose)">Failed to load</div>';return;}
   renderDeMethodTotal(allRows,fp);
-  const rows=fp?allRows.filter(e=>(e.pay_method||'Cash')===fp):allRows;
+  const rows=fp?allRows.filter(e=>{
+    const pm=e.pay_method||'Cash';
+    return fp==='UPI'?isUpiMethod(pm):pm===fp;
+  }):allRows;
   if(!rows.length){dv.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--ink4);padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r12)"><i class="fas fa-receipt" style="font-size:22px;margin-bottom:8px;display:block;opacity:.4"></i>No entries found</div>';return;}
   dv.innerHTML=rows.map(e=>`<div class="de-card" onclick='showInvoiceModal(${JSON.stringify(e)})'>
     <div class="de-card-top">
@@ -5889,10 +5901,31 @@ function crmTab(type, btn){
 // ═══════════════════════════════════════════
 // CLIENT PHONE AUTO-DETECT (Daily Entry)
 // ═══════════════════════════════════════════
+// Fires on every keystroke in the phone field. Backspacing below 8 digits
+// (including clearing the field entirely) used to leave whatever client chip
+// was already showing — the old detectClientByPhone() only ever added/updated
+// the chip, it never removed it. Route every keystroke through here so the
+// "too short to look up" case explicitly clears it instead of doing nothing.
+function handleDePhoneInput(raw){
+  const digits=(raw||'').replace(/[^0-9]/g,'');
+  if(digits.length>=8){detectClientByPhone(raw);}
+  else{clearDeClientChip();}
+}
+
+function clearDeClientChip(){
+  const chip=v('de-client-chip');
+  if(chip)chip.remove();
+}
+
 async function detectClientByPhone(phone){
-  if(!phone||phone.length<8)return;
+  if(!phone||phone.replace(/[^0-9]/g,'').length<8)return;
   const r=await apiCall('GET',`/clients/lookup?phone=${encodeURIComponent(phone)}`);
-  if(!r)return; // new client
+  // If the phone field moved on (user kept typing/backspacing while this
+  // request was in flight), a slower earlier response could land AFTER a
+  // faster later one and show a stale/wrong client — only apply this result
+  // if the field still holds the same number that was actually looked up.
+  if(v('de-ph')?.value!==phone)return;
+  if(!r){clearDeClientChip();return;} // no match (new client, or number no longer matches anyone)
   // Pre-fill name
   const nameEl=v('de-n');if(nameEl&&!nameEl.value)nameEl.value=r.name||'';
   // Show client info chip

@@ -614,6 +614,46 @@ async def _next_job_no(booking_type: str, cursor) -> str:
     return f"{prefix}-{row[0]}"
 
 
+async def _credit_beauty_points(cursor, client_id, inv_no, amount: float):
+    """Bridal advance/due payments are real revenue too, so Exclusive members
+    should earn beauty points on them exactly like a regular Daily Entry bill
+    (₹100 = 1 point). This mirrors the points logic in entries.py's
+    create_entry() — that one only runs for the Daily Entry form, so bridal
+    payments (mirrored into daily_entries via raw SQL here, not via POST
+    /entries) were silently never earning points, split-paid or not."""
+    if not client_id or not amount:
+        return
+    pts_to_add = int(float(amount) // 100)
+    if pts_to_add <= 0:
+        return
+    try:
+        await cursor.execute(
+            """INSERT INTO beauty_points_log
+               (membership_id, entry_type, points, notes)
+               SELECT id, 'Earned', :1, 'Service: '||:2
+               FROM memberships WHERE client_id=:3 AND status='Active'""",
+            [pts_to_add, str(inv_no), client_id]
+        )
+        await cursor.execute(
+            """SELECT m.id,
+                   NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
+                   NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END),0)
+               FROM memberships m
+               LEFT JOIN beauty_points_log l ON l.membership_id=m.id
+               WHERE m.client_id=:1 AND m.status='Active'
+               GROUP BY m.id""",
+            [client_id]
+        )
+        sync_row = await cursor.fetchone()
+        if sync_row:
+            await cursor.execute(
+                "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+                [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
+            )
+    except Exception:
+        pass  # non-member or table not ready — don't fail the payment over this
+
+
 async def _get_bridal(booking_id: int, cursor) -> dict:
     try:
         await cursor.execute(
@@ -779,10 +819,15 @@ async def create_bridal(
             adv_inv = f"BR-ADV-{new_id}"
             pay_m = data.advance_pay_method or 'Cash'
 
-            # Get or create client
+            # Get or create client — match on last 10 digits so phone
+            # formatting differences don't fragment this into a duplicate client.
             cl_id = None
             if data.phone:
-                await cursor.execute("SELECT id FROM clients WHERE phone=:1", [data.phone])
+                await cursor.execute(
+                    """SELECT id FROM clients WHERE SUBSTR(REGEXP_REPLACE(phone,'[^0-9]',''),-10) =
+                                                     SUBSTR(REGEXP_REPLACE(:1,'[^0-9]',''),-10)""",
+                    [data.phone]
+                )
                 cl_row = await cursor.fetchone()
                 if cl_row:
                     cl_id = cl_row[0]
@@ -809,6 +854,8 @@ async def create_bridal(
                  int(current_user["id"]),
                  cursor.var(_oracledb.NUMBER)]
             )
+            await db.commit()
+            await _credit_beauty_points(cursor, cl_id, adv_inv, adv_amount)
             await db.commit()
 
             # Log this as the booking's "Advance" payment so the invoice can
@@ -1075,7 +1122,11 @@ async def edit_bridal(
 
             cl_id = None
             if phone:
-                await cursor.execute("SELECT id FROM clients WHERE phone=:1", [phone])
+                await cursor.execute(
+                    """SELECT id FROM clients WHERE SUBSTR(REGEXP_REPLACE(phone,'[^0-9]',''),-10) =
+                                                     SUBSTR(REGEXP_REPLACE(:1,'[^0-9]',''),-10)""",
+                    [phone]
+                )
                 cl_row = await cursor.fetchone()
                 if cl_row:
                     cl_id = cl_row[0]
@@ -1103,6 +1154,8 @@ async def edit_bridal(
                  f"Advance increased on edit for booking #{booking_id}",
                  int(current_user["id"])]
             )
+            await db.commit()
+            await _credit_beauty_points(cursor, cl_id, adv_inv, delta)
             await db.commit()
 
             try:
@@ -1188,7 +1241,11 @@ async def record_advance_payment(
         edate = entry_date or date.today().strftime('%Y-%m-%d')
         cl_id = None
         if phone:
-            await cursor.execute("SELECT id FROM clients WHERE phone=:1", [phone])
+            await cursor.execute(
+                """SELECT id FROM clients WHERE SUBSTR(REGEXP_REPLACE(phone,'[^0-9]',''),-10) =
+                                                 SUBSTR(REGEXP_REPLACE(:1,'[^0-9]',''),-10)""",
+                [phone]
+            )
             cl_row = await cursor.fetchone()
             if cl_row:
                 cl_id = cl_row[0]
@@ -1213,6 +1270,8 @@ async def record_advance_payment(
              f"Bridal due payment for booking #{booking_id}",
              int(current_user["id"])]
         )
+        await db.commit()
+        await _credit_beauty_points(cursor, cl_id, inv_no, amount)
         await db.commit()
     except Exception:
         pass  # Don't fail the payment record if the daily-entry mirror fails
@@ -1352,7 +1411,7 @@ async def revenue_stats(
                          ELSE 0 END
                 ELSE 0 END) as cash_total,
             SUM(CASE
-                WHEN pay_method IN ('UPI','GPay') THEN net_total
+                WHEN pay_method IN ('UPI','GPay','GPay/UPI') THEN net_total
                 WHEN pay_method LIKE 'Split|%' THEN
                     CASE WHEN REGEXP_SUBSTR(pay_method,'UPI:([0-9]+)',1,1,'',1) IS NOT NULL
                          THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'UPI:([0-9]+)',1,1,'',1))
