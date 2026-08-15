@@ -3180,17 +3180,19 @@ async function editClient(id){
 }
 
 async function updateClient(id){
+  // The Regular client form (cf-regular) only has Name/Phone/Notes fields —
+  // this used to also read cl-em/cl-bd/cl-tg/cl-ann/cl-pst, which don't
+  // exist in that form. v() returns null for a missing id, so v('cl-em').value
+  // threw a TypeError and crashed this function before the PUT ever fired —
+  // that's why editing a Regular client silently never saved anything.
   const nm=v('cl-n').value.trim();if(!nm){toast('Enter name','var(--rose)');return;}
   const r=await apiCall('PUT',`/clients/${id}`,{
-    name:nm, phone:v('cl-ph').value||null, email:v('cl-em').value||null,
-    birthday:v('cl-bd').value||null, tag:v('cl-tg').value||'Regular',
-    preferences:v('cl-pr').value||null,
-    anniversary:v('cl-ann')?.value||null,
-    preferred_staff:v('cl-pst')?.value||null
+    name:nm, phone:v('cl-ph').value||null,
+    preferences:v('cl-pr').value||null
   });
   if(!r)return;
   toast('<i class="fas fa-check" style="color:var(--emerald)"></i> Client updated!','var(--emerald)');
-  ['cl-n','cl-ph','cl-em','cl-bd','cl-pr','cl-ann','cl-pst'].forEach(id=>{const el=v(id);if(el)el.value='';}); 
+  ['cl-n','cl-ph','cl-pr'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const sb=v('cl-save-btn');
   if(sb){sb.textContent='Save Client';sb.setAttribute('onclick','saveClient()');}
   v('cf').style.display='none';
