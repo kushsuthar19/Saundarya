@@ -300,14 +300,31 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         "Ganesh Pooja","Sangeet","Mahendi","Mamera/Mosadu",
         "Grah Santi Pooja","Party","Baby Shower","Other Function",
     ]
+    # A function can appear as more than one bridal_functions row — the
+    # auto-populated schedule row (date/time/artist) and a separate Add-on
+    # Services row (addon_item/addon_amount) tied to the same function name.
+    # Merge them instead of letting one silently overwrite the other.
     fn_map: Dict[str, Dict] = {}
     extra: List[str] = []
     for fn in functions:
         nm = (fn.get("function_name") or "").strip()
-        if nm:
-            fn_map[nm] = fn
+        if not nm:
+            continue
+        if nm not in fn_map:
+            fn_map[nm] = dict(fn)
             if nm not in STANDARD:
                 extra.append(nm)
+            continue
+        existing = fn_map[nm]
+        for k in ("fn_date", "fn_time", "person_count", "pkg_detail", "artist_name"):
+            if not existing.get(k) and fn.get(k):
+                existing[k] = fn.get(k)
+        addon_amt = float(fn.get("addon_amount") or 0)
+        if addon_amt or fn.get("addon_item"):
+            existing["addon_amount"] = float(existing.get("addon_amount") or 0) + addon_amt
+            prev_item = existing.get("addon_item")
+            new_item = fn.get("addon_item")
+            existing["addon_item"] = f"{prev_item} + {new_item}" if prev_item and new_item else (new_item or prev_item)
 
     all_fn = STANDARD + extra
     TH_W = SB("fth", fontSize=9, textColor=WHITE, alignment=TA_CENTER)
@@ -339,6 +356,11 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         pc_str = str(int(pc)) if (pc is not None and pc != "") else ""
 
         pkg = fn.get("pkg_detail") or ""
+        addon_item = fn.get("addon_item")
+        addon_amt = float(fn.get("addon_amount") or 0)
+        if addon_item or addon_amt:
+            addon_txt = f"+ {addon_item or 'Add-on'}" + (f" (Rs.{int(addon_amt):,})" if addon_amt else "")
+            pkg = f"{pkg}  {addon_txt}".strip() if pkg else addon_txt
 
         fn_data.append([
             Paragraph(
@@ -415,17 +437,24 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         story.append(Spacer(1, 5*mm))
 
     # Billing
-    pkg_amt   = float(booking.get("pkg_amount",  0))
-    transport = float(booking.get("transport",   0))
-    discount  = float(booking.get("discount",    0))
-    advance   = float(booking.get("advance_paid",0))
-    balance   = max(0, pkg_amt + transport - discount - advance)
+    pkg_amt    = float(booking.get("pkg_amount",  0))
+    transport  = float(booking.get("transport",   0))
+    discount   = float(booking.get("discount",    0))
+    advance    = float(booking.get("advance_paid",0))
+    addon_total = sum(float(fn.get("addon_amount") or 0) for fn in functions)
+    balance    = max(0, pkg_amt + transport + addon_total - discount - advance)
 
     BL = SB("bl", fontSize=10, alignment=TA_RIGHT)
     BV = S("bv",  fontSize=10, alignment=TA_CENTER)
     bill_rows = [
         [Paragraph("<b>Total Amount</b>",           BL),
          Paragraph(f"Rs.{int(pkg_amt):,}",          BV)],
+    ]
+    if addon_total:
+        bill_rows.append(
+            [Paragraph("<b>Add-on Packages</b>",    BL),
+             Paragraph(f"Rs.{int(addon_total):,}",  BV)])
+    bill_rows += [
         [Paragraph("<b>Outdoor Transportation</b>", BL),
          Paragraph(f"Rs.{int(transport):,}",        BV)],
         [Paragraph("<b>Discount</b>",               BL),

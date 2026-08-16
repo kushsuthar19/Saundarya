@@ -36,11 +36,15 @@ class Settings(BaseSettings):
     ORACLE_MAX_POOL: int = 10
     ORACLE_INCREMENT: int = 1
 
-    # WhatsApp (UltraMsg / CallMeBot / Official API)
+    # WhatsApp (UltraMsg / CallMeBot / Meta Cloud API / AiSensy)
     WA_API_URL: str = os.getenv("WA_API_URL", "")
     WA_INSTANCE_ID: str = os.getenv("WA_INSTANCE_ID", "")
     WA_TOKEN: str = os.getenv("WA_TOKEN", "")
-    # Provider: 'ultramsg' | 'callmebot' | 'meta'
+    # AiSensy sends via a pre-approved WhatsApp template ("campaign"), not
+    # free-form text — this is the exact campaign name from the AiSensy
+    # dashboard. Only used when WA_PROVIDER=aisensy.
+    WA_CAMPAIGN_NAME: str = os.getenv("WA_CAMPAIGN_NAME", "")
+    # Provider: 'ultramsg' | 'callmebot' | 'meta' | 'aisensy'
     WA_PROVIDER: str = os.getenv("WA_PROVIDER", "ultramsg")
 
     # Rate limiting

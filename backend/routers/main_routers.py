@@ -681,17 +681,26 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
     try:
         await cursor.execute(
             """SELECT id, function_name, fn_date, fn_time, person_count, person_name,
-                      pkg_detail, artist_name
+                      pkg_detail, artist_name, addon_item, addon_amount
                FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
             [booking_id]
         )
     except oracledb.DatabaseError:
-        # person_name column not migrated yet on this DB — fall back gracefully
-        await cursor.execute(
-            """SELECT id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_name
-               FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
-            [booking_id]
-        )
+        try:
+            # addon_item/addon_amount not migrated yet on this DB — fall back gracefully
+            await cursor.execute(
+                """SELECT id, function_name, fn_date, fn_time, person_count, person_name,
+                          pkg_detail, artist_name
+                   FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
+                [booking_id]
+            )
+        except oracledb.DatabaseError:
+            # person_name column not migrated yet either — fall back further
+            await cursor.execute(
+                """SELECT id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_name
+                   FROM bridal_functions WHERE booking_id=:1 ORDER BY id""",
+                [booking_id]
+            )
     fn_rows = await cursor.fetchall()
     fn_cols = [d[0].lower() for d in cursor.description]
     booking["functions"] = [dict(zip(fn_cols, r)) for r in fn_rows]
@@ -745,7 +754,11 @@ async def create_bridal(
 ):
     cursor = db.cursor()
     job_no = await _next_job_no(data.booking_type, cursor)
-    balance = max(0, data.pkg_amount + data.transport - data.discount - data.advance_paid)
+    # Add-on packages (e.g. a Sider makeup package tacked onto a specific
+    # function like Sangeet, on top of the main package) count toward what's
+    # owed just like transport/discount do.
+    addon_total = sum(float(fn.addon_amount or 0) for fn in data.functions)
+    balance = max(0, data.pkg_amount + data.transport + addon_total - data.discount - data.advance_paid)
     wd = str(data.wedding_date) if data.wedding_date else None
     bd = str(data.booking_date) if data.booking_date else date.today().strftime('%Y-%m-%d')
 
@@ -787,22 +800,34 @@ async def create_bridal(
             await cursor.execute(
                 """INSERT INTO bridal_functions
                    (booking_id, function_name, fn_date, fn_time, person_count, person_name,
-                    pkg_detail, artist_id, artist_name)
-                   VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8,:9)""",
+                    pkg_detail, artist_id, artist_name, addon_item, addon_amount)
+                   VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8,:9,:10,:11)""",
                 [new_id, fn.function_name, fnd, fn.fn_time or None,
                  fn.person_count or None, fn.person_name or None, fn.pkg_detail or None,
-                 fn.artist_id, fn.artist_name or None]
+                 fn.artist_id, fn.artist_name or None, fn.addon_item or None, fn.addon_amount or 0]
             )
         except oracledb.DatabaseError:
-            # person_name column not migrated yet on this DB — fall back gracefully
-            await cursor.execute(
-                """INSERT INTO bridal_functions
-                   (booking_id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_id, artist_name)
-                   VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8)""",
-                [new_id, fn.function_name, fnd, fn.fn_time or None,
-                 fn.person_count or None, fn.pkg_detail or None,
-                 fn.artist_id, fn.artist_name or None]
-            )
+            try:
+                # addon_item/addon_amount not migrated yet on this DB — fall back gracefully
+                await cursor.execute(
+                    """INSERT INTO bridal_functions
+                       (booking_id, function_name, fn_date, fn_time, person_count, person_name,
+                        pkg_detail, artist_id, artist_name)
+                       VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8,:9)""",
+                    [new_id, fn.function_name, fnd, fn.fn_time or None,
+                     fn.person_count or None, fn.person_name or None, fn.pkg_detail or None,
+                     fn.artist_id, fn.artist_name or None]
+                )
+            except oracledb.DatabaseError:
+                # person_name column not migrated yet either — fall back further
+                await cursor.execute(
+                    """INSERT INTO bridal_functions
+                       (booking_id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_id, artist_name)
+                       VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8)""",
+                    [new_id, fn.function_name, fnd, fn.fn_time or None,
+                     fn.person_count or None, fn.pkg_detail or None,
+                     fn.artist_id, fn.artist_name or None]
+                )
 
     await db.commit()
 
@@ -962,7 +987,7 @@ async def bridal_whatsapp(
     if not booking.get("phone"):
         raise HTTPException(400, "No phone number")
     message = build_bridal_invoice_message(booking)
-    result = await send_whatsapp_message(booking["phone"], message)
+    result = await send_whatsapp_message(booking["phone"], message, user_name=booking.get("client_name", ""))
     if result["success"]:
         await cursor.execute(
             "UPDATE bridal_bookings SET wa_sent=1 WHERE id=:1", [booking_id]
@@ -986,7 +1011,8 @@ async def bridal_whatsapp_pdf(
     doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/bridal/{booking_id}/pdf/public?token={_bridal_pdf_token(booking_id)}"
     result = await send_whatsapp_document(
         booking["phone"], doc_url, f"Invoice_{booking['job_no']}.pdf",
-        caption=f"Invoice for {booking['job_no']} — Saundarya Beauty Care"
+        caption=f"Invoice for {booking['job_no']} — Saundarya Beauty Care",
+        user_name=booking.get("client_name", "")
     )
     if result["success"]:
         await cursor.execute(

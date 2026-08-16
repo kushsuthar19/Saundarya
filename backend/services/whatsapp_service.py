@@ -1,6 +1,6 @@
 """
 WhatsApp messaging service.
-Supports: UltraMsg (recommended), CallMeBot, Meta Cloud API.
+Supports: UltraMsg, CallMeBot, Meta Cloud API, AiSensy.
 
 Setup guide:
 -----------
@@ -19,6 +19,19 @@ CallMeBot (free, limited):
 Meta Cloud API (official, requires business verification):
   1. https://developers.facebook.com/docs/whatsapp/cloud-api/get-started
   2. Set WA_PROVIDER=meta, WA_TOKEN=<bearer_token>, WA_INSTANCE_ID=<phone_number_id>
+
+AiSensy (official WhatsApp Business Solution Provider):
+  1. In the AiSensy dashboard: Manage -> API Key -> copy it.
+  2. AiSensy only sends via a pre-approved WhatsApp template ("Campaign") —
+     it can't send arbitrary free text like the other providers. Create one
+     API Campaign whose template body is a single variable, e.g. just
+     "{{1}}" (Manage -> Campaigns -> create an API Campaign, get it
+     WhatsApp-approved). This app then fills that {{1}} with the whole
+     invoice message it already builds, so no other template setup is
+     needed. Note the exact Campaign name.
+  3. Set WA_PROVIDER=aisensy, WA_TOKEN=<api_key>, WA_CAMPAIGN_NAME=<campaign_name>
+     (WA_API_URL / WA_INSTANCE_ID are not used for this provider — the
+     endpoint is fixed.)
 """
 import httpx
 import logging
@@ -26,6 +39,8 @@ from typing import Optional
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2"
 
 
 def _format_phone(phone: str) -> str:
@@ -38,13 +53,39 @@ def _format_phone(phone: str) -> str:
     return phone
 
 
-async def send_whatsapp_message(phone: str, message: str) -> dict:
-    """Send a WhatsApp text message. Returns {'success': bool, 'error': str|None}."""
-    if not settings.WA_TOKEN or not settings.WA_API_URL:
+def _wa_not_configured(provider: str) -> Optional[dict]:
+    """Returns an error dict if the configured provider is missing what it
+    needs, else None. AiSensy's endpoint is fixed (no WA_API_URL) but needs
+    a Campaign name instead — everyone else needs WA_API_URL."""
+    if provider == "aisensy":
+        if not settings.WA_TOKEN or not settings.WA_CAMPAIGN_NAME:
+            return {"success": False, "error": "WhatsApp not configured. Set WA_TOKEN and WA_CAMPAIGN_NAME in .env"}
+    elif not settings.WA_TOKEN or not settings.WA_API_URL:
         return {"success": False, "error": "WhatsApp not configured. Set WA_TOKEN and WA_API_URL in .env"}
+    return None
+
+
+def _aisensy_result(resp) -> dict:
+    """AiSensy's docs only document HTTP 200 == success and don't specify a
+    failure JSON shape, so treat any non-200 as a failure, and a 200 body
+    that explicitly says success:false as one too."""
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+    success = resp.status_code == 200 and str(data.get("success", True)).lower() != "false"
+    error = None if success else (data.get("message") or data.get("error") or resp.text[:200])
+    return {"success": success, "error": error}
+
+
+async def send_whatsapp_message(phone: str, message: str, user_name: str = "") -> dict:
+    """Send a WhatsApp text message. Returns {'success': bool, 'error': str|None}."""
+    provider = settings.WA_PROVIDER.lower()
+    not_configured = _wa_not_configured(provider)
+    if not_configured:
+        return not_configured
 
     phone = _format_phone(phone)
-    provider = settings.WA_PROVIDER.lower()
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -82,6 +123,20 @@ async def send_whatsapp_message(phone: str, message: str) -> dict:
                 success = resp.status_code == 200
                 return {"success": success, "error": None if success else resp.text[:200]}
 
+            elif provider == "aisensy":
+                # AiSensy only sends pre-approved WhatsApp templates, not free
+                # text — WA_CAMPAIGN_NAME must point at a Campaign whose
+                # template body is a single "{{1}}" variable, which we fill
+                # with the whole message this app already composed.
+                resp = await client.post(AISENSY_URL, json={
+                    "apiKey": settings.WA_TOKEN,
+                    "campaignName": settings.WA_CAMPAIGN_NAME,
+                    "destination": phone,
+                    "userName": user_name or "Customer",
+                    "templateParams": [message],
+                })
+                return _aisensy_result(resp)
+
             else:
                 return {"success": False, "error": f"Unknown WA provider: {provider}"}
 
@@ -90,16 +145,17 @@ async def send_whatsapp_message(phone: str, message: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
-async def send_whatsapp_document(phone: str, document_url: str, filename: str, caption: str = "") -> dict:
+async def send_whatsapp_document(phone: str, document_url: str, filename: str, caption: str = "", user_name: str = "") -> dict:
     """Send an actual file (e.g. an invoice PDF) as a WhatsApp document message
     — not just a link. document_url must be a publicly reachable URL; the WA
     provider fetches it server-side and attaches it as a real file in the chat.
     Returns {'success': bool, 'error': str|None}."""
-    if not settings.WA_TOKEN or not settings.WA_API_URL:
-        return {"success": False, "error": "WhatsApp not configured. Set WA_TOKEN and WA_API_URL in .env"}
+    provider = settings.WA_PROVIDER.lower()
+    not_configured = _wa_not_configured(provider)
+    if not_configured:
+        return not_configured
 
     phone = _format_phone(phone)
-    provider = settings.WA_PROVIDER.lower()
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -129,6 +185,20 @@ async def send_whatsapp_document(phone: str, document_url: str, filename: str, c
                 )
                 success = resp.status_code == 200
                 return {"success": success, "error": None if success else resp.text[:200]}
+
+            elif provider == "aisensy":
+                # Same fixed-template Campaign as send_whatsapp_message, plus
+                # a media attachment — the AiSensy media URL must be publicly
+                # reachable (it already is: apiDownload/public PDF links).
+                resp = await client.post(AISENSY_URL, json={
+                    "apiKey": settings.WA_TOKEN,
+                    "campaignName": settings.WA_CAMPAIGN_NAME,
+                    "destination": phone,
+                    "userName": user_name or "Customer",
+                    "media": {"url": document_url, "filename": filename},
+                    "templateParams": [caption or filename],
+                })
+                return _aisensy_result(resp)
 
             else:
                 return {"success": False, "error": f"{provider} doesn't support sending files, only text messages"}
@@ -195,6 +265,7 @@ def build_bridal_invoice_message(booking: dict) -> str:
     pkg_amt = booking.get("pkg_amount", 0)
     advance = booking.get("advance_paid", 0)
     balance = booking.get("balance_due", 0)
+    addons = [fn for fn in (booking.get("functions") or []) if fn.get("addon_amount")]
 
     lines = [
         "💍 *Saundarya Beauty Care*",
@@ -207,6 +278,11 @@ def build_bridal_invoice_message(booking: dict) -> str:
         f"👰 Client: *{booking.get('client_name', '')}*",
         f"💍 Wedding: {w_date}",
         f"📦 Package: {booking.get('package_name', '')}",
+    ]
+    for fn in addons:
+        item = fn.get("addon_item") or "Add-on"
+        lines.append(f"➕ {item} ({fn.get('function_name', '')}): ₹{int(fn['addon_amount']):,}")
+    lines += [
         "━━━━━━━━━━━━━━━━━━",
         f"💰 Total: ₹{int(pkg_amt):,}",
         f"✅ Advance Paid: ₹{int(advance):,}",

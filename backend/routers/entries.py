@@ -370,7 +370,7 @@ async def send_invoice_whatsapp(
         raise HTTPException(status_code=400, detail="No phone number for this entry")
 
     message = build_daily_invoice_message(entry, entry["items"])
-    result = await send_whatsapp_message(entry["phone"], message)
+    result = await send_whatsapp_message(entry["phone"], message, user_name=entry.get("client_name", ""))
 
     if result["success"]:
         await cursor.execute(

@@ -240,6 +240,8 @@ CREATE INDEX idx_items_entry ON entry_items(entry_id);
         pkg_detail     VARCHAR2(200),
         artist_id      NUMBER REFERENCES staff(id),
         artist_name    VARCHAR2(100),
+        addon_item     VARCHAR2(200),
+        addon_amount   NUMBER(10,2) DEFAULT 0,
         created_at     TIMESTAMP DEFAULT SYSTIMESTAMP
     );
     CREATE INDEX idx_br_funcs_booking ON bridal_functions(booking_id);

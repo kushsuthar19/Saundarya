@@ -1029,8 +1029,11 @@ table tbody tr:hover td{background:var(--bg2)}
       <!-- Add-on services (e.g. Sider package for Sangeet) -->
       <div style="margin-bottom:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px"><i class="fas fa-plus-circle" style="color:var(--teal)"></i> Add-on Services (optional)</div>
-        <div id="bride-addons-list"></div>
-        <button onclick="addBrideAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal)"><i class="fas fa-plus"></i> Add Service / Package</button>
+        <div class="ow"><table class="ptable"><thead><tr><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
+          <tbody id="bride-addons-list"></tbody>
+        </table></div>
+        <datalist id="br-addon-fn-suggestions"></datalist>
+        <button onclick="addBrideAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal);margin-top:6px"><i class="fas fa-plus"></i> Add Service / Package</button>
       </div>
       <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="bb-p">₹0</span></div><div class="bill-row"><span class="bl">Add-ons</span><span class="br" id="bb-addons">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="bb-t">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="bb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="bb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="bb-due">₹0</span></div></div>
       <div class="ar">
@@ -3631,24 +3634,48 @@ function brBill(){
   const dueEl=v('bb-due');if(dueEl)dueEl.textContent=fmt(due);
 }
 
+// Function names already on the Function Schedule for this booking (set by
+// selBridalPkg() when a main package is picked) — offered as datalist
+// autocomplete on the add-on row's Function field, e.g. typing/picking
+// "Sangeet" there ties this add-on to that function, but it's still a plain
+// text field so a one-off/custom function name works too.
+function _refreshBrAddonFnSuggestions(){
+  const dl=v('br-addon-fn-suggestions');if(!dl)return;
+  const names=Array.from(document.querySelectorAll('#br-fb tr'))
+    .map(r=>r.querySelector('strong')?.textContent?.trim())
+    .filter(Boolean);
+  dl.innerHTML=names.map(f=>`<option value="${f}">`).join('');
+}
+
 function addBrideAddon(){
   const list=v('bride-addons-list');if(!list)return;
-  const idx=list.querySelectorAll('.bride-addon-row').length;
-  const row=document.createElement('div');
+  _refreshBrAddonFnSuggestions();
+  const row=document.createElement('tr');
   row.className='bride-addon-row';
-  row.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
   row.innerHTML=`
-    <select style="flex:1;border:1px solid var(--border);border-radius:5px;padding:5px 6px;font-size:11px;background:var(--surface)" onchange="brideAddonSelect(this)">
-      <option value="">Select add-on type</option>
-      <option value="8000">Sider Package — Sangeet (₹8,000)</option>
-      <option value="6000">Sider Package — Reception (₹6,000)</option>
-      <option value="5000">Sider Package — Engagement (₹5,000)</option>
-      <option value="3500">Sider Package — Basic (₹3,500)</option>
+    <td><input type="text" placeholder="Function (e.g. Sangeet)" class="bride-addon-fn" list="br-addon-fn-suggestions" style="width:100%"></td>
+    <td><input type="date" class="bride-addon-date" style="width:100%"></td>
+    <td><input type="time" class="bride-addon-time" style="width:78px"></td>
+    <td><select class="bride-addon-pkg" style="width:100%" onchange="brideAddonSelect(this)">
+      <option value="">Select Package</option>
+      <optgroup label="Basic">
+        <option value="2299">Basic Makeup + Hair</option>
+        <option value="3999">+Lashes</option>
+        <option value="5999">+Extension</option>
+      </optgroup>
+      <optgroup label="Premium">
+        <option value="7999">+Lens (Nars/Huda)</option>
+        <option value="10500">+All (Too Faced)</option>
+      </optgroup>
+      <optgroup label="Engagement/Reception">
+        <option value="12500">HD Makeup</option>
+        <option value="15499">UHD Makeup</option>
+        <option value="18499">Airbrush + Flower</option>
+      </optgroup>
       <option value="0">Custom Amount</option>
-    </select>
-    <input type="number" placeholder="₹" class="bride-addon-amt" style="width:90px;border:1px solid var(--border);border-radius:5px;padding:5px;font-size:11px" oninput="brBill()">
-    <input type="text" placeholder="Description" style="flex:1;border:1px solid var(--border);border-radius:5px;padding:5px;font-size:11px">
-    <button onclick="this.closest('.bride-addon-row').remove();brBill()" style="background:none;border:none;color:var(--rose);font-size:18px;cursor:pointer">×</button>`;
+    </select></td>
+    <td><input type="number" placeholder="0" class="bride-addon-amt" style="width:72px" oninput="brBill()"></td>
+    <td><button class="rm-r" onclick="this.closest('tr').remove();brBill()">×</button></td>`;
   list.appendChild(row);
 }
 
@@ -3712,6 +3739,25 @@ async function saveBridal(type){
         pkg_detail:inputs[3]?.value||null,
         artist_id:sel?.value||null,
         artist_name:sel?.options[sel?.selectedIndex]?.text||null
+      });
+    });
+    // Add-on Services (e.g. an extra Sider package for Sangeet on top of the
+    // main package) — each becomes its own bridal_functions row.
+    v('bride-addons-list')?.querySelectorAll('.bride-addon-row').forEach(row=>{
+      const fnInp=row.querySelector('.bride-addon-fn');
+      const dateInp=row.querySelector('.bride-addon-date');
+      const timeInp=row.querySelector('.bride-addon-time');
+      const pkgSel=row.querySelector('.bride-addon-pkg');
+      const amtInp=row.querySelector('.bride-addon-amt');
+      const amt=parseFloat(amtInp?.value)||0;
+      if(amt<=0)return;  // nothing entered in this row — skip it
+      const item=pkgSel?.options[pkgSel.selectedIndex]?.text||'Add-on';
+      funcs.push({
+        function_name:fnInp?.value?.trim()||item,
+        fn_date:dateInp?.value||null,
+        fn_time:timeInp?.value||null,
+        addon_item:item,
+        addon_amount:amt
       });
     });
   } else if(type==='groom'){

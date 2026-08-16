@@ -293,6 +293,8 @@ class BridalFunction(BaseModel):
     pkg_detail: Optional[str] = None
     artist_id: Optional[int] = None
     artist_name: Optional[str] = None
+    addon_item: Optional[str] = None     # e.g. "Basic + Lashes" — extra package on top of the main one
+    addon_amount: Optional[float] = 0    # its price, added into balance_due and the invoice
 
     @field_validator("fn_date", mode="before")
     @classmethod
@@ -301,7 +303,7 @@ class BridalFunction(BaseModel):
             return None
         return v
 
-    @field_validator("fn_time", "pkg_detail", "artist_name", "person_name", mode="before")
+    @field_validator("fn_time", "pkg_detail", "artist_name", "person_name", "addon_item", mode="before")
     @classmethod
     def coerce_str(cls, v):
         return None if v == "" else v
@@ -315,6 +317,16 @@ class BridalFunction(BaseModel):
             return int(v)
         except (ValueError, TypeError):
             return None
+
+    @field_validator("addon_amount", mode="before")
+    @classmethod
+    def coerce_addon_amount(cls, v):
+        if v == "" or v is None:
+            return 0
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 0
 
 
 class BridalCreate(BaseModel):
@@ -367,6 +379,8 @@ class BridalFunctionOut(BaseModel):
     person_name: Optional[str] = None
     pkg_detail: Optional[str]
     artist_name: Optional[str]
+    addon_item: Optional[str] = None
+    addon_amount: Optional[float] = 0
 
 
 class BridalPaymentOut(BaseModel):
