@@ -241,11 +241,11 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=M, rightMargin=M,
-                            topMargin=10*mm, bottomMargin=10*mm)
+                            topMargin=8*mm, bottomMargin=8*mm)
     story = []
     btype = booking.get("booking_type", "Bride")
     story.append(_header(btype))
-    story.append(Spacer(1, 5*mm))
+    story.append(Spacer(1, 3*mm))
 
     today  = datetime.now().strftime("%d/%m/%Y")
     job_no = booking.get("job_no", "")
@@ -254,7 +254,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         Paragraph(f"<b>Date:</b>  {today}",
                   SB("jd", fontSize=11, alignment=TA_RIGHT)),
     ]], colWidths=[95*mm, 87*mm]))
-    story.append(Spacer(1, 5*mm))
+    story.append(Spacer(1, 3*mm))
 
     # Client info
     wd = booking.get("wedding_date")
@@ -269,7 +269,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     def dotted(label, value):
         dots = "." * max(5, 58 - len(label) - len(str(value)))
         return [Paragraph(f"<b>{label}:</b>  {value}{dots}",
-                          S("dl", fontSize=10, leading=17))]
+                          S("dl", fontSize=10, leading=13))]
 
     info_rows = [
         dotted("Wedding Person Name", booking.get("client_name", "")),
@@ -288,11 +288,11 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     info_box = Table([[info_inner]], colWidths=[176*mm])
     info_box.setStyle(TableStyle([
         ("BOX",           (0,0),(-1,-1), 1.2, DARK_GREEN),
-        ("TOPPADDING",    (0,0),(-1,-1), 5),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
     ]))
     story.append(info_box)
-    story.append(Spacer(1, 5*mm))
+    story.append(Spacer(1, 3*mm))
 
     # Function schedule
     STANDARD = [
@@ -327,9 +327,9 @@ def generate_bridal_invoice(booking: Dict[str, Any],
             existing["addon_item"] = f"{prev_item} + {new_item}" if prev_item and new_item else (new_item or prev_item)
 
     all_fn = STANDARD + extra
-    TH_W = SB("fth", fontSize=9, textColor=WHITE, alignment=TA_CENTER)
+    TH_W = SB("fth", fontSize=9, textColor=WHITE, alignment=TA_CENTER, leading=11)
     fn_data = [[
-        Paragraph("", S("fh0")),
+        Paragraph("", S("fh0", leading=11)),
         Paragraph("<b>Date</b>",    TH_W),
         Paragraph("<b>Timing</b>",  TH_W),
         Paragraph("<b>Person</b>",  TH_W),
@@ -365,13 +365,13 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         fn_data.append([
             Paragraph(
                 f"<b>{fn_name}:</b>" if is_booked else f"{fn_name}:",
-                SB("fnb", fontSize=9, textColor=DARK_GREEN)
-                if is_booked else S("fnr", fontSize=9)
+                SB("fnb", fontSize=9, textColor=DARK_GREEN, leading=11)
+                if is_booked else S("fnr", fontSize=9, leading=11)
             ),
-            Paragraph(fd_str,                    S("fd", fontSize=9, alignment=TA_CENTER)),
-            Paragraph(fn.get("fn_time") or "",   S("ft", fontSize=9, alignment=TA_CENTER)),
-            Paragraph(pc_str,                    S("fp", fontSize=9, alignment=TA_CENTER)),
-            Paragraph(pkg,                       S("fpk", fontSize=9)),
+            Paragraph(fd_str,                    S("fd", fontSize=9, alignment=TA_CENTER, leading=11)),
+            Paragraph(fn.get("fn_time") or "",   S("ft", fontSize=9, alignment=TA_CENTER, leading=11)),
+            Paragraph(pc_str,                    S("fp", fontSize=9, alignment=TA_CENTER, leading=11)),
+            Paragraph(pkg,                       S("fpk", fontSize=9, leading=11)),
         ])
         if is_booked:
             booked_rows.append(idx + 1)   # +1 for header row
@@ -383,8 +383,8 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         ("TEXTCOLOR",     (1,0),(-1,0),  WHITE),
         ("GRID",          (0,0),(-1,-1), 0.4, MED_GRAY),
         ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
-        ("TOPPADDING",    (0,0),(-1,-1), 5),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
+        ("TOPPADDING",    (0,0),(-1,-1), 2),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 2),
         ("LEFTPADDING",   (0,0),(-1,-1), 5),
         ("RIGHTPADDING",  (0,0),(-1,-1), 5),
         ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
@@ -393,7 +393,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         style_cmds.append(("BACKGROUND", (0,r),(-1,r), GREEN_LIGHT))
     fn_tbl.setStyle(TableStyle(style_cmds))
     story.append(fn_tbl)
-    story.append(Spacer(1, 5*mm))
+    story.append(Spacer(1, 3*mm))
 
     # Payment history — when the advance was paid, and when each due
     # payment (if any) was paid, so this isn't just a single snapshot.
@@ -428,13 +428,13 @@ def generate_bridal_invoice(booking: Dict[str, Any],
             ("TEXTCOLOR",     (0,0),(-1,0),  WHITE),
             ("GRID",          (0,0),(-1,-1), 0.4, MED_GRAY),
             ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
-            ("TOPPADDING",    (0,0),(-1,-1), 4),
-            ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+            ("TOPPADDING",    (0,0),(-1,-1), 3),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 3),
         ]))
         story.append(Paragraph("<b>Payment History</b>", SB("phh", fontSize=10, textColor=DARK_GREEN)))
         story.append(Spacer(1, 2*mm))
         story.append(pay_tbl)
-        story.append(Spacer(1, 5*mm))
+        story.append(Spacer(1, 3*mm))
 
     # Billing
     pkg_amt    = float(booking.get("pkg_amount",  0))
@@ -444,8 +444,8 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     addon_total = sum(float(fn.get("addon_amount") or 0) for fn in functions)
     balance    = max(0, pkg_amt + transport + addon_total - discount - advance)
 
-    BL = SB("bl", fontSize=10, alignment=TA_RIGHT)
-    BV = S("bv",  fontSize=10, alignment=TA_CENTER)
+    BL = SB("bl", fontSize=10, alignment=TA_RIGHT, leading=12)
+    BV = S("bv",  fontSize=10, alignment=TA_CENTER, leading=12)
     bill_rows = [
         [Paragraph("<b>Total Amount</b>",           BL),
          Paragraph(f"Rs.{int(pkg_amt):,}",          BV)],
@@ -471,8 +471,8 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
         ("LINEBELOW",     (0,0),(-1,-2), 0.4, MED_GRAY),
         ("BACKGROUND",    (0,-1),(-1,-1), DARK_GREEN),
-        ("TOPPADDING",    (0,0),(-1,-1), 7),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 7),
+        ("TOPPADDING",    (0,0),(-1,-1), 4),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 4),
         ("RIGHTPADDING",  (0,0),(0,-1),  10),
         ("LEFTPADDING",   (1,0),(1,-1),  8),
         ("RIGHTPADDING",  (1,0),(1,-1),  8),
@@ -491,7 +491,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
                      colWidths=[114*mm, 4*mm, 64*mm])
     combined.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP")]))
     story.append(combined)
-    story.append(Spacer(1, 6*mm))
+    story.append(Spacer(1, 3*mm))
     story.append(_footer())
     doc.build(story)
     return buf.getvalue()
