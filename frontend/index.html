@@ -6538,6 +6538,22 @@ async function loadPtsHistory(clientId){
 // NFC CARD FUNCTIONS
 // ═══════════════════════════════════════════
 
+// Finds the "Enter Card UID" input for whichever member's Register/Replace
+// Card box is currently open (if any). Checked by visibility, not focus,
+// since focus can drift away while the staff reaches for the physical
+// reader — see [[nfc_bridge_setup]].
+function findOpenNfcRegisterInput(){
+  const wraps=document.querySelectorAll('[id^="nfc-register-wrap-"]');
+  for(const w of wraps){
+    if(w.style.display!=='none'){
+      const clientId=w.id.replace('nfc-register-wrap-','');
+      const inp=v(`nfc-uid-input-${clientId}`);
+      if(inp)return inp;
+    }
+  }
+  return null;
+}
+
 // NFC Reader (ACR122U) — tap behavior depends on which section you're on:
 // on Daily Entry → fills the bill's Name/Phone; anywhere else → opens that
 // member's Exclusive Member Profile directly.
@@ -6549,7 +6565,7 @@ async function loadPtsHistory(clientId){
   document.addEventListener('keydown', function(e){
     // Ignore if user is typing in an input manually
     const tag=document.activeElement?.tagName;
-    const registerInput=document.activeElement?.id?.includes('nfc-uid-input')?document.activeElement:null;
+    const registerInput=(document.activeElement?.id?.includes('nfc-uid-input')?document.activeElement:null)||findOpenNfcRegisterInput();
     const dailyEntryField=(document.activeElement?.id==='de-n'||document.activeElement?.id==='de-ph')?document.activeElement:null;
     if((tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')&&!registerInput&&!dailyEntryField)return;
     if(nfcTimer)clearTimeout(nfcTimer);
@@ -6597,6 +6613,14 @@ async function loadPtsHistory(clientId){
       if(msg.type==='status'){
         setNfcBridgeStatus(msg.reader_connected?'var(--emerald)':'var(--amber)',msg.reader_connected?'NFC: ready':'NFC: reader not detected');
       } else if(msg.type==='card_tap'&&msg.uid){
+        const registerInput=findOpenNfcRegisterInput();
+        if(registerInput){
+          // Registering a brand-new card — just capture the UID into the
+          // field, don't look it up (it isn't linked to anyone yet).
+          registerInput.value=msg.uid;
+          toast('Card UID captured — click "Link Card" to save it','var(--sky)');
+          return;
+        }
         handleNfcTap(msg.uid);
       }
     };
