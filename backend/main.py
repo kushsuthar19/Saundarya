@@ -22,11 +22,13 @@ from backend.middleware.security import SecurityMiddleware
 from backend.routers.auth import router as auth_router
 from backend.routers.clients import router as clients_router
 from backend.routers.entries import router as entries_router
+from backend.routers.wa_templates import router as wa_templates_router
 from backend.routers.main_routers import (
     appt_router, staff_router, att_router, bridal_router,
     dash_router, revenue_router, reports_router, salary_router,
     svc_router, inquiry_router    # ← add inquiry_router here
 )
+from backend.services.scheduler import start_scheduler, stop_scheduler
 
 # ── Logging ───────────────────────────────────────────────
 logging.basicConfig(
@@ -43,8 +45,13 @@ async def lifespan(app: FastAPI):
     await init_pool()
     # Create PDF temp dir
     os.makedirs(settings.PDF_DIR, exist_ok=True)
+    # Create admin-uploaded files dir (service booklet PDF, etc.)
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    # WhatsApp winback / membership-expiry reminders — daily in-process job
+    start_scheduler()
     logger.info("Ready.")
     yield
+    stop_scheduler()
     await close_pool()
     logger.info("Shutdown complete.")
 
@@ -93,6 +100,7 @@ app.include_router(reports_router,  prefix=API_PREFIX)
 app.include_router(salary_router,   prefix=API_PREFIX)
 app.include_router(svc_router,      prefix=API_PREFIX)
 app.include_router(inquiry_router, prefix=API_PREFIX)
+app.include_router(wa_templates_router, prefix=API_PREFIX)
 
 # ── Health check ──────────────────────────────────────────
 @app.get("/api/health")

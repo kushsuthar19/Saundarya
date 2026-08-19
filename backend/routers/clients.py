@@ -6,6 +6,7 @@ import oracledb
 from backend.core.database import get_db
 from backend.core.security import get_current_user, require_admin
 from backend.schemas.schemas import ClientCreate, ClientUpdate, ClientOut
+from backend.services.whatsapp_service import send_whatsapp_template
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -362,6 +363,26 @@ async def get_client(
 ):
     cursor = db.cursor()
     return await _get_client(client_id, cursor)
+
+
+@router.post("/{client_id}/whatsapp")
+async def send_client_whatsapp(
+    client_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Manual 'Update' button in the Clients section — sends the
+    client_general_update template (just the client's name, no other
+    params). Real API send, not the wa.me hand-off the button used before."""
+    cursor = db.cursor()
+    client = await _get_client(client_id, cursor)
+    if not client.get("phone"):
+        raise HTTPException(status_code=400, detail="No phone number for this client")
+    result = await send_whatsapp_template(
+        db, client["phone"], "client_update", [client["name"]],
+        client_id=client_id, ref_id=client_id, user_name=client["name"],
+    )
+    return result
 
 
 # ── update client ─────────────────────────────────────────────────────────────

@@ -1,18 +1,35 @@
 """Daily entries (bills/invoices) endpoints."""
+import hashlib
+import hmac
+import logging
 from datetime import date
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse, Response
 import oracledb
 import io
 
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import get_current_user
 from backend.schemas.schemas import DailyEntryCreate, DailyEntryOut
 from backend.services.pdf_service import generate_daily_invoice, generate_daily_batch_pdf
-from backend.services.whatsapp_service import send_whatsapp_message, build_daily_invoice_message
+from backend.services.whatsapp_service import send_whatsapp_message, build_daily_invoice_message, send_whatsapp_template
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/entries", tags=["entries"])
+
+
+def _entry_pdf_token(entry_id: int) -> str:
+    """Same pattern as bridal's _bridal_pdf_token in main_routers.py —
+    deterministic signed token so the invoice PDF can be fetched without
+    login (AiSensy needs a public URL to attach as a document), derived
+    from SECRET_KEY so it can't be forged and needs no DB storage."""
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        f"entry-pdf-{entry_id}".encode(),
+        hashlib.sha256
+    ).hexdigest()[:24]
 
 
 async def _get_next_inv_no(cursor) -> str:
@@ -288,6 +305,44 @@ async def create_entry(
             )
 
     await db.commit()
+
+    # ── WhatsApp: auto-send Daily Entry confirmation ────────────────────
+    # Regular clients get "daily_entry"; Exclusive members get
+    # "exclusive_points" instead (never both — the points one already
+    # covers what the visit was for). This is purely best-effort: any
+    # failure here is logged and swallowed, never allowed to fail the
+    # save that already succeeded above. Skips silently if there's no
+    # phone on file — nothing to send to.
+    if data.phone:
+        try:
+            await cursor.execute("SELECT NVL(client_type,'New') FROM clients WHERE id=:1", [client_id])
+            ct_row = await cursor.fetchone()
+            is_exclusive = bool(ct_row and ct_row[0] == 'Exclusive')
+
+            if is_exclusive:
+                # Balance was already recomputed and saved above (points
+                # block) — read it back fresh rather than trust a variable
+                # that's only set when pts_to_add > 0.
+                await cursor.execute(
+                    "SELECT NVL(beauty_points,0) FROM memberships WHERE client_id=:1 AND status='Active'",
+                    [client_id]
+                )
+                bal_row = await cursor.fetchone()
+                new_balance = int(bal_row[0]) if bal_row else 0
+                await send_whatsapp_template(
+                    db, data.phone, "exclusive_points",
+                    [data.client_name, services_str, f"₹{int(net):,}", pts_to_add, new_balance],
+                    client_id=client_id, ref_id=entry_id, user_name=data.client_name,
+                )
+            else:
+                await send_whatsapp_template(
+                    db, data.phone, "daily_entry",
+                    [data.client_name, services_str, f"₹{int(net):,}", str(data.entry_date)],
+                    client_id=client_id, ref_id=entry_id, user_name=data.client_name,
+                )
+        except Exception as wa_err:
+            logger.error(f"Daily Entry auto WhatsApp send failed (non-fatal): {wa_err}")
+
     return await _get_entry_with_items(entry_id, cursor)
 
 
@@ -322,6 +377,29 @@ async def download_invoice_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@router.get("/{entry_id}/pdf/public")
+async def download_invoice_pdf_public(
+    entry_id: int,
+    token: str = Query(...),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Unauthenticated invoice download for AiSensy to fetch and attach as
+    a WhatsApp document — same signed-token pattern as bridal's
+    /bridal/{id}/pdf/public. Needs the site reachable over HTTPS to
+    actually work as a WhatsApp media URL; code-complete either way."""
+    if token != _entry_pdf_token(entry_id):
+        raise HTTPException(status_code=403, detail="Invalid or expired link")
+    cursor = db.cursor()
+    entry = await _get_entry_with_items(entry_id, cursor)
+    pdf_bytes = generate_daily_invoice(entry, entry["items"])
+    filename = f"Invoice_{entry['inv_no']}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
     )
 
 
@@ -380,6 +458,36 @@ async def send_invoice_whatsapp(
         return {"success": True, "message": "WhatsApp sent"}
     else:
         return {"success": False, "error": result.get("error")}
+
+
+@router.post("/{entry_id}/whatsapp/pdf")
+async def send_invoice_whatsapp_pdf(
+    entry_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Send the invoice as a real attached WhatsApp document (template
+    'daily_entry_pdf'), not a text message and not a link — manual button
+    only, mirrors bridal's /whatsapp/pdf. Requires the site to be reachable
+    over HTTPS for AiSensy to fetch the PDF; code-complete now, actual
+    delivery to be confirmed once HTTPS is live."""
+    cursor = db.cursor()
+    entry = await _get_entry_with_items(entry_id, cursor)
+    if not entry.get("phone"):
+        raise HTTPException(status_code=400, detail="No phone number for this entry")
+
+    doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/entries/{entry_id}/pdf/public?token={_entry_pdf_token(entry_id)}"
+    result = await send_whatsapp_template(
+        db, entry["phone"], "daily_entry_pdf",
+        [entry.get("client_name", ""), entry.get("services", ""), f"₹{int(entry.get('net_total', 0)):,}", str(entry.get("entry_date", ""))],
+        media_url=doc_url, media_filename=f"Invoice_{entry['inv_no']}.pdf",
+        client_id=entry.get("client_id"), ref_id=entry_id, user_name=entry.get("client_name", ""),
+    )
+    if result["success"]:
+        await cursor.execute("UPDATE daily_entries SET wa_sent = 1 WHERE id = :1", [entry_id])
+        await db.commit()
+    return result
 
 
 @router.delete("/{entry_id}")

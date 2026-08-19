@@ -208,6 +208,122 @@ async def send_whatsapp_document(phone: str, document_url: str, filename: str, c
         return {"success": False, "error": str(e)}
 
 
+async def send_aisensy_template(phone: str, campaign_name: str, template_params: list, user_name: str = "") -> dict:
+    """Send via a specific AiSensy campaign with arbitrary ordered template
+    params — used by the WA Templates / Broadcast feature, where each saved
+    template points at its own pre-approved AiSensy campaign (separate from
+    the app's default {{1}} invoice campaign). Only AiSensy supports this;
+    other providers only send free text via send_whatsapp_message."""
+    if settings.WA_PROVIDER.lower() != "aisensy":
+        return {"success": False, "error": "Template broadcast requires WA_PROVIDER=aisensy"}
+    if not settings.WA_TOKEN:
+        return {"success": False, "error": "WhatsApp not configured. Set WA_TOKEN in .env"}
+
+    phone = _format_phone(phone)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(AISENSY_URL, json={
+                "apiKey": settings.WA_TOKEN,
+                "campaignName": campaign_name,
+                "destination": phone,
+                "userName": user_name or "Customer",
+                "templateParams": template_params,
+            })
+            return _aisensy_result(resp)
+    except Exception as e:
+        logger.error(f"WhatsApp template broadcast send error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ── Named-template sends (Daily Entry auto-send, Bridal, Clients, Inquiry,
+#    scheduled reminders) ──────────────────────────────────────────────────
+# Each key here is a SEPARATE AiSensy Campaign — one campaign per approved
+# template, no mixing — configured via its own AISENSY_CAMPAIGN_* setting.
+# A blank value (not yet created/approved in AiSensy) just means that one
+# automated message quietly no-ops instead of sending, everything else
+# keeps working.
+TEMPLATE_CAMPAIGNS = {
+    "daily_entry": settings.AISENSY_CAMPAIGN_DAILY_ENTRY,
+    "daily_entry_pdf": settings.AISENSY_CAMPAIGN_DAILY_ENTRY_PDF,
+    "exclusive_points": settings.AISENSY_CAMPAIGN_EXCLUSIVE_POINTS,
+    "bridal_bride": settings.AISENSY_CAMPAIGN_BRIDAL_BRIDE,
+    "bridal_groom": settings.AISENSY_CAMPAIGN_BRIDAL_GROOM,
+    "bridal_sider": settings.AISENSY_CAMPAIGN_BRIDAL_SIDER,
+    "client_update": settings.AISENSY_CAMPAIGN_CLIENT_UPDATE,
+    "inquiry": settings.AISENSY_CAMPAIGN_INQUIRY,
+    "inquiry_pdf": settings.AISENSY_CAMPAIGN_INQUIRY_PDF,
+    "winback": settings.AISENSY_CAMPAIGN_WINBACK,
+    "membership": settings.AISENSY_CAMPAIGN_MEMBERSHIP,
+}
+
+
+async def send_whatsapp_template(
+    db,
+    destination: str,
+    template_key: str,
+    params: list,
+    media_url: Optional[str] = None,
+    media_filename: Optional[str] = None,
+    client_id: Optional[int] = None,
+    ref_id: Optional[int] = None,
+    user_name: str = "",
+) -> dict:
+    """Send one of the named templates in TEMPLATE_CAMPAIGNS and log the
+    attempt to wa_log. `db` is the caller's already-open oracledb connection
+    (routers already have one via Depends; the scheduler opens its own) —
+    pass None only if there's truly no connection available, which just
+    skips logging.
+
+    NEVER raises. Every failure path (missing campaign, provider down, bad
+    response, logging failure) is caught and returned as
+    {'success': False, 'error': ...} — a WhatsApp hiccup must never break
+    the save operation that triggered it. Callers should treat the return
+    value as informational, not something to re-raise on.
+    """
+    campaign_name = TEMPLATE_CAMPAIGNS.get(template_key, "")
+    if not campaign_name:
+        result = {"success": False, "error": f"No AiSensy campaign configured for '{template_key}' yet — set AISENSY_CAMPAIGN_* for it in .env"}
+    elif settings.WA_PROVIDER.lower() != "aisensy":
+        result = {"success": False, "error": "Named template sends require WA_PROVIDER=aisensy"}
+    elif not settings.WA_TOKEN:
+        result = {"success": False, "error": "WhatsApp not configured. Set WA_TOKEN in .env"}
+    else:
+        phone = _format_phone(destination)
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                payload = {
+                    "apiKey": settings.WA_TOKEN,
+                    "campaignName": campaign_name,
+                    "destination": phone,
+                    "userName": user_name or "Customer",
+                    "templateParams": [str(p) for p in params],
+                }
+                if media_url:
+                    payload["media"] = {"url": media_url, "filename": media_filename or "document.pdf"}
+                resp = await client.post(AISENSY_URL, json=payload)
+                result = _aisensy_result(resp)
+        except Exception as e:
+            logger.error(f"WhatsApp template send error ({template_key}): {e}")
+            result = {"success": False, "error": str(e)}
+
+    if db is not None:
+        try:
+            log_cursor = db.cursor()
+            await log_cursor.execute(
+                """INSERT INTO wa_log (phone, type, ref_id, client_id, template_key, message, status, error_message)
+                   VALUES (:1,:2,:3,:4,:5,:6,:7,:8)""",
+                [destination, template_key, ref_id, client_id, template_key,
+                 ", ".join(str(p) for p in params), "sent" if result.get("success") else "failed",
+                 result.get("error")]
+            )
+            await db.commit()
+        except Exception as log_err:
+            # Logging must never take down the caller either.
+            logger.error(f"Failed to log WhatsApp send to wa_log: {log_err}")
+
+    return result
+
+
 def build_daily_invoice_message(entry: dict, items: list) -> str:
     """Build WhatsApp invoice message for daily entry."""
     lines = [

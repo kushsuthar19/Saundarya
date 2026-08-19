@@ -3,9 +3,12 @@ Appointments, Staff, Attendance, Bridal Bookings, Revenue, Reports routers.
 """
 import hashlib
 import hmac
+import logging
+import os
 from datetime import date
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import FileResponse
 import oracledb
 
 from backend.core.config import settings
@@ -19,8 +22,10 @@ from backend.schemas.schemas import (
     DashboardStats, RevenueStats, SalaryPaymentCreate,
 )
 from backend.services.pdf_service import generate_bridal_invoice, generate_sider_invoice
-from backend.services.whatsapp_service import send_whatsapp_message, send_whatsapp_document, build_bridal_invoice_message
+from backend.services.whatsapp_service import send_whatsapp_message, send_whatsapp_document, build_bridal_invoice_message, send_whatsapp_template
 from backend.core.security import hash_password
+
+logger = logging.getLogger(__name__)
 
 
 def _bridal_pdf_token(booking_id: int) -> str:
@@ -897,6 +902,28 @@ async def create_bridal(
                 pass  # bridal_payments table not migrated yet — degrade gracefully
         except Exception as _e:
             pass  # Don't fail bridal save if daily entry fails
+
+    # ── WhatsApp: auto-send booking confirmation ────────────────────────
+    # One template per booking_type — never more than one of the three
+    # fires for a given booking. Best-effort: any failure here is logged
+    # and swallowed, never allowed to fail the save that already succeeded.
+    if data.phone:
+        try:
+            template_key = {
+                "Bride": "bridal_bride", "Groom": "bridal_groom", "Sider": "bridal_sider",
+            }.get(data.booking_type)
+            if template_key:
+                event_dates = ", ".join(sorted({
+                    str(fn.fn_date) for fn in data.functions if fn.fn_date
+                })) or (wd or "")
+                total_bill = data.pkg_amount + data.transport + addon_total - data.discount
+                await send_whatsapp_template(
+                    db, data.phone, template_key,
+                    [data.client_name, event_dates, f"₹{int(total_bill):,}", f"₹{int(data.advance_paid):,}"],
+                    ref_id=new_id, user_name=data.client_name,
+                )
+        except Exception as wa_err:
+            logger.error(f"Bridal auto WhatsApp send failed (non-fatal): {wa_err}")
 
     return await _get_bridal(new_id, cursor)
 
@@ -1885,3 +1912,97 @@ async def delete_inquiry(
     await cursor.execute("DELETE FROM inquiries WHERE id=:1", [inquiry_id])
     await db.commit()
     return {"deleted": inquiry_id}
+
+
+@inquiry_router.post("/{inquiry_id}/whatsapp")
+async def send_inquiry_whatsapp(
+    inquiry_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Manual WhatsApp button in the Inquiry section — sends the
+    inquiry_response template (name + service(s) inquired about). Real API
+    send, not the wa.me hand-off the button used before. Manual-only, no
+    auto-send on inquiry save, per your answer to the open question."""
+    cursor = db.cursor()
+    await cursor.execute("SELECT name, phone, service FROM inquiries WHERE id=:1", [inquiry_id])
+    row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    name, phone, service = row
+    if not phone:
+        raise HTTPException(status_code=400, detail="No phone number for this inquiry")
+    result = await send_whatsapp_template(
+        db, phone, "inquiry", [name, service or "our services"],
+        ref_id=inquiry_id, user_name=name,
+    )
+    return result
+
+
+# ── Service booklet (template #9: inquiry_response_with_booklet) ───────────
+# One fixed PDF, admin-uploadable/replaceable from the app — not generated
+# per-record like the invoices, so no per-record signed token needed.
+_BOOKLET_FILENAME = "service_booklet.pdf"
+
+
+def _booklet_path() -> str:
+    return os.path.join(settings.UPLOAD_DIR, _BOOKLET_FILENAME)
+
+
+@inquiry_router.post("/booklet")
+async def upload_service_booklet(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_admin),
+):
+    """Admin-only — uploads/replaces the service booklet PDF sent by the
+    'Send Booklet' button. Whatever's uploaded here is what every future
+    'Send Booklet' click sends, until replaced again."""
+    if not (file.content_type == "application/pdf" or (file.filename or "").lower().endswith(".pdf")):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    contents = await file.read()
+    with open(_booklet_path(), "wb") as f:
+        f.write(contents)
+    return {"uploaded": True, "size": len(contents)}
+
+
+@inquiry_router.get("/booklet/public")
+async def get_service_booklet_public():
+    """Public download for AiSensy to fetch and attach as a WhatsApp
+    document. No signed token like the invoice PDFs — this is the same
+    fixed marketing PDF for every inquiry, not personal/financial data, so
+    there's nothing per-record to protect."""
+    path = _booklet_path()
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="No service booklet uploaded yet")
+    return FileResponse(path, media_type="application/pdf", filename=_BOOKLET_FILENAME)
+
+
+@inquiry_router.post("/{inquiry_id}/whatsapp/booklet")
+async def send_inquiry_booklet_whatsapp(
+    inquiry_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Manual 'Send Booklet' button — sends the uploaded booklet as a real
+    attached WhatsApp document via inquiry_response_with_booklet. Requires
+    the site to be reachable over HTTPS for AiSensy to fetch the PDF;
+    code-complete now, actual delivery to be confirmed once HTTPS is live."""
+    if not os.path.exists(_booklet_path()):
+        raise HTTPException(status_code=400, detail="No service booklet uploaded yet — upload one first")
+    cursor = db.cursor()
+    await cursor.execute("SELECT name, phone, service FROM inquiries WHERE id=:1", [inquiry_id])
+    row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    name, phone, service = row
+    if not phone:
+        raise HTTPException(status_code=400, detail="No phone number for this inquiry")
+    doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/inquiries/booklet/public"
+    result = await send_whatsapp_template(
+        db, phone, "inquiry_pdf", [name, service or "our services"],
+        media_url=doc_url, media_filename=_BOOKLET_FILENAME,
+        ref_id=inquiry_id, user_name=name,
+    )
+    return result

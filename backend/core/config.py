@@ -47,12 +47,36 @@ class Settings(BaseSettings):
     # Provider: 'ultramsg' | 'callmebot' | 'meta' | 'aisensy'
     WA_PROVIDER: str = os.getenv("WA_PROVIDER", "ultramsg")
 
+    # AiSensy — one campaign name per automated template (Daily Entry,
+    # Bridal, Clients, Inquiry, scheduled reminders). Each of these is a
+    # SEPARATE AiSensy Campaign/Template (AiSensy is one-campaign-per-
+    # template, no mixing) — set once each is approved and live.
+    # Reuses WA_TOKEN as the AiSensy API key and the AISENSY_URL constant
+    # already in whatsapp_service.py as the endpoint — no separate API
+    # key/URL setting needed, since it's the same AiSensy account and a
+    # fixed endpoint either way.
+    AISENSY_CAMPAIGN_DAILY_ENTRY: str = os.getenv("AISENSY_CAMPAIGN_DAILY_ENTRY", "")
+    AISENSY_CAMPAIGN_DAILY_ENTRY_PDF: str = os.getenv("AISENSY_CAMPAIGN_DAILY_ENTRY_PDF", "")
+    AISENSY_CAMPAIGN_EXCLUSIVE_POINTS: str = os.getenv("AISENSY_CAMPAIGN_EXCLUSIVE_POINTS", "")
+    AISENSY_CAMPAIGN_BRIDAL_BRIDE: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_BRIDE", "")
+    AISENSY_CAMPAIGN_BRIDAL_GROOM: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_GROOM", "")
+    AISENSY_CAMPAIGN_BRIDAL_SIDER: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_SIDER", "")
+    AISENSY_CAMPAIGN_CLIENT_UPDATE: str = os.getenv("AISENSY_CAMPAIGN_CLIENT_UPDATE", "")
+    AISENSY_CAMPAIGN_INQUIRY: str = os.getenv("AISENSY_CAMPAIGN_INQUIRY", "")
+    AISENSY_CAMPAIGN_INQUIRY_PDF: str = os.getenv("AISENSY_CAMPAIGN_INQUIRY_PDF", "")
+    AISENSY_CAMPAIGN_WINBACK: str = os.getenv("AISENSY_CAMPAIGN_WINBACK", "")
+    AISENSY_CAMPAIGN_MEMBERSHIP: str = os.getenv("AISENSY_CAMPAIGN_MEMBERSHIP", "")
+
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_LOGIN: int = 10
 
     # PDF generation
     PDF_DIR: str = "/tmp/saundarya_pdfs"
+    # Admin-uploaded static files (currently just the Inquiry service
+    # booklet PDF) — NOT /tmp, since these are manually uploaded assets
+    # with no way to regenerate them, and /tmp can be wiped on reboot.
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
 
     class Config:
         env_file = ".env"

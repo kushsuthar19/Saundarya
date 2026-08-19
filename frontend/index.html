@@ -688,6 +688,7 @@ table tbody tr:hover td{background:var(--bg2)}
     <button class="nb nc-teal" data-sec="daily" onclick="go(this,'daily')"><i class="fas fa-pen-ruler nb-ico"></i>Daily Entry</button>
     <button class="nb nc-sky" data-sec="clients" onclick="go(this,'clients')"><i class="fas fa-users nb-ico"></i>Clients</button>
     <button class="nb nc-emerald" data-sec="inquiry" onclick="go(this,'inquiry')"><i class="fas fa-phone-alt nb-ico"></i>Inquiry</button>
+    <button class="nb nc-coral" data-sec="broadcast" onclick="go(this,'broadcast')"><i class="fab fa-whatsapp nb-ico"></i>Broadcast</button>
     <button class="nb nc-emerald" data-sec="staff" onclick="go(this,'staff')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Staff</button>
     <button class="nb nc-amber" data-sec="revenue" onclick="go(this,'revenue')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Revenue</button>
     <button class="nb nc-gold" data-sec="reports" onclick="go(this,'reports')" data-admin="1"><i class="fas fa-lock nb-ico"></i>Reports</button>
@@ -1731,6 +1732,16 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="ptitle"><i class="fas fa-phone-alt" style="color:var(--emerald)"></i>Inquiry</div>
   <div class="psub">Track potential clients — store inquiry details and follow up via WhatsApp</div>
   <div class="nline emerald"></div>
+  <div class="admin-only" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <i class="fas fa-file-pdf" style="color:var(--amber)"></i>
+      <span style="font-size:12px;color:var(--ink3)">Service booklet PDF (sent by the "Send Booklet" button on each inquiry):</span>
+      <label class="btn btn-sm btn-ghost" style="cursor:pointer;margin:0">
+        <i class="fas fa-upload"></i> Upload / Replace
+        <input type="file" accept="application/pdf" onchange="uploadServiceBooklet(this)" style="display:none">
+      </label>
+    </div>
+  </div>
   <!-- Add Inquiry Form -->
   <div id="inq-form" style="display:none;margin-bottom:16px">
     <div class="card"><div class="card-hd emerald"><div class="card-hd-t"><i class="fas fa-plus"></i>New Inquiry</div></div>
@@ -1784,6 +1795,40 @@ table tbody tr:hover td{background:var(--bg2)}
     <tbody id="inq-tbody"><tr><td colspan="9" style="text-align:center;color:var(--ink4);padding:20px">No inquiries yet</td></tr></tbody>
     </table></div>
   </div>
+</div>
+
+<div id="sec-broadcast" class="sec">
+  <div class="ptitle"><i class="fab fa-whatsapp" style="color:var(--coral)"></i>WhatsApp Broadcast</div>
+  <div class="psub">Save a click-to-send template, then blast it to all clients, a tag, or a hand-picked list. Each template needs its own AiSensy campaign already WhatsApp-approved.</div>
+  <div class="nline" style="background:var(--coral)"></div>
+
+  <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">
+    <button class="btn btn-emerald btn-sm" onclick="openWaTemplateForm()"><i class="fas fa-plus"></i>New Template</button>
+    <button class="btn btn-ghost btn-sm" onclick="openWaHistoryModal()"><i class="fas fa-history"></i>Send History</button>
+  </div>
+
+  <!-- Template create/edit form -->
+  <div id="wa-tmpl-form" style="display:none;margin-bottom:16px">
+    <div class="card"><div class="card-hd emerald"><div class="card-hd-t"><i class="fas fa-file-alt"></i><span id="wa-tmpl-form-title">New Template</span></div></div>
+    <div class="card-body">
+      <input type="hidden" id="wt-id">
+      <div class="fg">
+        <div class="fl"><label>Template Name *</label><input type="text" id="wt-name" placeholder="e.g. Diwali Offer"></div>
+        <div class="fl"><label>AiSensy Campaign Name *</label><input type="text" id="wt-campaign" placeholder="Exact campaign name from AiSensy dashboard"></div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:6px">TEMPLATE VARIABLES — in {{1}}, {{2}}... order, matching your approved AiSensy template</label>
+        <div id="wt-params"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addWtParamRow()" style="margin-top:6px"><i class="fas fa-plus"></i>Add Variable</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-emerald" onclick="saveWaTemplate()"><i class="fas fa-save"></i>Save Template</button>
+        <button class="btn btn-ghost" onclick="v('wa-tmpl-form').style.display='none'">Cancel</button>
+      </div>
+    </div></div>
+  </div>
+
+  <div id="wa-tmpl-list" class="sg"></div>
 </div>
 
 <!-- ═══ INVOICE MODAL ═══ -->
@@ -1951,7 +1996,7 @@ function toggleDark(){
 // ════════════════════════════════
 // NAV & BREADCRUMB
 // ════════════════════════════════
-const PAGE_NAMES={dash:"Dashboard",appt:"Appointments",bridal:"Bridal Management",daily:"Daily Entry",clients:"Client CRM",inquiry:"Inquiry",staff:"Staff Management",revenue:"Revenue",reports:"Reports & Analytics"};
+const PAGE_NAMES={dash:"Dashboard",appt:"Appointments",bridal:"Bridal Management",daily:"Daily Entry",clients:"Client CRM",inquiry:"Inquiry",broadcast:"WhatsApp Broadcast",staff:"Staff Management",revenue:"Revenue",reports:"Reports & Analytics"};
 
 function go(btn,id){
   if(!id&&btn){id=btn;btn=null;}
@@ -1970,6 +2015,7 @@ function go(btn,id){
   if(id==="daily"){renderDailyView();updateStaffSels();}
   if(id==="clients")renderClients('');
   if(id==="inquiry")renderInquiries('');
+  if(id==="broadcast")renderWaTemplates();
 }
 
 function goPw(btn,id){
@@ -3063,7 +3109,7 @@ async function renderClients(s){
     <td>${c.visit_count||c.visits||0}</td><td>${fmt(c.total_spent||0)}</td>
     <td>${c.preferred_staff||'—'}</td><td>${c.preferences||'—'}</td>
     <td style="white-space:nowrap">
-      ${c.phone?`<button onclick="sendWaClient('${c.phone}','${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
+      ${c.phone?`<button onclick="sendWaClient(${c.id},'${c.name}')" style="background:none;border:none;cursor:pointer;font-size:15px" title="WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
       <div style="position:relative;display:inline-block">
         <button onclick="toggleRowMenu('cr-menu-${c.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
         <div id="cr-menu-${c.id}" class="row-dropdown-menu" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:150px;overflow:hidden">
@@ -3136,8 +3182,248 @@ function sendWaFromModal(){
 }
 
 
-function sendWaClient(phone,name){
-  openWaModal(phone,name,'Hello '+name+'! Thank you for visiting Saundarya Beauty Care. Book your next appointment: 96621 35422 - Saundarya Beauty Care & Academy, Vadodara');
+async function sendWaClient(clientId,name){
+  // Real API send via the client_update template (name only) — replaces
+  // the old wa.me hand-off modal. Needs AISENSY_CAMPAIGN_CLIENT_UPDATE
+  // set in .env and its template approved before this actually delivers.
+  const r=await apiCall('POST',`/clients/${clientId}/whatsapp`);
+  if(!r)return;
+  if(r.success)toast('<i class="fas fa-check"></i> WhatsApp sent to '+name,'var(--emerald)');
+  else toast('WhatsApp send failed: '+(r.error||'Unknown error'),'var(--rose)');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WHATSAPP BROADCAST TEMPLATES
+// One AiSensy-approved campaign per template; "Send Broadcast" fans it out
+// to All clients / a tag / a hand-picked list in one click.
+// ═══════════════════════════════════════════════════════════════
+let _waTemplates=[];
+
+async function renderWaTemplates(){
+  const list=await apiCall('GET','/wa-templates');
+  _waTemplates=list||[];
+  const box=v('wa-tmpl-list');if(!box)return;
+  if(!_waTemplates.length){
+    box.innerHTML='<div style="color:var(--ink4);font-size:12px;grid-column:1/-1">No templates yet — click "New Template" to add one (needs an AiSensy-approved campaign first).</div>';
+    return;
+  }
+  box.innerHTML=_waTemplates.map(t=>{
+    const params=(t.params||[]).map(p=>`<span style="background:var(--bg2);border-radius:4px;padding:2px 6px;font-size:10px;margin-right:4px;display:inline-block;margin-bottom:4px">${p.label||'?'}${p.type==='client_name'||p.type==='phone'?' (auto)':''}</span>`).join('');
+    return `<div class="card">
+      <div class="card-body">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="font-weight:700;font-size:13px;color:var(--ink)"><i class="fab fa-whatsapp" style="color:#128C7E"></i> ${t.name}</div>
+          <div style="display:flex;gap:6px">
+            <button onclick="openWaTemplateForm(${t.id})" style="background:none;border:none;cursor:pointer;color:var(--ink3)" title="Edit"><i class="fas fa-pen"></i></button>
+            <button onclick="deleteWaTemplate(${t.id})" style="background:none;border:none;cursor:pointer;color:var(--rose)" title="Delete"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--ink3);margin:4px 0">Campaign: ${t.campaign_name}</div>
+        <div style="margin:8px 0">${params||'<span style="color:var(--ink4);font-size:11px">No variables</span>'}</div>
+        <button class="btn btn-emerald btn-sm" onclick="openWaBroadcastModal(${t.id})" style="width:100%"><i class="fas fa-paper-plane"></i> Send Broadcast</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openWaTemplateForm(id){
+  const form=v('wa-tmpl-form');form.style.display='block';
+  v('wt-id').value=id||'';
+  const t=id?_waTemplates.find(x=>x.id===id):null;
+  v('wa-tmpl-form-title').textContent=t?'Edit Template':'New Template';
+  v('wt-name').value=t?t.name:'';
+  v('wt-campaign').value=t?t.campaign_name:'';
+  v('wt-params').innerHTML='';
+  (t&&t.params&&t.params.length?t.params:[{label:'Client Name',type:'client_name'}]).forEach(p=>addWtParamRow(p.label,p.type));
+  form.scrollIntoView({behavior:'smooth'});
+}
+
+function addWtParamRow(label,type){
+  const box=v('wt-params');
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;gap:8px;margin-bottom:6px;align-items:center';
+  row.innerHTML=`<input type="text" class="wt-param-label" placeholder="Variable label e.g. Offer Text" value="${(label||'').replace(/"/g,'&quot;')}" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:var(--surface)">
+    <select class="wt-param-type" style="border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)">
+      <option value="static" ${type==='static'?'selected':''}>Typed each send</option>
+      <option value="client_name" ${type==='client_name'?'selected':''}>Client's Name (auto)</option>
+      <option value="phone" ${type==='phone'?'selected':''}>Client's Phone (auto)</option>
+    </select>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:var(--rose)"><i class="fas fa-times"></i></button>`;
+  box.appendChild(row);
+}
+
+async function saveWaTemplate(){
+  const id=v('wt-id').value;
+  const name=v('wt-name').value.trim();
+  const campaign=v('wt-campaign').value.trim();
+  if(!name||!campaign){toast('Enter template name and campaign name','var(--rose)');return;}
+  const params=[...document.querySelectorAll('#wt-params > div')].map(row=>({
+    label:row.querySelector('.wt-param-label').value.trim(),
+    type:row.querySelector('.wt-param-type').value
+  })).filter(p=>p.label);
+  const body={name,campaign_name:campaign,params};
+  const r=id?await apiCall('PUT',`/wa-templates/${id}`,body):await apiCall('POST','/wa-templates',body);
+  if(r){
+    toast('<i class="fas fa-check"></i> Template saved','var(--emerald)');
+    v('wa-tmpl-form').style.display='none';
+    renderWaTemplates();
+  }
+}
+
+async function deleteWaTemplate(id){
+  if(!confirm('Delete this template?'))return;
+  const r=await apiCall('DELETE',`/wa-templates/${id}`);
+  if(r){toast('Template deleted','var(--rose)');renderWaTemplates();}
+}
+
+// ── broadcast composer ────────────────────────────────────────────
+let _waBcastTemplate=null;
+let _waBcastAudience='all';
+let _waBcastPicked=new Set();
+let _waAllClientsCache=null;
+
+async function openWaBroadcastModal(templateId){
+  _waBcastTemplate=_waTemplates.find(t=>t.id===templateId);
+  if(!_waBcastTemplate)return;
+  _waBcastAudience='all';_waBcastPicked=new Set();
+  const modal=v('inv-modal');if(!modal)return;
+  const staticParams=(_waBcastTemplate.params||[]).filter(p=>p.type==='static');
+  const staticInputs=staticParams.map(p=>`
+    <div class="fl"><label>${p.label}</label><input type="text" class="wb-static" data-label="${p.label.replace(/"/g,'&quot;')}" placeholder="${p.label}"></div>
+  `).join('');
+  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:24px;width:520px;max-width:95vw;max-height:88vh;overflow:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:4px"><i class="fab fa-whatsapp" style="color:#128C7E"></i> Send "${_waBcastTemplate.name}"</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:14px">Campaign: ${_waBcastTemplate.campaign_name}</div>
+    ${staticInputs?`<div style="margin-bottom:14px">${staticInputs}</div>`:''}
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:6px">SEND TO</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button type="button" class="btn btn-sm wb-aud-btn" data-aud="all" onclick="setWbAudience('all')">All Clients</button>
+        <button type="button" class="btn btn-sm btn-ghost wb-aud-btn" data-aud="tag" onclick="setWbAudience('tag')">By Tag</button>
+        <button type="button" class="btn btn-sm btn-ghost wb-aud-btn" data-aud="manual" onclick="setWbAudience('manual')">Pick Clients</button>
+      </div>
+      <div id="wb-audience-body"></div>
+    </div>
+    <div id="wb-count" style="font-size:12px;color:var(--ink3);margin:10px 0;font-weight:600"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeInvModal()">Cancel</button>
+      <button class="btn btn-emerald" onclick="sendWaBroadcast(this)"><i class="fas fa-paper-plane"></i> Send</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
+  renderWbAudienceBody();
+  updateWbCount();
+}
+
+function setWbAudience(aud){
+  _waBcastAudience=aud;
+  document.querySelectorAll('.wb-aud-btn').forEach(b=>{
+    if(b.dataset.aud===aud)b.classList.remove('btn-ghost');else b.classList.add('btn-ghost');
+  });
+  renderWbAudienceBody();
+  updateWbCount();
+}
+
+async function renderWbAudienceBody(){
+  const box=v('wb-audience-body');if(!box)return;
+  if(_waBcastAudience==='all'){
+    box.innerHTML='<div style="font-size:12px;color:var(--ink3)">Every client with a phone number on file.</div>';
+  }else if(_waBcastAudience==='tag'){
+    const clients=await getAllClientsCached();
+    const tags=[...new Set(clients.map(c=>c.tag).filter(Boolean))];
+    box.innerHTML=`<select id="wb-tag-sel" onchange="updateWbCount()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)">
+      ${tags.map(t=>`<option value="${t}">${t}</option>`).join('')}
+    </select>`;
+  }else{
+    const clients=await getAllClientsCached();
+    box.innerHTML=`<input type="text" placeholder="Search clients..." oninput="filterWbPickList(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);margin-bottom:6px">
+      <div id="wb-pick-list" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px"></div>`;
+    renderWbPickList(clients,'');
+  }
+}
+
+function renderWbPickList(clients,search){
+  const box=v('wb-pick-list');if(!box)return;
+  const s=(search||'').toUpperCase();
+  const filtered=clients.filter(c=>!s||(c.name||'').toUpperCase().includes(s)||(c.phone||'').includes(s));
+  box.innerHTML=filtered.slice(0,300).map(c=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:12px;cursor:pointer">
+      <input type="checkbox" ${_waBcastPicked.has(c.id)?'checked':''} onchange="toggleWbPick(${c.id},this.checked)">
+      ${c.name} <span style="color:var(--ink4)">${c.phone||''}</span>
+    </label>`).join('')||'<div style="color:var(--ink4);font-size:12px;padding:6px">No clients found</div>';
+}
+
+async function filterWbPickList(search){
+  const clients=await getAllClientsCached();
+  renderWbPickList(clients,search);
+}
+
+function toggleWbPick(id,checked){
+  if(checked)_waBcastPicked.add(id);else _waBcastPicked.delete(id);
+  updateWbCount();
+}
+
+async function getAllClientsCached(){
+  if(_waAllClientsCache)return _waAllClientsCache;
+  const r=await apiCall('GET','/clients?limit=500');
+  _waAllClientsCache=r||[];
+  return _waAllClientsCache;
+}
+
+async function updateWbCount(){
+  const box=v('wb-count');if(!box)return;
+  let body={audience:_waBcastAudience};
+  if(_waBcastAudience==='tag'){
+    const sel=v('wb-tag-sel');
+    body.tag=sel?sel.value:'';
+  }else if(_waBcastAudience==='manual'){
+    body.client_ids=[..._waBcastPicked];
+  }
+  const r=await apiCall('POST','/wa-templates/audience-preview',body);
+  box.textContent=r?`${r.count} client${r.count===1?'':'s'} will receive this message`:'';
+}
+
+async function sendWaBroadcast(btn){
+  if(!_waBcastTemplate)return;
+  const staticValues={};
+  document.querySelectorAll('.wb-static').forEach(inp=>{staticValues[inp.dataset.label]=inp.value;});
+  let body={audience:_waBcastAudience,static_values:staticValues};
+  if(_waBcastAudience==='tag'){
+    const sel=v('wb-tag-sel');
+    if(!sel||!sel.value){toast('Select a tag','var(--rose)');return;}
+    body.tag=sel.value;
+  }else if(_waBcastAudience==='manual'){
+    if(!_waBcastPicked.size){toast('Pick at least one client','var(--rose)');return;}
+    body.client_ids=[..._waBcastPicked];
+  }
+  if(!confirm('Send this WhatsApp message now? This cannot be undone.'))return;
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Sending...';}
+  const r=await apiCall('POST',`/wa-templates/${_waBcastTemplate.id}/broadcast`,body);
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane"></i> Send';}
+  if(r){
+    closeInvModal();
+    toast(`<i class="fas fa-check"></i> Sent ${r.sent}/${r.total}${r.failed?` (${r.failed} failed)`:''}`, r.failed?'var(--amber)':'var(--emerald)');
+  }
+}
+
+// ── send history ──────────────────────────────────────────────────
+async function openWaHistoryModal(){
+  const rows=await apiCall('GET','/wa-templates/broadcasts/history');
+  const modal=v('inv-modal');if(!modal)return;
+  modal.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:24px;width:560px;max-width:95vw;max-height:80vh;overflow:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:14px"><i class="fas fa-history"></i> Broadcast History</div>
+    ${(rows&&rows.length)?rows.map(h=>`
+      <div style="border-bottom:1px solid var(--border);padding:8px 0;font-size:12px">
+        <div style="font-weight:600;color:var(--ink)">${h.template_name||''} <span style="color:var(--ink4);font-weight:400">→ ${h.audience_desc||''}</span></div>
+        <div style="color:var(--ink3)">${h.sent_count}/${h.total_count} sent${h.failed_count?`, ${h.failed_count} failed`:''} · ${h.created_at}</div>
+      </div>`).join(''):'<div style="color:var(--ink4);font-size:12px">No broadcasts sent yet</div>'}
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-ghost" onclick="closeInvModal()">Close</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
 }
 
 async function editClient(id){
@@ -3530,6 +3816,7 @@ async function renderDailyView(){
         <div id="de-menu-${e.id}" class="row-dropdown-menu" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:140px;overflow:hidden">
           <div onclick="apiDownload('/entries/${e.id}/pdf','Invoice_${e.inv_no}.pdf');toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-download" style="width:14px;color:var(--sky)"></i> Download PDF</div>
           ${e.phone?`<div onclick="sendWAEntry({id:${e.id},inv_no:'${e.inv_no}',phone:'${e.phone}'});toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fab fa-whatsapp" style="width:14px;color:#128C7E"></i> WhatsApp</div>`:''}
+          ${e.phone?`<div onclick="sendEntryPdfWa(${e.id},this);toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-file-pdf" style="width:14px;color:var(--amber)"></i> Send with PDF</div>`:''}
           <div onclick="editEntry(${e.id});toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-edit" style="width:14px;color:var(--teal)"></i> Edit</div>
           <div onclick="deleteEntry(${e.id},'${e.inv_no}');toggleRowMenu('de-menu-${e.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;color:var(--rose)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-trash" style="width:14px"></i> Delete</div>
         </div>
@@ -3582,6 +3869,7 @@ function showInvoiceModal(entry){
       <button onclick="window.print()" style="background:#1A4A3A;color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:11px"><i class="fas fa-print"></i> Print</button>
       <button onclick="apiDownload('/entries/${entry.id}/pdf','Invoice_${entry.inv_no}.pdf')" style="background:#1A4A3A;color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:11px"><i class="fas fa-download"></i> PDF</button>
       ${entry.phone?`<button onclick='sendWAEntry(${JSON.stringify({id:entry.id,inv_no:entry.inv_no,phone:entry.phone})})' style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:11px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp</button>`:''}
+      ${entry.phone?`<button onclick="sendEntryPdfWa(${entry.id},this)" style="background:var(--amber);color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:11px"><i class="fas fa-file-pdf"></i> Send with PDF</button>`:''}
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 14px;cursor:pointer;font-size:11px">Close</button>
     </div>
   </div>`;
@@ -3595,6 +3883,19 @@ async function sendWAEntry(entry){
   else toast('WhatsApp API not configured in .env','var(--rose)');
 }
 function sendWhatsApp(){toast('Click WhatsApp button on each entry card','var(--gold)');}
+
+async function sendEntryPdfWa(entryId,btn){
+  // Sends the invoice as a real attached WhatsApp document via the
+  // daily_entry_pdf template — needs HTTPS live to actually deliver
+  // (AiSensy must fetch the PDF over a public URL); code-complete now,
+  // confirm once the domain is set up.
+  if(btn){btn.disabled=true;const orig=btn.innerHTML;btn.dataset.orig=orig;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Sending...';}
+  const r=await apiCall('POST',`/entries/${entryId}/whatsapp/pdf`);
+  if(btn){btn.disabled=false;btn.innerHTML=btn.dataset.orig||'<i class="fas fa-file-pdf"></i> Send with PDF';}
+  if(!r)return;
+  if(r.success)toast('<i class="fas fa-check"></i> Invoice PDF sent on WhatsApp','var(--emerald)');
+  else toast('WhatsApp send failed: '+(r.error||'Unknown error'),'var(--rose)');
+}
 async function downloadBatchPdf(){
   const d=v('de-fd')?.value||td();
   await apiDownload(`/entries/batch/pdf?entry_date=${d}`,`DailyReport_${d}.pdf`);
@@ -5865,10 +6166,11 @@ async function renderInquiries(search){
     </select></td>
     <td style="max-width:120px;font-size:11px;color:var(--ink3)">${inq.notes||'—'}</td>
     <td style="white-space:nowrap">
-      <button onclick="sendInquiryWa(${inq.id},'${inq.phone||''}','${inq.name.replace(/'/g,'')}','${inq.service||''}')" style="background:none;border:none;cursor:pointer;font-size:16px" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>
+      <button onclick="sendInquiryWa(${inq.id},'${inq.phone||''}','${inq.name.replace(/'/g,'')}')" style="background:none;border:none;cursor:pointer;font-size:16px" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>
       <div style="position:relative;display:inline-block">
         <button onclick="toggleRowMenu('inq-menu-${inq.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
-        <div id="inq-menu-${inq.id}" class="row-dropdown-menu" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:130px;overflow:hidden">
+        <div id="inq-menu-${inq.id}" class="row-dropdown-menu" style="display:none;position:absolute;right:0;top:110%;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99;min-width:150px;overflow:hidden">
+          <div onclick="sendInquiryBooklet(${inq.id},'${inq.name.replace(/'/g,'')}');toggleRowMenu('inq-menu-${inq.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-file-pdf" style="width:14px;color:var(--amber)"></i> Send Booklet</div>
           <div onclick="editInquiry(${inq.id});toggleRowMenu('inq-menu-${inq.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-edit" style="width:14px;color:var(--teal)"></i> Edit</div>
           <div onclick="deleteInquiry(${inq.id},'${inq.name.replace(/'/g,'')}');toggleRowMenu('inq-menu-${inq.id}')" style="padding:9px 14px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:8px;color:var(--rose)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><i class="fas fa-trash" style="width:14px"></i> Delete</div>
         </div>
@@ -5926,9 +6228,48 @@ async function updateInquiry(id){
   renderInquiries('');
 }
 
-function sendInquiryWa(id,phone,name,service){
+async function sendInquiryWa(id,phone,name){
+  // Real API send via the inquiry_response template (name + service) —
+  // replaces the old wa.me hand-off modal. Needs AISENSY_CAMPAIGN_INQUIRY
+  // set in .env and its template approved before this actually delivers.
   if(!phone){toast('No phone number for this inquiry','var(--rose)');return;}
-  openWaModal(phone,name,'Namaste, '+name+'! Thank you for your inquiry at Saundarya Beauty Care, Vadodara. We would love to help with '+(service||'our services')+'. Please reply to book your appointment. - Saundarya Beauty Care & Academy');
+  const r=await apiCall('POST',`/inquiries/${id}/whatsapp`);
+  if(!r)return;
+  if(r.success)toast('<i class="fas fa-check"></i> WhatsApp sent to '+name,'var(--emerald)');
+  else toast('WhatsApp send failed: '+(r.error||'Unknown error'),'var(--rose)');
+}
+
+async function uploadServiceBooklet(input){
+  // Admin-only file upload — apiCall() always JSON-encodes its body, so
+  // this needs its own raw fetch with FormData for multipart/form-data.
+  const file=input.files[0];
+  if(!file)return;
+  const fd=new FormData();
+  fd.append('file',file);
+  const hdrs={};
+  if(_token)hdrs['Authorization']=`Bearer ${_token}`;
+  try{
+    const resp=await fetch(API+'/inquiries/booklet',{method:'POST',headers:hdrs,credentials:'include',body:fd});
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({detail:'Upload failed'}));
+      toast(err.detail||'Upload failed','var(--rose)');
+      return;
+    }
+    toast('<i class="fas fa-check"></i> Service booklet uploaded','var(--emerald)');
+  }catch(e){
+    toast('Upload failed: '+e.message,'var(--rose)');
+  }
+  input.value='';
+}
+
+async function sendInquiryBooklet(id,name){
+  // Sends the admin-uploaded service booklet PDF via inquiry_response_with_booklet.
+  // Needs HTTPS live to actually deliver (AiSensy must fetch the PDF over a
+  // public URL) — code-complete now, confirm once the domain is set up.
+  const r=await apiCall('POST',`/inquiries/${id}/whatsapp/booklet`);
+  if(!r)return;
+  if(r.success)toast('<i class="fas fa-check"></i> Booklet sent to '+name,'var(--emerald)');
+  else toast('Booklet send failed: '+(r.error||'Unknown error'),'var(--rose)');
 }
 
 // ═══════════════════════════════════════════
