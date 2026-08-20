@@ -1405,10 +1405,10 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="nline sky" id="clients-nline"></div>
   <!-- Client Type Tabs -->
   <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:14px">
-    <button class="crm-tab active" id="crm-tab-all" onclick="crmTab('all',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">All Clients</button>
-    <button class="crm-tab" id="crm-tab-New" onclick="crmTab('New',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🟢 New</button>
-    <button class="crm-tab" id="crm-tab-Regular" onclick="crmTab('Regular',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🔵 Regular</button>
-    <button class="crm-tab" id="crm-tab-Exclusive" onclick="crmTab('Exclusive',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">⭐ Exclusive</button>
+    <button class="crm-tab active" id="crm-tab-all" onclick="crmTab('all',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">All Clients<span id="crm-cnt-all"></span></button>
+    <button class="crm-tab" id="crm-tab-New" onclick="crmTab('New',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🟢 New<span id="crm-cnt-New"></span></button>
+    <button class="crm-tab" id="crm-tab-Regular" onclick="crmTab('Regular',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">🔵 Regular<span id="crm-cnt-Regular"></span></button>
+    <button class="crm-tab" id="crm-tab-Exclusive" onclick="crmTab('Exclusive',this)" style="padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s">⭐ Exclusive<span id="crm-cnt-Exclusive"></span></button>
   </div>
   <div style="display:flex;gap:8px;margin-bottom:8px">
     <div class="sbar-wrap" style="flex:1"><i class="fas fa-search"></i><input type="text" id="crm-search" placeholder="Search clients by name or phone..." oninput="renderClients(this.value)"></div>
@@ -3105,8 +3105,23 @@ function showCfExclusive(){
     emExp.value=d.toISOString().split('T')[0];
   }
 }
+// Counts shown on the All/New/Regular/Exclusive tabs — always the totals
+// across every client (ignoring the active tab/search), so re-fetched
+// unfiltered each time the list changes.
+async function updateCrmTabCounts(){
+  const rows=await apiCall('GET','/clients?limit=500');
+  if(!rows)return;
+  const counts={all:rows.length,New:0,Regular:0,Exclusive:0};
+  rows.forEach(c=>{const t=c.client_type||'New';if(counts[t]!==undefined)counts[t]++;});
+  const set=(id,n)=>{const el=v(id);if(el)el.textContent=' ('+n+')';};
+  set('crm-cnt-all',counts.all);
+  set('crm-cnt-New',counts.New);
+  set('crm-cnt-Regular',counts.Regular);
+  set('crm-cnt-Exclusive',counts.Exclusive);
+}
 async function renderClients(s){
   const tb=v('cl-tbody');if(!tb)return;
+  updateCrmTabCounts();
   // Build URL with tab filter
   let url=`/clients?limit=200${s?'&search='+encodeURIComponent(s):''}`;
   if(_crmActiveType&&_crmActiveType!=='all') url+=`&client_type=${encodeURIComponent(_crmActiveType)}`;
