@@ -45,8 +45,13 @@
   --shadow-lg:0 12px 40px rgba(0,0,0,0.55);
 }
 
-html{scroll-behavior:smooth}
-body{font-family:"Inter",sans-serif;background:var(--bg);color:var(--ink);font-size:13px;line-height:1.5;transition:background var(--t-slow),color var(--t-slow);min-height:100vh}
+html{scroll-behavior:smooth;overscroll-behavior-y:contain}
+/* overscroll-behavior-y above stops the page's elastic/rubber-band bounce
+   on trackpad scroll-past-top — without it, position:fixed elements (like
+   the pink "+" quick-actions button pinned to the bottom-right) can
+   flicker and briefly render up near the top of the screen, overlapping
+   the account menu, during that bounce on macOS Chrome/Safari. */
+body{font-family:"Inter",sans-serif;background:var(--bg);color:var(--ink);font-size:13px;line-height:1.5;transition:background var(--t-slow),color var(--t-slow);min-height:100vh;overscroll-behavior-y:contain}
 
 /* ══ LOADING SKELETON ══ */
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
@@ -3769,6 +3774,27 @@ function isUpiMethod(pm){
   return pm==='UPI'||pm==='GPay'||pm==='GPay/UPI';
 }
 
+// Formats a created_at timestamp (e.g. "2026-08-20T14:32:10.123456") into a
+// 12-hour clock time like "02:32 PM" for display next to the entry date.
+function fmtTime(ts){
+  if(!ts)return '';
+  const d=new Date(ts);
+  if(isNaN(d))return '';
+  return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+}
+
+// Split pay_method strings ("Split|Cash:1000|UPI:1200|Card:0") are stored
+// raw — show them as a readable "Split (Cash ₹1,000 + UPI ₹1,200)" instead.
+function formatPayMethod(pm){
+  const sp=parseSplitPay(pm);
+  if(!sp)return pm||'Cash';
+  const parts=[];
+  if(sp.cash)parts.push('Cash '+fmt(sp.cash));
+  if(sp.upi)parts.push('UPI '+fmt(sp.upi));
+  if(sp.card)parts.push('Card '+fmt(sp.card));
+  return 'Split ('+parts.join(' + ')+')';
+}
+
 function renderDeMethodTotal(rows,fp){
   const el=v('de-fp-total');if(!el)return;
   if(!fp){el.style.display='none';return;}
@@ -3796,20 +3822,27 @@ async function renderDailyView(){
   const allRows=await apiCall('GET',`/entries?limit=200${qp}`);
   if(!allRows){dv.innerHTML='<div style="text-align:center;padding:30px;color:var(--rose)">Failed to load</div>';return;}
   renderDeMethodTotal(allRows,fp);
+  // A Split bill ("Split|Cash:1000|UPI:1200|Card:0") straddles methods — it
+  // must show up under a filter whenever it has a non-zero leg in that
+  // method, not just when pay_method matches exactly, or its cash/UPI/card
+  // portion silently vanishes from that filtered list (even though the
+  // total above already counts it).
   const rows=fp?allRows.filter(e=>{
     const pm=e.pay_method||'Cash';
+    const sp=parseSplitPay(pm);
+    if(sp)return fp==='UPI'?sp.upi>0:(fp==='Cash'?sp.cash>0:sp.card>0);
     return fp==='UPI'?isUpiMethod(pm):pm===fp;
   }):allRows;
   if(!rows.length){dv.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--ink4);padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r12)"><i class="fas fa-receipt" style="font-size:22px;margin-bottom:8px;display:block;opacity:.4"></i>No entries found</div>';return;}
   dv.innerHTML=rows.map(e=>`<div class="de-card" onclick='showInvoiceModal(${JSON.stringify(e)})'>
     <div class="de-card-top">
       <div><div class="de-name"><i class="fas fa-user"></i> ${e.client_name}</div><div class="de-phone">${e.phone||''}</div></div>
-      <div style="text-align:right"><div class="de-inv">${e.inv_no}</div><div class="de-date">${e.entry_date||''}</div></div>
+      <div style="text-align:right"><div class="de-inv">${e.inv_no}</div><div class="de-date">${e.entry_date||''}${e.created_at?' · '+fmtTime(e.created_at):''}</div></div>
     </div>
     <div class="de-svcs">${e.services||''}</div>
     <div class="de-footer">
       <span class="pill p-nd">${e.visit_type||'Walk-in'}</span>
-      <span class="pill p-bk">${e.pay_method||'Cash'}</span>
+      <span class="pill p-bk">${formatPayMethod(e.pay_method)}</span>
       <span style="margin-left:auto;font-weight:600">${fmt(e.net_total||0)}</span>
       <div style="position:relative;display:inline-block" onclick="event.stopPropagation()">
         <button onclick="toggleRowMenu('de-menu-${e.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
@@ -3835,8 +3868,12 @@ function showInvoiceModal(entry){
     <td style="padding:5px 10px;text-align:right;font-weight:500">${fmt((it.price||0)*(it.qty||1))}</td>
   </tr>`).join('');
   const gross=entry.gross_total||0,disc=entry.discount||0,net=entry.net_total||0,pay=entry.pay_method||'Cash';
-  const cash=pay==='Cash'?net:(pay==='Split'?net/2:0);
-  const online=(pay==='UPI'||pay==='Card')?net:(pay==='Split'?net/2:0);
+  // pay_method for a split bill is "Split|Cash:1000|UPI:1200|Card:0", never
+  // the literal string "Split" — so pull the real per-method amounts out of
+  // it instead of guessing a 50/50 split (which never even matched before).
+  const sp=parseSplitPay(pay);
+  const cash=sp?sp.cash:(pay==='Cash'?net:0);
+  const online=sp?(sp.upi+sp.card):((pay==='UPI'||pay==='Card')?net:0);
   const dateStr=entry.entry_date||'';
   const dayStr=dateStr?new Date(dateStr+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long'}):'';
   m.innerHTML=`
@@ -3847,8 +3884,8 @@ function showInvoiceModal(entry){
       <div style="background:#1A4A3A;color:#fff;padding:8px 16px 8px 12px;border-radius:0 8px 8px 0;margin-right:-28px;font-size:11px;text-align:right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> 96621 35422<br>9723044589</div>
     </div>
     <div style="background:#1A4A3A;color:#fff;text-align:center;padding:8px;font-weight:700;font-size:14px;letter-spacing:2px;border-radius:6px;margin:0 0 12px">SERVICES</div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid #eee"><span><b>Date:</b> ${dateStr}</span><span><b>Invoice:</b> ${entry.inv_no||''}</span><span><b>Day:</b> ${dayStr}</span></div>
-    <div style="font-size:11px;margin-bottom:12px;padding:6px 8px;background:#f9f9f9;border-radius:4px"><b>Client:</b> ${entry.client_name} &nbsp;|&nbsp; <b>Phone:</b> ${entry.phone||'—'} &nbsp;|&nbsp; <b>Payment:</b> ${pay}</div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid #eee"><span><b>Date:</b> ${dateStr}${entry.created_at?' '+fmtTime(entry.created_at):''}</span><span><b>Invoice:</b> ${entry.inv_no||''}</span><span><b>Day:</b> ${dayStr}</span></div>
+    <div style="font-size:11px;margin-bottom:12px;padding:6px 8px;background:#f9f9f9;border-radius:4px"><b>Client:</b> ${entry.client_name} &nbsp;|&nbsp; <b>Phone:</b> ${entry.phone||'—'} &nbsp;|&nbsp; <b>Payment:</b> ${formatPayMethod(pay)}</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
       <thead><tr style="background:#1A4A3A"><th style="color:#fff;padding:7px 10px;text-align:left;font-size:10px">Sr.</th><th style="color:#fff;padding:7px 10px;text-align:left;font-size:10px">Service / Work Done</th><th style="color:#fff;padding:7px 10px;text-align:left;font-size:10px">Staff</th><th style="color:#fff;padding:7px 10px;text-align:right;font-size:10px">Amount (₹)</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="4" style="text-align:center;padding:12px;color:#888">No items</td></tr>'}</tbody>
