@@ -608,7 +608,13 @@ table tbody tr:hover td{background:var(--bg2)}
 .notif-time{font-size:9.5px;color:var(--ink4);margin-top:2px}
 
 /* ══ FAB (Floating Action Button) ══ */
-.fab{
+/* Named .qfab, not .fab — Font Awesome's own brand-icon class is literally
+   "fab" (e.g. <i class="fab fa-whatsapp">), so a plain ".fab" selector here
+   was also styling every WhatsApp/brand icon on the page as a fixed,
+   pink-violet 52px circle pinned to its nearest filtered/backdrop-filtered
+   ancestor (e.g. the topbar) instead of the viewport — that's what made a
+   WhatsApp icon appear to float in the wrong place near the top. */
+.qfab{
   position:fixed;bottom:24px;right:24px;
   width:52px;height:52px;border-radius:50%;
   background:linear-gradient(135deg,var(--rose),var(--violet));
@@ -618,7 +624,7 @@ table tbody tr:hover td{background:var(--bg2)}
   z-index:100;transition:all var(--t);
   animation:glow 3s infinite;
 }
-.fab:hover{transform:scale(1.1) rotate(90deg);box-shadow:0 8px 28px rgba(192,56,90,0.5)}
+.qfab:hover{transform:scale(1.1) rotate(90deg);box-shadow:0 8px 28px rgba(192,56,90,0.5)}
 
 .fab-menu{
   position:fixed;bottom:86px;right:20px;
@@ -658,7 +664,7 @@ table tbody tr:hover td{background:var(--bg2)}
 [data-theme="dark"] .bill-box{background:#1C180A}
 
 @media print{
-  .topbar,.fab,.fab-menu,.toast,.breadcrumb,.modal-close,.inv-actions,.br-footer-btns{display:none!important}
+  .topbar,.qfab,.fab-menu,.toast,.breadcrumb,.modal-close,.inv-actions,.br-footer-btns{display:none!important}
   .modal-ov{position:static!important;background:none!important;display:block!important;padding:0!important}
   .modal-box{box-shadow:none!important;max-height:none!important}
 }
@@ -1865,7 +1871,7 @@ table tbody tr:hover td{background:var(--bg2)}
 </div>
 
 <!-- ═══ FAB ═══ -->
-<button class="fab" onclick="toggleFab()" id="fab-main" title="Quick Actions"><i class="fas fa-plus" id="fab-ico"></i></button>
+<button class="qfab" onclick="toggleFab()" id="fab-main" title="Quick Actions"><i class="fas fa-plus" id="fab-ico"></i></button>
 <div class="fab-menu" id="fab-menu">
   <div class="fab-item" onclick="go(document.querySelector('.nb[data-sec=daily]'),'daily');closeFab()"><i class="fas fa-pen-ruler"></i>New Daily Entry</div>
   <div class="fab-item" onclick="go(document.querySelector('.nb[data-sec=appt]'),'appt');closeFab()"><i class="fas fa-calendar-plus"></i>New Appointment</div>
@@ -3778,7 +3784,14 @@ function isUpiMethod(pm){
 // 12-hour clock time like "02:32 PM" for display next to the entry date.
 function fmtTime(ts){
   if(!ts)return '';
-  const d=new Date(ts);
+  // The Oracle DB's SYSTIMESTAMP (and this server) runs in UTC, and the
+  // backend serializes created_at as a bare "2026-08-20T21:17:32.123456"
+  // with no "Z"/offset — without marking it as UTC here, new Date() parses
+  // it as if it were already the viewer's local time, so it renders ~5:30
+  // hours off from the live clock in the topbar. Force UTC parsing so the
+  // browser converts it to the viewer's actual local time instead.
+  const iso=/[zZ]|[+-]\d{2}:?\d{2}$/.test(ts)?ts:ts.replace(' ','T')+'Z';
+  const d=new Date(iso);
   if(isNaN(d))return '';
   return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
 }
