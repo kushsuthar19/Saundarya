@@ -3788,15 +3788,33 @@ function renderSelSvcs(){
 }
 
 // Split pay_method strings look like "Split|Cash:750|UPI:250|Card:0" — pull out each leg.
-function parseSplitPay(pm){
-  if(!pm||!pm.startsWith('Split|'))return null;
+// One shared parser for every screen that reads a pay_method string — used
+// by Daily Entry, the Dashboard's payment split (both "Today" and its
+// calendar view), and the Revenue calendar/daily views, so they can never
+// drift out of sync with each other again.
+//
+// netTotal (optional) only matters for legacy/damaged records: bills saved
+// as the bare word "Split" with no "|Cash:X|UPI:Y|Card:Z" breakdown (a data
+// loss bug in the old Edit screen, fixed now — see saveEntryEdit). Passing
+// netTotal here guesses an even Cash/UPI split for those instead of
+// treating the whole bill as unparsable and dropping its money from every
+// total that calls this — the same guess every screen already made
+// independently, now made once, consistently, everywhere. The returned
+// `estimated: true` flag lets a caller mark that guess as unconfirmed
+// instead of presenting it as a fact.
+function parseSplitPay(pm,netTotal){
+  if(!pm||!pm.startsWith('Split'))return null;
   let cash=0,upi=0,card=0;
   pm.split('|').forEach(p=>{
     if(p.startsWith('Cash:'))cash=parseFloat(p.slice(5))||0;
     else if(p.startsWith('UPI:'))upi=parseFloat(p.slice(4))||0;
     else if(p.startsWith('Card:'))card=parseFloat(p.slice(5))||0;
   });
-  return {cash,upi,card};
+  let estimated=false;
+  if(cash===0&&upi===0&&card===0&&netTotal){
+    cash=netTotal/2;upi=netTotal/2;estimated=true;
+  }
+  return {cash,upi,card,estimated};
 }
 
 // Bridal advance/due payments and the membership fee use "GPay/UPI" as the
@@ -3826,14 +3844,17 @@ function fmtTime(ts){
 
 // Split pay_method strings ("Split|Cash:1000|UPI:1200|Card:0") are stored
 // raw — show them as a readable "Split (Cash ₹1,000 + UPI ₹1,200)" instead.
-function formatPayMethod(pm){
-  const sp=parseSplitPay(pm);
+// A damaged legacy record (bare "Split", no breakdown) shows its guessed
+// 50/50 amounts too now, clearly marked "(est.)" instead of just the bare
+// word "Split" — pass netTotal so parseSplitPay can make that guess.
+function formatPayMethod(pm,netTotal){
+  const sp=parseSplitPay(pm,netTotal);
   if(!sp)return pm||'Cash';
   const parts=[];
   if(sp.cash)parts.push('Cash '+fmt(sp.cash));
   if(sp.upi)parts.push('UPI '+fmt(sp.upi));
   if(sp.card)parts.push('Card '+fmt(sp.card));
-  return 'Split ('+parts.join(' + ')+')';
+  return 'Split ('+parts.join(' + ')+(sp.estimated?' — est., please verify':'')+')';
 }
 
 function renderDeMethodTotal(rows,fp){
@@ -3842,7 +3863,7 @@ function renderDeMethodTotal(rows,fp){
   let cash=0,upi=0,card=0;
   rows.forEach(e=>{
     const pm=e.pay_method||'Cash',net=e.net_total||0;
-    const sp=parseSplitPay(pm);
+    const sp=parseSplitPay(pm,net);
     if(sp){cash+=sp.cash;upi+=sp.upi;card+=sp.card;}
     else if(pm==='Cash')cash+=net;
     else if(isUpiMethod(pm))upi+=net;
@@ -3870,7 +3891,7 @@ async function renderDailyView(){
   // total above already counts it).
   const rows=fp?allRows.filter(e=>{
     const pm=e.pay_method||'Cash';
-    const sp=parseSplitPay(pm);
+    const sp=parseSplitPay(pm,e.net_total||0);
     if(sp)return fp==='UPI'?sp.upi>0:(fp==='Cash'?sp.cash>0:sp.card>0);
     return fp==='UPI'?isUpiMethod(pm):pm===fp;
   }):allRows;
@@ -3883,7 +3904,7 @@ async function renderDailyView(){
     <div class="de-svcs">${e.services||''}</div>
     <div class="de-footer">
       <span class="pill p-nd">${e.visit_type||'Walk-in'}</span>
-      <span class="pill p-bk">${formatPayMethod(e.pay_method)}</span>
+      <span class="pill p-bk">${formatPayMethod(e.pay_method,e.net_total||0)}</span>
       <span style="margin-left:auto;font-weight:600">${fmt(e.net_total||0)}</span>
       <div style="position:relative;display:inline-block" onclick="event.stopPropagation()">
         <button onclick="toggleRowMenu('de-menu-${e.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink3)">⋮</button>
@@ -3909,10 +3930,10 @@ function showInvoiceModal(entry){
     <td style="padding:5px 10px;text-align:right;font-weight:500">${fmt((it.price||0)*(it.qty||1))}</td>
   </tr>`).join('');
   const gross=entry.gross_total||0,disc=entry.discount||0,net=entry.net_total||0,pay=entry.pay_method||'Cash';
-  // pay_method for a split bill is "Split|Cash:1000|UPI:1200|Card:0", never
-  // the literal string "Split" — so pull the real per-method amounts out of
-  // it instead of guessing a 50/50 split (which never even matched before).
-  const sp=parseSplitPay(pay);
+  // pay_method for a split bill is "Split|Cash:1000|UPI:1200|Card:0". A
+  // damaged legacy record (bare "Split", no breakdown) falls back to a
+  // 50/50 guess via netTotal instead of showing ₹0 for both.
+  const sp=parseSplitPay(pay,net);
   const cash=sp?sp.cash:(pay==='Cash'?net:0);
   const online=sp?(sp.upi+sp.card):((pay==='UPI'||pay==='Card')?net:0);
   const dateStr=entry.entry_date||'';
@@ -3926,7 +3947,7 @@ function showInvoiceModal(entry){
     </div>
     <div style="background:#1A4A3A;color:#fff;text-align:center;padding:8px;font-weight:700;font-size:14px;letter-spacing:2px;border-radius:6px;margin:0 0 12px">SERVICES</div>
     <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px;padding:6px 0;border-bottom:1px solid #eee"><span><b>Date:</b> ${dateStr}${entry.created_at?' '+fmtTime(entry.created_at):''}</span><span><b>Invoice:</b> ${entry.inv_no||''}</span><span><b>Day:</b> ${dayStr}</span></div>
-    <div style="font-size:11px;margin-bottom:12px;padding:6px 8px;background:#f9f9f9;border-radius:4px"><b>Client:</b> ${entry.client_name} &nbsp;|&nbsp; <b>Phone:</b> ${entry.phone||'—'} &nbsp;|&nbsp; <b>Payment:</b> ${formatPayMethod(pay)}</div>
+    <div style="font-size:11px;margin-bottom:12px;padding:6px 8px;background:#f9f9f9;border-radius:4px"><b>Client:</b> ${entry.client_name} &nbsp;|&nbsp; <b>Phone:</b> ${entry.phone||'—'} &nbsp;|&nbsp; <b>Payment:</b> ${formatPayMethod(pay,net)}</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
       <thead><tr style="background:#1A4A3A"><th style="color:#fff;padding:7px 10px;text-align:left;font-size:10px">Sr.</th><th style="color:#fff;padding:7px 10px;text-align:left;font-size:10px">Service / Work Done</th><th style="color:#fff;padding:7px 10px;text-align:left;font-size:10px">Staff</th><th style="color:#fff;padding:7px 10px;text-align:right;font-size:10px">Amount (₹)</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="4" style="text-align:center;padding:12px;color:#888">No items</td></tr>'}</tbody>
@@ -5489,19 +5510,16 @@ async function updateDashPaymentSplit(){
   const today=td();
   const rows=await apiCall('GET',`/entries?limit=200&entry_date=${today}`);
   if(!rows){parent.innerHTML='<div style="color:var(--ink4);font-size:12px;text-align:center;padding:16px">No data</div>';return;}
+  // Shared parseSplitPay() below — same parser Daily Entry uses, so this
+  // widget can never drift out of sync with it again.
   let cash=0,upi=0,card=0;
   rows.forEach(e=>{
-    const amt=e.net_total||0;
-    if(e.pay_method==='Cash')cash+=amt;
-    else if(e.pay_method==='UPI'||e.pay_method==='GPay'||e.pay_method==='GPay/UPI'||e.pay_method==='GPay/UPI')upi+=amt;
-    else if(e.pay_method==='Card')card+=amt;
-    else if(e.pay_method&&e.pay_method.startsWith('Split')){
-      const parts=e.pay_method.split('|');
-      let sc=0,su=0,scard=0;
-      parts.forEach(p=>{if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;});
-      const st=sc+su+scard;
-      if(st>0){cash+=sc;upi+=su;card+=scard;}else{cash+=amt/2;upi+=amt/2;}
-    }
+    const amt=e.net_total||0,pm=e.pay_method||'Cash';
+    const sp=parseSplitPay(pm,amt);
+    if(sp){cash+=sp.cash;upi+=sp.upi;card+=sp.card;}
+    else if(pm==='Cash')cash+=amt;
+    else if(isUpiMethod(pm))upi+=amt;
+    else if(pm==='Card')card+=amt;
   });
   const total=cash+upi+card;
   const pct=(val)=>total?Math.round(val/total*100):0;
@@ -5558,19 +5576,12 @@ async function renderDashPaySplitCalendar(){
   rows.forEach(r=>{
     const d=String(r.entry_date||'').substring(0,10);
     if(!dayMap[d])dayMap[d]={cash:0,upi:0,card:0};
-    const amt=r.net_total||0;
-    if(r.pay_method==='Cash')dayMap[d].cash+=amt;
-    else if(r.pay_method==='UPI'||r.pay_method==='GPay'||r.pay_method==='GPay/UPI')dayMap[d].upi+=amt;
-    else if(r.pay_method==='Card')dayMap[d].card+=amt;
-    else if(r.pay_method&&r.pay_method.startsWith('Split')){
-        // Parse "Split|Cash:750|UPI:250|Card:0" format
-        const parts=r.pay_method.split('|');
-        let sc=0,su=0,scard=0;
-        parts.forEach(p=>{if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;});
-        const splitTotal=sc+su+scard;
-        if(splitTotal>0){dayMap[d].cash+=sc;dayMap[d].upi+=su;dayMap[d].card+=scard;}
-        else{dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;} // fallback for old records
-      }
+    const amt=r.net_total||0,pm=r.pay_method||'Cash';
+    const sp=parseSplitPay(pm,amt);
+    if(sp){dayMap[d].cash+=sp.cash;dayMap[d].upi+=sp.upi;dayMap[d].card+=sp.card;}
+    else if(pm==='Cash')dayMap[d].cash+=amt;
+    else if(isUpiMethod(pm))dayMap[d].upi+=amt;
+    else if(pm==='Card')dayMap[d].card+=amt;
   });
   const days=Object.keys(dayMap).sort().reverse();
   if(!days.length){grid.innerHTML='<div style="color:var(--ink4);padding:10px;font-size:11px;text-align:center">No payments this month</div>';return;}
@@ -5824,21 +5835,14 @@ async function renderRevCalendar(){
   rows.forEach(r=>{
     const d=String(r.entry_date||'').substring(0,10);
     if(!dayMap[d])dayMap[d]={total:0,count:0,cash:0,upi:0,card:0};
-    const amt=r.net_total||0;
+    const amt=r.net_total||0,pm=r.pay_method||'Cash';
     dayMap[d].total+=amt;
     dayMap[d].count+=1;
-    if(r.pay_method==='Cash')dayMap[d].cash+=amt;
-    else if(r.pay_method==='UPI'||r.pay_method==='GPay'||r.pay_method==='GPay/UPI')dayMap[d].upi+=amt;
-    else if(r.pay_method==='Card')dayMap[d].card+=amt;
-    else if(r.pay_method&&r.pay_method.startsWith('Split')){
-        // Parse "Split|Cash:750|UPI:250|Card:0" format
-        const parts=r.pay_method.split('|');
-        let sc=0,su=0,scard=0;
-        parts.forEach(p=>{if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;});
-        const splitTotal=sc+su+scard;
-        if(splitTotal>0){dayMap[d].cash+=sc;dayMap[d].upi+=su;dayMap[d].card+=scard;}
-        else{dayMap[d].cash+=amt/2;dayMap[d].upi+=amt/2;} // fallback for old records
-      }
+    const sp=parseSplitPay(pm,amt);
+    if(sp){dayMap[d].cash+=sp.cash;dayMap[d].upi+=sp.upi;dayMap[d].card+=sp.card;}
+    else if(pm==='Cash')dayMap[d].cash+=amt;
+    else if(isUpiMethod(pm))dayMap[d].upi+=amt;
+    else if(pm==='Card')dayMap[d].card+=amt;
   });
 
   // Build calendar
@@ -5907,16 +5911,10 @@ async function renderRevDaily(){
     <td><b>${fmt(e.net_total||0)}</b></td>
     <td>${(()=>{
       const pm=e.pay_method||'Cash';
-      if(pm.startsWith('Split|')){
-        const parts=pm.split('|');
-        let sc=0,su=0,scard=0;
-        parts.forEach(p=>{
-          if(p.startsWith('Cash:'))sc=parseFloat(p.slice(5))||0;
-          else if(p.startsWith('UPI:'))su=parseFloat(p.slice(4))||0;
-          else if(p.startsWith('Card:'))scard=parseFloat(p.slice(5))||0;
-        });
-        const tip=`Cash:₹${sc} UPI:₹${su} Card:₹${scard}`;
-        return `<span class="pill p-wa" title="${tip}" style="cursor:help">Split</span><br><span style="font-size:9px;color:var(--ink3)">${sc?'💵'+Math.round(sc)+' ':''}${su?'📱'+Math.round(su)+' ':''}${scard?'💳'+Math.round(scard):''}` +'</span>';
+      const sp=parseSplitPay(pm,e.net_total||0);
+      if(sp){
+        const tip=`Cash:₹${sp.cash} UPI:₹${sp.upi} Card:₹${sp.card}`+(sp.estimated?' (estimated — please verify)':'');
+        return `<span class="pill p-wa" title="${tip}" style="cursor:help">Split${sp.estimated?' ⚠️':''}</span><br><span style="font-size:9px;color:var(--ink3)">${sp.cash?'💵'+Math.round(sp.cash)+' ':''}${sp.upi?'📱'+Math.round(sp.upi)+' ':''}${sp.card?'💳'+Math.round(sp.card):''}` +'</span>';
       }
       return `<span class="pill ${pmC[pm]||'p-lt'}">${pm}</span>`;
     })()}</td>
