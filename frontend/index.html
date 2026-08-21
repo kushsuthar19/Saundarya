@@ -2810,7 +2810,7 @@ async function editEntry(id){
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Entry Date</label>
         <input id="ee-date" type="date" value="${e.entry_date||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Payment Method</label>
-        <select id="ee-pay" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)">
+        <select id="ee-pay" onchange="eeToggleSplit()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)">
           <option ${(e.pay_method||'Cash')==='Cash'?'selected':''}>Cash</option>
           <option ${e.pay_method==='UPI'?'selected':''}>UPI</option>
           <option ${e.pay_method==='Card'?'selected':''}>Card</option>
@@ -2818,6 +2818,16 @@ async function editEntry(id){
         </select></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Discount ₹</label>
         <input id="ee-disc" type="number" value="${e.discount||0}" oninput="eeCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <!-- Split breakdown — only shown/used when Payment Method = Split. Pre-filled
+           from the entry's existing "Split|Cash:X|UPI:Y|Card:Z" string (if any) so
+           editing something unrelated (like a typo) doesn't wipe the split amounts:
+           saveEntryEdit() rebuilds that same pipe-delimited string from these boxes
+           instead of sending the bare word "Split". -->
+      <div id="ee-split-wrap" style="display:${(e.pay_method||'').startsWith('Split')?'grid':'none'};grid-column:1/-1;grid-template-columns:repeat(3,1fr);gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div><label style="font-size:10px;color:var(--ink3)">Cash ₹</label><br><input type="number" id="ee-split-cash" value="${(parseSplitPay(e.pay_method)||{}).cash||0}" min="0" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+        <div><label style="font-size:10px;color:var(--ink3)">GPay/UPI ₹</label><br><input type="number" id="ee-split-upi" value="${(parseSplitPay(e.pay_method)||{}).upi||0}" min="0" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+        <div><label style="font-size:10px;color:var(--ink3)">Card ₹</label><br><input type="number" id="ee-split-card" value="${(parseSplitPay(e.pay_method)||{}).card||0}" min="0" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+      </div>
       <div style="grid-column:1/-1"><label style="font-size:11px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">Remarks</label>
         <textarea id="ee-rem" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical">${e.remarks||''}</textarea></div>
     </div>
@@ -2855,6 +2865,10 @@ async function editEntry(id){
   window._eeRowCount=items.length;
 }
 
+function eeToggleSplit(){
+  const wrap=v('ee-split-wrap');if(!wrap)return;
+  wrap.style.display=v('ee-pay')?.value==='Split'?'grid':'none';
+}
 function eeCalc(){
   // Recalculate totals from rows
   let gross=0;
@@ -2916,6 +2930,20 @@ async function saveEntryEdit(id){
   const disc=parseFloat(v('ee-disc')?.value)||0;
   const gross=items.reduce((s,it)=>s+(it.price||0)*(it.qty||1),0);
   const net=Math.max(0,gross-disc);
+  // Split needs its Cash/UPI/Card breakdown rebuilt into the same
+  // "Split|Cash:X|UPI:Y|Card:Z" string the rest of the app expects — sending
+  // the bare word "Split" (what the dropdown's own value would be) erases
+  // the breakdown, which is exactly the bug this fixes.
+  const payMethod=(()=>{
+    const pm=v('ee-pay')?.value||'Cash';
+    if(pm==='Split'){
+      const sc=parseFloat(v('ee-split-cash')?.value||0);
+      const su=parseFloat(v('ee-split-upi')?.value||0);
+      const scard=parseFloat(v('ee-split-card')?.value||0);
+      return 'Split|Cash:'+sc+'|UPI:'+su+'|Card:'+scard;
+    }
+    return pm;
+  })();
   const r=await apiCall('PATCH',`/entries/${id}`,{
     client_name:v('ee-name')?.value?.trim()||'',
     phone:v('ee-phone')?.value?.trim()||null,
@@ -2923,7 +2951,7 @@ async function saveEntryEdit(id){
     discount:disc,
     gross_total:gross,
     net_total:net,
-    pay_method:v('ee-pay')?.value||'Cash',
+    pay_method:payMethod,
     remarks:v('ee-rem')?.value?.trim()||null,
     items:items
   });
