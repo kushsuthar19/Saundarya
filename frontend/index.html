@@ -746,7 +746,7 @@ table tbody tr:hover td{background:var(--bg2)}
   <div class="psub" id="dash-dl">Loading...</div>
   <div class="nline ink"></div>
   <div class="kgrid" id="dash-kpis">
-    <div class="kpi k-ink"><i class="kpi-ico fas fa-rupee-sign"></i><div class="kpi-l">Today Revenue</div><div class="kpi-v" id="d-rev">₹0</div><div class="kpi-s">Live</div></div>
+    <div class="kpi k-ink"><i class="kpi-ico fas fa-rupee-sign"></i><div class="kpi-l">Today Revenue <i class="fas fa-eye" style="font-size:9px;opacity:.6"></i></div><div class="kpi-v" id="d-rev" onclick="togglePrivReveal('d-rev')" style="cursor:pointer" title="Click to reveal — hides again after 5s">••••••</div><div class="kpi-s">Live</div></div>
     <div class="kpi k-rose"><i class="kpi-ico fas fa-calendar-check"></i><div class="kpi-l">Appointments</div><div class="kpi-v" id="d-appt">0</div><div class="kpi-s">Today</div></div>
     <div class="kpi k-teal"><i class="kpi-ico fas fa-walking"></i><div class="kpi-l">Walk-ins</div><div class="kpi-v" id="d-walk">0</div><div class="kpi-s">Today</div></div>
     <div class="kpi k-violet"><i class="kpi-ico fas fa-gem"></i><div class="kpi-l">Bridal Active</div><div class="kpi-v" id="d-bridal">0</div><div class="kpi-s">Bookings</div></div>
@@ -2368,7 +2368,7 @@ function selectCat(el,catId){
   chips.style.display="grid";customInp.style.display="none";
   const svcs=SERVICES[catId]||[];
   if(!svcs.length){chips.innerHTML='<div style="color:var(--ink4);font-size:12px;padding:10px">No services in this category</div>';return;}
-  chips.innerHTML=svcs.map((s,i)=>`<div class="svc-chip" data-idx="${i}" data-cat="${catId}" onclick="addSvcChip(this,'${s.n.replace(/'/g,"'")}',${s.p})"><span class="sc-name">${s.n}</span><span class="sc-price">${s.p>0?"₹"+s.p.toLocaleString("en-IN"):""}</span></div>`).join("");
+  chips.innerHTML=svcs.map((s,i)=>`<div class="svc-chip" data-idx="${i}" data-cat="${catId}" onclick="addSvcChip(this,'${s.n.replace(/'/g,"\\'")}',${s.p})"><span class="sc-name">${s.n}</span><span class="sc-price">${s.p>0?"₹"+s.p.toLocaleString("en-IN"):""}</span></div>`).join("");
 }
 function backToCats(){
   v("de-step1").style.display="block";
@@ -5480,12 +5480,38 @@ async function togAtt(staffId,isPresent){
 }
 
 // ═══════════════════════════════════════════════════════════════
+// PRIVACY-MASKED AMOUNTS (Dashboard revenue/payment totals)
+// ═══════════════════════════════════════════════════════════════
+// These start hidden behind "••••••" every time they're (re)rendered —
+// on login and after every refresh — for staff/admin terminals someone
+// else might be glancing at. Click reveals the real amount for 5 seconds,
+// then it re-masks itself automatically.
+function setPrivAmount(id,value){
+  const el=v(id);if(!el)return;
+  el.dataset.real=value;
+  el.dataset.revealed='';
+  clearTimeout(el._privTimer);
+  el.textContent='••••••';
+}
+function togglePrivReveal(id){
+  const el=v(id);if(!el)return;
+  if(el.dataset.revealed==='1')return;
+  el.dataset.revealed='1';
+  el.textContent=el.dataset.real||'';
+  clearTimeout(el._privTimer);
+  el._privTimer=setTimeout(()=>{
+    el.dataset.revealed='';
+    el.textContent='••••••';
+  },5000);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════
 async function updateDash(){
   const r=await apiCall('GET','/dashboard');if(!r)return;
   const s=(id,val)=>{const e=v(id);if(e)e.textContent=val;};
-  s('d-rev',fmt(r.today_revenue||0));s('d-appt',r.today_appointments||0);
+  setPrivAmount('d-rev',fmt(r.today_revenue||0));s('d-appt',r.today_appointments||0);
   s('d-walk',r.today_walkins||0);s('d-bridal',r.active_bridal||0);
   s('d-sp',`${r.staff_present||0}`);s('d-st',`of ${r.staff_total||0}`);
   s('d-ent',r.today_entries||0);dateDash();
@@ -5543,8 +5569,8 @@ async function updateDashPaymentSplit(){
       </div>
     </div>`).join('')}
     <div style="border-top:1px solid var(--border);padding-top:7px;margin-top:4px;display:flex;justify-content:space-between;font-size:11px">
-      <span style="color:var(--ink3)">Today Total</span>
-      <span style="font-weight:700;color:var(--emerald)">${fmt(total)}</span>
+      <span style="color:var(--ink3)">Today Total <i class="fas fa-eye" style="font-size:9px;opacity:.6"></i></span>
+      <span style="font-weight:700;color:var(--emerald);cursor:pointer" id="dash-pay-total" data-real="${fmt(total)}" onclick="togglePrivReveal('dash-pay-total')" title="Click to reveal — hides again after 5s">••••••</span>
     </div>
   </div>`;
 }
