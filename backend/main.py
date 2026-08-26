@@ -108,6 +108,17 @@ async def health():
     return {"status": "ok", "version": settings.APP_VERSION, "env": settings.ENV}
 
 
+# Short root-level alias for POST /api/v1/staff/test-punch — the RS9n
+# biometric machine's "Web Server URL" field is typed in on a 12-key
+# numeric keypad, so a long path with symbols is painful/error-prone to
+# enter. Same handler, same behavior (logs the raw request, returns
+# {"ok": true}) — just a shorter URL to type: http://<host>:8000/punch
+@app.post("/punch")
+async def punch_alias(request: Request):
+    from backend.routers.main_routers import test_punch
+    return await test_punch(request)
+
+
 # ── Serve Frontend (SPA) ──────────────────────────────────
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
@@ -122,7 +133,14 @@ if os.path.exists(FRONTEND_DIR):
             raise HTTPException(status_code=404)
         index_file = os.path.join(FRONTEND_DIR, "index.html")
         if os.path.exists(index_file):
-            return FileResponse(index_file)
+            # No Cache-Control here means browsers fall back to heuristic
+            # caching based on Last-Modified, which can hold onto a stale
+            # copy of this file for a surprisingly long time after a
+            # deploy — every fix pushed to it would need a manual hard
+            # refresh to actually show up. Force revalidation on every
+            # load instead: the browser still reuses its cached bytes via
+            # a 304 when nothing changed, but always checks first.
+            return FileResponse(index_file, headers={"Cache-Control": "no-cache, must-revalidate"})
         raise HTTPException(status_code=404, detail="Frontend not found")
 
 
