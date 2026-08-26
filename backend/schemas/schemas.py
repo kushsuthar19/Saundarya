@@ -104,6 +104,9 @@ class StaffCreate(BaseModel):
     base_salary: float = 0
     commission_pct: float = Field(10, ge=0, le=100)
     av_class: Optional[str] = "a0"
+    # RS9n biometric machine's internal numeric ID for this staff member's
+    # fingerprint enrollment — links a punch event back to this staff row.
+    device_user_id: Optional[int] = None
     # Optional linked user account
     username: Optional[str] = None
     password: Optional[str] = None
@@ -123,6 +126,7 @@ class StaffOut(BaseModel):
     paid_salary: float
     av_class: Optional[str]
     is_active: int
+    device_user_id: Optional[int] = None
     half_day_count: int = 0
     morning_duty_count: int = 0
     monthly_revenue: float = 0

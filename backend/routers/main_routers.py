@@ -3,9 +3,10 @@ Appointments, Staff, Attendance, Bridal Bookings, Revenue, Reports routers.
 """
 import hashlib
 import hmac
+import json
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -250,17 +251,17 @@ async def create_staff(
     jd = str(data.join_date) if data.join_date else None
     await cursor.execute(
         """INSERT INTO staff (user_id, name, role, phone, join_date, base_salary,
-           commission_pct, av_class)
-           VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8)
-           RETURNING id INTO :9""",
+           commission_pct, av_class, device_user_id)
+           VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9)
+           RETURNING id INTO :10""",
         [user_id, data.name, data.role, data.phone, jd,
-         data.base_salary, data.commission_pct, data.av_class,
+         data.base_salary, data.commission_pct, data.av_class, data.device_user_id,
          cursor.var(oracledb.NUMBER)]
     )
     new_id = int(cursor.bindvars[-1].getvalue()[0])
     await db.commit()
     await cursor.execute(
-        "SELECT id,name,role,phone,join_date,base_salary,commission_pct,days_present,total_services,comm_earned,paid_salary,av_class,is_active FROM staff WHERE id=:1",
+        "SELECT id,name,role,phone,join_date,base_salary,commission_pct,days_present,total_services,comm_earned,paid_salary,av_class,is_active,device_user_id FROM staff WHERE id=:1",
         [new_id]
     )
     row = await cursor.fetchone()
@@ -421,7 +422,8 @@ async def get_staff_by_id(
     cursor = db.cursor()
     await cursor.execute(
         """SELECT id, name, role, phone, join_date, base_salary, commission_pct,
-                  days_present, total_services, comm_earned, paid_salary, av_class, is_active
+                  days_present, total_services, comm_earned, paid_salary, av_class, is_active,
+                  device_user_id
            FROM staff WHERE id=:1""",
         [staff_id]
     )
@@ -442,7 +444,7 @@ async def update_staff_by_id(
     cursor = db.cursor()
     fields = []
     values = []
-    allowed = ['name','role','phone','join_date','base_salary','commission_pct']
+    allowed = ['name','role','phone','join_date','base_salary','commission_pct','device_user_id']
     for k,v2 in data.items():
         if k in allowed:
             fields.append(f"{k}=:{len(values)+1}")
@@ -475,6 +477,40 @@ async def delete_staff_by_id(
         await cursor.execute("UPDATE users SET is_active=0 WHERE id=:1", [row[0]])
     await db.commit()
     return {"deleted": staff_id}
+
+
+# TEMPORARY — Stage 1 of the RS9n biometric attendance feature. The RS9n's
+# actual push payload format/content-type is unknown, so this deliberately
+# does no parsing/validation: it just captures everything about the raw
+# request (headers, query params, raw body — tried as JSON, falling back to
+# text) so it can be inspected once the machine is pointed at this URL.
+# Unauthenticated on purpose — the machine has no way to log in. Once the
+# real format is confirmed, this gets replaced by the real POST /staff/punch
+# endpoint (device_user_id lookup, status-logic calc, staff_attendance
+# insert) per Stage 2 — nothing about this route survives into that build.
+@staff_router.post("/test-punch")
+async def test_punch(request: Request):
+    raw_body = await request.body()
+    try:
+        parsed = await request.json()
+        body_repr = parsed
+    except Exception:
+        body_repr = raw_body.decode("utf-8", errors="replace")
+    entry = {
+        "received_at": datetime.utcnow().isoformat() + "Z",
+        "client_ip": request.client.host if request.client else None,
+        "method": request.method,
+        "headers": dict(request.headers),
+        "query_params": dict(request.query_params),
+        "body": body_repr,
+    }
+    logger.info(f"RS9n test-punch received: {entry}")
+    try:
+        with open("/tmp/rs9n_test_punch.log", "a") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except Exception as log_err:
+        logger.error(f"Could not write /tmp/rs9n_test_punch.log: {log_err}")
+    return {"ok": True}
 
 
 # ════════════════════════════════

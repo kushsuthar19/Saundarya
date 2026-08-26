@@ -1541,6 +1541,7 @@ table tbody tr:hover td{background:var(--bg2)}
           <div class="fl"><label>Join Date</label><input type="date" id="st-jd"></div>
           <div class="fl" id="st-sal-wrap"><label>Base Salary (₹/month)</label><input type="number" id="st-sal" placeholder="0"></div>
           <div class="fl" id="st-com-wrap"><label>Commission %</label><input type="number" id="st-com" placeholder="10" min="0" max="100"></div>
+          <div class="fl"><label>Device User ID <span style="font-weight:400;color:var(--ink3)">(fingerprint machine)</span></label><input type="number" id="st-dev" placeholder="e.g. 7"></div>
         </div>
         <div class="ar"><button class="btn btn-ghost" onclick="v('sf').style.display='none'">Cancel</button><button class="btn btn-emerald" onclick="saveStaff()"><i class="fas fa-save"></i>Save Staff</button></div>
       </div></div>
@@ -4839,11 +4840,12 @@ async function saveStaff(){
     name:nm,role:v('st-r').value||null,phone:v('st-ph').value||null,
     join_date:v('st-jd').value||null,
     base_salary:isOwner?0:(parseFloat(v('st-sal').value)||0),
-    commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10)
+    commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10),
+    device_user_id:v('st-dev')?.value?parseInt(v('st-dev').value):null
   });
   if(!r)return;
   toast('<i class="fas fa-user-plus" style="color:var(--emerald)"></i> Staff saved!','var(--emerald)');
-  ['st-n','st-ph','st-jd','st-sal','st-com'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['st-n','st-ph','st-jd','st-sal','st-com','st-dev'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const sr=v('st-r');if(sr)sr.value='';
   toggleOwnerFields();
   toggleSF();renderStaffGrid();updateStaffSels();
@@ -5097,6 +5099,7 @@ async function editStaff(id){
   v('st-jd').value=s.join_date||'';
   v('st-sal').value=s.base_salary||0;
   v('st-com').value=s.commission_pct||10;
+  const devEl=v('st-dev');if(devEl)devEl.value=s.device_user_id||'';
   toggleOwnerFields();
   // Show form
   const sf=v('sf');if(sf)sf.style.display='block';
@@ -5114,11 +5117,12 @@ async function updateStaff(id){
     phone:v('st-ph').value||null,
     join_date:v('st-jd').value||null,
     base_salary:isOwner?0:(parseFloat(v('st-sal').value)||0),
-    commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10)
+    commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10),
+    device_user_id:v('st-dev')?.value?parseInt(v('st-dev').value):null
   });
   if(!r)return;
   toast('<i class="fas fa-check"></i> Staff updated!','var(--emerald)');
-  ['st-n','st-ph','st-jd','st-sal','st-com'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['st-n','st-ph','st-jd','st-sal','st-com','st-dev'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const sr=v('st-r');if(sr)sr.value='';
   const btn=document.querySelector('#sf button');
   if(btn){btn.textContent='Save Staff';btn.setAttribute('onclick','saveStaff()');}
