@@ -3,10 +3,9 @@ Appointments, Staff, Attendance, Bridal Bookings, Revenue, Reports routers.
 """
 import hashlib
 import hmac
-import json
 import logging
 import os
-from datetime import date, datetime
+from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -477,40 +476,6 @@ async def delete_staff_by_id(
         await cursor.execute("UPDATE users SET is_active=0 WHERE id=:1", [row[0]])
     await db.commit()
     return {"deleted": staff_id}
-
-
-# TEMPORARY — Stage 1 of the RS9n biometric attendance feature. The RS9n's
-# actual push payload format/content-type is unknown, so this deliberately
-# does no parsing/validation: it just captures everything about the raw
-# request (headers, query params, raw body — tried as JSON, falling back to
-# text) so it can be inspected once the machine is pointed at this URL.
-# Unauthenticated on purpose — the machine has no way to log in. Once the
-# real format is confirmed, this gets replaced by the real POST /staff/punch
-# endpoint (device_user_id lookup, status-logic calc, staff_attendance
-# insert) per Stage 2 — nothing about this route survives into that build.
-@staff_router.post("/test-punch")
-async def test_punch(request: Request):
-    raw_body = await request.body()
-    try:
-        parsed = await request.json()
-        body_repr = parsed
-    except Exception:
-        body_repr = raw_body.decode("utf-8", errors="replace")
-    entry = {
-        "received_at": datetime.utcnow().isoformat() + "Z",
-        "client_ip": request.client.host if request.client else None,
-        "method": request.method,
-        "headers": dict(request.headers),
-        "query_params": dict(request.query_params),
-        "body": body_repr,
-    }
-    logger.info(f"RS9n test-punch received: {entry}")
-    try:
-        with open("/tmp/rs9n_test_punch.log", "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
-    except Exception as log_err:
-        logger.error(f"Could not write /tmp/rs9n_test_punch.log: {log_err}")
-    return {"ok": True}
 
 
 # ════════════════════════════════
