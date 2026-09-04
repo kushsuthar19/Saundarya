@@ -6684,6 +6684,23 @@ async function renewMembership(clientId){
   loadMemNotifications();
 }
 
+function toggleMidEdit(clientId){
+  const view=v(`mid-view-${clientId}`),edit=v(`mid-edit-${clientId}`);
+  if(!view||!edit)return;
+  const editing=edit.style.display!=='none'&&edit.style.display!=='';
+  view.style.display=editing?'inline-flex':'none';
+  edit.style.display=editing?'none':'inline-flex';
+  if(!editing)v(`mid-inp-${clientId}`)?.focus();
+}
+async function saveMidEdit(clientId){
+  const inp=v(`mid-inp-${clientId}`);
+  const newId=(inp?.value||'').trim();
+  if(!newId){toast('Membership ID cannot be blank','var(--rose)');return;}
+  const r=await apiCall('PUT',`/clients/${clientId}/membership`,{membership_id:newId});
+  if(!r)return;
+  toast('<i class="fas fa-check"></i> Membership ID updated','var(--emerald)');
+  await _loadMemberProfile(clientId);
+}
 async function showMemberProfile(clientId){
   const modal=v('inv-modal');if(!modal)return;
   modal.innerHTML='<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div><div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><div style="font-size:16px;font-weight:700"><i class="fas fa-crown" style="color:var(--gold)"></i> Exclusive Member Profile</div><button onclick="closeInvModal()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button></div><div id="mem-profile-body"><div style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i> Loading...</div></div></div>';
@@ -6751,7 +6768,12 @@ async function _loadMemberProfile(clientId){
         <div style="font-size:9px;color:#f5d78e;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px">Saundarya Exclusive Member</div>
         <div style="font-size:21px;font-weight:700;color:#fff;margin-bottom:6px;line-height:1.2">${client.name}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <span style="background:rgba(255,255,255,.1);color:#f5d78e;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px">${mem?.membership_id||'—'}</span>
+          <span id="mid-view-${clientId}" onclick="${mem?`toggleMidEdit(${clientId})`:''}" style="background:rgba(255,255,255,.1);color:#f5d78e;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;${mem?'cursor:pointer':''}" title="${mem?'Click to edit Membership ID':''}">${mem?.membership_id||'—'}${mem?' <i class="fas fa-pencil-alt" style="font-size:8px;opacity:.7"></i>':''}</span>
+          <span id="mid-edit-${clientId}" style="display:none;align-items:center;gap:4px">
+            <input id="mid-inp-${clientId}" value="${mem?.membership_id||''}" style="width:90px;font-size:10px;padding:3px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff">
+            <button onclick="saveMidEdit(${clientId})" title="Save" style="background:var(--emerald);color:#fff;border:none;border-radius:5px;padding:3px 7px;font-size:9px;cursor:pointer"><i class="fas fa-check"></i></button>
+            <button onclick="toggleMidEdit(${clientId})" title="Cancel" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:5px;padding:3px 7px;font-size:9px;cursor:pointer"><i class="fas fa-times"></i></button>
+          </span>
           <span style="color:rgba(255,255,255,.55);font-size:10px"><i class="fas fa-phone" style="margin-right:4px"></i>${client.phone||'—'}</span>
         </div>
       </div>

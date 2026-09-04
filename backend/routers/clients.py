@@ -219,13 +219,27 @@ async def register_nfc_card(
         [mem_id]
     )
 
-    # Insert new card
-    await cursor.execute(
-        """INSERT INTO nfc_cards (membership_id, card_uid, status, issued_date)
-           VALUES (:1, :2, 'Active', SYSDATE)
-           RETURNING id INTO :3""",
-        [mem_id, uid, cursor.var(oracledb.NUMBER)]
-    )
+    # A physical card keeps one row for its whole life, not a new row every
+    # time it changes hands — reassigning a previously-deactivated card
+    # (e.g. after replacing someone's card) reuses that same row instead of
+    # inserting a second one with the same card_uid, which the database
+    # rejects (Internal Server Error) since card_uid is unique.
+    await cursor.execute("SELECT id FROM nfc_cards WHERE card_uid=:1", [uid])
+    old_row = await cursor.fetchone()
+    if old_row:
+        await cursor.execute(
+            """UPDATE nfc_cards
+               SET membership_id=:1, status='Active', issued_date=SYSDATE, deactivated_at=NULL
+               WHERE id=:2""",
+            [mem_id, old_row[0]]
+        )
+    else:
+        await cursor.execute(
+            """INSERT INTO nfc_cards (membership_id, card_uid, status, issued_date)
+               VALUES (:1, :2, 'Active', SYSDATE)
+               RETURNING id INTO :3""",
+            [mem_id, uid, cursor.var(oracledb.NUMBER)]
+        )
     await db.commit()
     return {"registered": True, "card_uid": uid, "membership_id": mem_id}
 
@@ -708,14 +722,23 @@ async def update_membership_dates(
             raise HTTPException(status_code=400, detail="Invalid expiry_date, expected YYYY-MM-DD")
         fields.append(f"expiry_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
         values.append(data['expiry_date'])
+    if data.get('membership_id'):
+        new_mid = data['membership_id'].strip().upper()
+        if not new_mid:
+            raise HTTPException(status_code=400, detail="Membership ID cannot be blank")
+        fields.append(f"membership_id=:{len(values)+1}")
+        values.append(new_mid)
     if not fields:
-        raise HTTPException(status_code=400, detail="No valid date fields provided")
+        raise HTTPException(status_code=400, detail="No valid fields provided")
 
     values.append(mem_db_id)
-    await cursor.execute(
-        f"UPDATE memberships SET {','.join(fields)} WHERE id=:{len(values)}",
-        values
-    )
+    try:
+        await cursor.execute(
+            f"UPDATE memberships SET {','.join(fields)} WHERE id=:{len(values)}",
+            values
+        )
+    except oracledb.IntegrityError:
+        raise HTTPException(status_code=400, detail="That Membership ID is already in use by another member")
     await db.commit()
     return {"updated": True}
 
