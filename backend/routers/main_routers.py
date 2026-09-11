@@ -1655,14 +1655,19 @@ async def reports_summary(
         return r[0] if r else 0
 
     daily_month = await sc("SELECT COALESCE(SUM(net_total),0) FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY-MM')=:1", [month_str])
+    # booking_date (not updated_at) is what actually represents "when the
+    # advance was paid" — updated_at changes on ANY edit to the booking
+    # (fixing a phone number, adding an add-on, anything), which was
+    # silently re-attributing old advances to whatever month they were
+    # last touched in, inflating that month/year's total.
     bridal_advance_month = await sc(
         """SELECT COALESCE(SUM(advance_paid),0) FROM bridal_bookings
-           WHERE TO_CHAR(updated_at,'YYYY-MM')=:1""", [month_str]
+           WHERE TO_CHAR(booking_date,'YYYY-MM')=:1""", [month_str]
     )
     daily_year = await sc("SELECT COALESCE(SUM(net_total),0) FROM daily_entries WHERE TO_CHAR(entry_date,'YYYY')=:1", [year_str])
     bridal_advance_year = await sc(
         """SELECT COALESCE(SUM(advance_paid),0) FROM bridal_bookings
-           WHERE TO_CHAR(updated_at,'YYYY')=:1""", [year_str]
+           WHERE TO_CHAR(booking_date,'YYYY')=:1""", [year_str]
     )
     return {
         "monthly_revenue": daily_month,
