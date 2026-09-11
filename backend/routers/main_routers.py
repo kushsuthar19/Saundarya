@@ -22,7 +22,7 @@ from backend.schemas.schemas import (
     DashboardStats, RevenueStats, SalaryPaymentCreate,
 )
 from backend.services.pdf_service import generate_bridal_invoice, generate_sider_invoice
-from backend.services.whatsapp_service import send_whatsapp_message, send_whatsapp_document, build_bridal_invoice_message, send_whatsapp_template
+from backend.services.whatsapp_service import send_whatsapp_message, build_bridal_invoice_message, send_whatsapp_template
 from backend.core.security import hash_password
 
 logger = logging.getLogger(__name__)
@@ -1031,16 +1031,38 @@ async def bridal_whatsapp_pdf(
     current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
-    """Send the actual invoice PDF as a WhatsApp document — not a link."""
+    """Send the actual invoice PDF as a WhatsApp document — not a link.
+
+    Was calling send_whatsapp_document(), which only checks/uses a generic
+    WA_CAMPAIGN_NAME env var that's never been set — a different, older
+    config path than the per-purpose AISENSY_CAMPAIGN_BRIDAL_* templates
+    actually configured and already working for the auto-send-on-creation
+    message below. Switched to send_whatsapp_template() (same one Daily
+    Entry's equivalent /whatsapp/pdf endpoint uses), reusing that same
+    template/params, just with the PDF attached as media this time.
+    """
     cursor = db.cursor()
     booking = await _get_bridal(booking_id, cursor)
     if not booking.get("phone"):
         raise HTTPException(400, "No phone number")
+    template_key = {
+        "Bride": "bridal_bride", "Groom": "bridal_groom", "Sider": "bridal_sider",
+    }.get(booking.get("booking_type"))
+    if not template_key:
+        raise HTTPException(400, f"Unknown booking type: {booking.get('booking_type')}")
+    functions = booking.get("functions") or []
+    event_dates = ", ".join(sorted({
+        str(fn.get("fn_date")) for fn in functions if fn.get("fn_date")
+    })) or str(booking.get("wedding_date") or "")
+    addon_total = sum(float(fn.get("addon_amount") or 0) for fn in functions)
+    total_bill = float(booking.get("pkg_amount") or 0) + float(booking.get("transport") or 0) \
+        + addon_total - float(booking.get("discount") or 0)
     doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/bridal/{booking_id}/pdf/public?token={_bridal_pdf_token(booking_id)}"
-    result = await send_whatsapp_document(
-        booking["phone"], doc_url, f"Invoice_{booking['job_no']}.pdf",
-        caption=f"Invoice for {booking['job_no']} — Saundarya Beauty Care",
-        user_name=booking.get("client_name", "")
+    result = await send_whatsapp_template(
+        db, booking["phone"], template_key,
+        [booking.get("client_name", ""), event_dates, f"₹{int(total_bill):,}", f"₹{int(booking.get('advance_paid') or 0):,}"],
+        media_url=doc_url, media_filename=f"Invoice_{booking['job_no']}.pdf",
+        ref_id=booking_id, user_name=booking.get("client_name", ""),
     )
     if result["success"]:
         await cursor.execute(
