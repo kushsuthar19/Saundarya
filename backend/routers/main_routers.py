@@ -1036,17 +1036,20 @@ async def bridal_whatsapp_pdf(
     Was calling send_whatsapp_document(), which only checks/uses a generic
     WA_CAMPAIGN_NAME env var that's never been set — a different, older
     config path than the per-purpose AISENSY_CAMPAIGN_BRIDAL_* templates
-    actually configured and already working for the auto-send-on-creation
-    message below. Switched to send_whatsapp_template() (same one Daily
-    Entry's equivalent /whatsapp/pdf endpoint uses), reusing that same
-    template/params, just with the PDF attached as media this time.
+    actually configured. Now uses send_whatsapp_template() (same one Daily
+    Entry's equivalent /whatsapp/pdf endpoint uses) with the dedicated
+    "_with_invoice" document-type templates — separate from the plain-text
+    confirmation ones, since a template must be specifically approved with
+    a File/Document header to carry a PDF attachment.
     """
     cursor = db.cursor()
     booking = await _get_bridal(booking_id, cursor)
     if not booking.get("phone"):
         raise HTTPException(400, "No phone number")
     template_key = {
-        "Bride": "bridal_bride", "Groom": "bridal_groom", "Sider": "bridal_sider",
+        "Bride": "bridal_bride_with_invoice",
+        "Groom": "bridal_groom_with_invoice",
+        "Sider": "bridal_sider_with_invoice",
     }.get(booking.get("booking_type"))
     if not template_key:
         raise HTTPException(400, f"Unknown booking type: {booking.get('booking_type')}")

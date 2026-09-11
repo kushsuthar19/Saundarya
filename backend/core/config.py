@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     AISENSY_CAMPAIGN_BRIDAL_BRIDE: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_BRIDE", "")
     AISENSY_CAMPAIGN_BRIDAL_GROOM: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_GROOM", "")
     AISENSY_CAMPAIGN_BRIDAL_SIDER: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_SIDER", "")
+    # Document-type templates for the "Send with PDF" button — separate from
+    # the plain-text confirmation ones above, since a WhatsApp template must
+    # be specifically approved with a File/Document header to carry a PDF
+    # attachment; the confirmation templates weren't approved that way.
+    AISENSY_CAMPAIGN_BRIDAL_BRIDE_PDF: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_BRIDE_PDF", "")
+    AISENSY_CAMPAIGN_BRIDAL_GROOM_PDF: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_GROOM_PDF", "")
+    AISENSY_CAMPAIGN_BRIDAL_SIDER_PDF: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_SIDER_PDF", "")
     AISENSY_CAMPAIGN_CLIENT_UPDATE: str = os.getenv("AISENSY_CAMPAIGN_CLIENT_UPDATE", "")
     AISENSY_CAMPAIGN_INQUIRY: str = os.getenv("AISENSY_CAMPAIGN_INQUIRY", "")
     AISENSY_CAMPAIGN_INQUIRY_PDF: str = os.getenv("AISENSY_CAMPAIGN_INQUIRY_PDF", "")
