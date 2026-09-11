@@ -1100,14 +1100,79 @@ async def edit_bridal(
         return fields, values
 
     fields, values = _build_fields(True)
-    if not fields:
+    if not fields and 'functions' not in data:
         return {"error": "No valid fields"}
-    # Recalculate balance_due
+
+    # Replace the Function Schedule + Add-ons if a "functions" list was
+    # submitted — full edit support (previously only the top-level booking
+    # fields like name/amount/dates could be changed after creation, never
+    # the per-function schedule or add-ons).
+    if isinstance(data.get('functions'), list):
+        await cursor.execute("DELETE FROM bridal_functions WHERE booking_id=:1", [booking_id])
+        for fn in data['functions']:
+            fname = (fn.get('function_name') or '').strip()
+            if not fname:
+                continue
+            fnd = fn.get('fn_date') or None
+            try:
+                await cursor.execute(
+                    """INSERT INTO bridal_functions
+                       (booking_id, function_name, fn_date, fn_time, person_count, person_name,
+                        pkg_detail, artist_id, artist_name, addon_item, addon_amount)
+                       VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8,:9,:10,:11)""",
+                    [booking_id, fname, fnd, fn.get('fn_time') or None,
+                     fn.get('person_count') or None, fn.get('person_name') or None,
+                     fn.get('pkg_detail') or None, fn.get('artist_id') or None,
+                     fn.get('artist_name') or None, fn.get('addon_item') or None,
+                     fn.get('addon_amount') or 0]
+                )
+            except oracledb.DatabaseError:
+                try:
+                    # addon_item/addon_amount not migrated yet on this DB — fall back gracefully
+                    await cursor.execute(
+                        """INSERT INTO bridal_functions
+                           (booking_id, function_name, fn_date, fn_time, person_count, person_name,
+                            pkg_detail, artist_id, artist_name)
+                           VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8,:9)""",
+                        [booking_id, fname, fnd, fn.get('fn_time') or None,
+                         fn.get('person_count') or None, fn.get('person_name') or None,
+                         fn.get('pkg_detail') or None, fn.get('artist_id') or None,
+                         fn.get('artist_name') or None]
+                    )
+                except oracledb.DatabaseError:
+                    # person_name column not migrated yet either — fall back further
+                    await cursor.execute(
+                        """INSERT INTO bridal_functions
+                           (booking_id, function_name, fn_date, fn_time, person_count, pkg_detail, artist_id, artist_name)
+                           VALUES (:1,:2,TO_DATE(:3,'YYYY-MM-DD'),:4,:5,:6,:7,:8)""",
+                        [booking_id, fname, fnd, fn.get('fn_time') or None,
+                         fn.get('person_count') or None, fn.get('pkg_detail') or None,
+                         fn.get('artist_id') or None, fn.get('artist_name') or None]
+                    )
+        await db.commit()
+
+    if not fields:
+        return {"updated": True}
+
+    # Recalculate balance_due — must include add-on amounts the same way
+    # create_bridal does, or every edit to a booking that has add-ons
+    # (even something unrelated like fixing a phone number) silently drops
+    # them from the balance.
     pkg = data.get('pkg_amount', 0) or 0
     tr = data.get('transport', 0) or 0
     disc = data.get('discount', 0) or 0
     adv = data.get('advance_paid', 0) or 0
-    balance = max(0, float(pkg) + float(tr) - float(disc) - float(adv))
+    addon_total = 0.0
+    try:
+        await cursor.execute(
+            "SELECT NVL(SUM(addon_amount),0) FROM bridal_functions WHERE booking_id=:1",
+            [booking_id]
+        )
+        addon_row = await cursor.fetchone()
+        addon_total = float(addon_row[0] or 0) if addon_row else 0.0
+    except oracledb.DatabaseError:
+        pass  # addon_amount column not migrated yet on this DB — treat as 0
+    balance = max(0, float(pkg) + float(tr) + addon_total - float(disc) - float(adv))
     fields.append(f"balance_due=:{len(values)+1}")
     values.append(balance)
     fields.append(f"updated_at=SYSTIMESTAMP")

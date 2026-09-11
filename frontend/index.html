@@ -683,7 +683,7 @@ table tbody tr:hover td{background:var(--bg2)}
 <div data-theme="light">
 <!-- TOPBAR -->
 <div class="topbar" id="topbar">
-  <div class="logo-wrap">
+  <div class="logo-wrap" onclick="location.reload()" style="cursor:pointer" title="Click to refresh">
     <div class="logo-placeholder" id="logo-ph" style="border:none;cursor:default">
       <img src="/static/logo.jpg" id="logo-img" class="logo-img-el" alt="Saundarya Logo"
         style="display:block;width:40px;height:40px;object-fit:contain;border-radius:6px"
@@ -1483,6 +1483,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <!-- Membership Details -->
         <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">⭐ Membership</div>
         <div class="fg" style="margin-bottom:14px;background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid rgba(201,168,76,.3);border-radius:var(--r8);padding:12px">
+          <div class="fl"><label>Membership ID <span style="font-size:9px;color:var(--ink3);font-weight:400">(auto — edit if needed)</span></label><input type="text" id="em-mid" placeholder="SBC..." style="text-transform:uppercase"></div>
           <div class="fl"><label>Membership Fee (₹)</label><input type="number" id="em-fee" value="1000" placeholder="1000"></div>
           <div class="fl"><label>Payment Method</label>
             <select id="em-pay">
@@ -3058,8 +3059,9 @@ async function saveExclusiveMember(){
   // accrue from visits after the join date, not before
   const startDate=(v('em-start')?.value||'').trim()||td();
   const expiryDate=(v('em-expiry')?.value||'').trim()||null;
+  const midOverride=(v('em-mid')?.value||'').trim()||null;
   const mem=await apiCall('POST',`/clients/${client.id}/membership`,{
-    fee_paid:fee,start_date:startDate,expiry_date:expiryDate
+    fee_paid:fee,start_date:startDate,expiry_date:expiryDate,membership_id:midOverride
   });
   if(!mem){
     const existMems2=await apiCall('GET',`/clients/${client.id}/membership`);
@@ -3084,7 +3086,7 @@ async function saveExclusiveMember(){
 
   toast(`<i class="fas fa-crown" style="color:var(--gold)"></i> ${nm} enrolled as ⭐ Exclusive Member! ID: ${mem.membership_id}`,'var(--gold)');
   // Clear form
-  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes','em-mid'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const ef=v('em-fee');if(ef)ef.value='1000';
   v('cf').style.display='none';
   _crmActiveType='Exclusive';renderClients('');
@@ -3121,7 +3123,7 @@ function autoSetExpiry(){
   if(exp)exp.value=d.toISOString().split('T')[0];
 }
 
-function showCfExclusive(){
+async function showCfExclusive(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='none';
   v('cf-exclusive').style.display='block';
@@ -3132,6 +3134,13 @@ function showCfExclusive(){
   if(emExp&&!emExp.value){
     const d=new Date();d.setFullYear(d.getFullYear()+1);
     emExp.value=d.toISOString().split('T')[0];
+  }
+  // Pre-fill the suggested next Membership ID — still fully editable
+  // before saving, this is just the default.
+  const emMid=v('em-mid');
+  if(emMid&&!emMid.value){
+    const suggestion=await apiCall('GET','/clients/next-membership-id');
+    if(suggestion?.membership_id)emMid.value=suggestion.membership_id;
   }
 }
 async function renderClients(s){
@@ -4309,6 +4318,39 @@ async function editBridal(id){
       <div style="grid-column:1/-1"><label style="font-size:11px;color:var(--ink3);font-weight:600">Notes</label>
         <textarea id="eb-notes" rows="2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical">${b.notes||''}</textarea></div>
     </div>
+    <!-- Function Schedule + Add-ons — previously only the fields above
+         could be edited after creation; the per-function schedule and
+         add-on services couldn't be touched at all once saved. -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600">Function Schedule &amp; Add-ons</label>
+        <button type="button" onclick="ebAddFuncRow()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal)"><i class="fas fa-plus"></i> Add Row</button>
+      </div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:640px">
+        <thead><tr style="background:var(--ink);color:#fff">
+          <th style="padding:5px 6px;text-align:left">Function</th>
+          <th style="padding:5px 6px;text-align:left">Date</th>
+          <th style="padding:5px 6px;text-align:left">Time</th>
+          <th style="padding:5px 6px;text-align:left">Person</th>
+          <th style="padding:5px 6px;text-align:left">Package</th>
+          <th style="padding:5px 6px;text-align:left">Add-on Item</th>
+          <th style="padding:5px 6px;text-align:left">Add-on ₹</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="eb-func-tbody">${(b.functions||[]).map(f=>`<tr data-artist-id="${f.artist_id||''}" data-artist-name="${(f.artist_name||'').replace(/"/g,'&quot;')}">
+          <td><input class="eb-fn-name" value="${(f.function_name||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input type="date" class="eb-fn-date" value="${String(f.fn_date||'').substring(0,10)}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input type="time" class="eb-fn-time" value="${f.fn_time||''}" style="width:78px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input type="number" class="eb-fn-person" value="${f.person_count||''}" min="1" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input class="eb-fn-pkg" value="${(f.pkg_detail||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input class="eb-fn-addon-item" value="${(f.addon_item||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input type="number" class="eb-fn-addon-amt" value="${f.addon_amount||0}" min="0" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><button type="button" onclick="this.closest('tr').remove()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
       <button onclick="saveBridalEdit(${id})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Save Changes</button>
@@ -4317,7 +4359,40 @@ async function editBridal(id){
   modal.style.display='flex';
 }
 
+function ebAddFuncRow(){
+  const tbody=v('eb-func-tbody');if(!tbody)return;
+  const row=document.createElement('tr');
+  row.innerHTML=`
+    <td><input class="eb-fn-name" placeholder="Function name" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input type="date" class="eb-fn-date" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input type="time" class="eb-fn-time" style="width:78px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input type="number" class="eb-fn-person" min="1" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input class="eb-fn-pkg" placeholder="Package detail" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input class="eb-fn-addon-item" placeholder="Add-on item" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input type="number" class="eb-fn-addon-amt" placeholder="0" min="0" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><button type="button" onclick="this.closest('tr').remove()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>`;
+  tbody.appendChild(row);
+}
+
 async function saveBridalEdit(id){
+  const functions=[];
+  document.querySelectorAll('#eb-func-tbody tr').forEach(tr=>{
+    const name=tr.querySelector('.eb-fn-name')?.value?.trim();
+    if(!name)return;
+    functions.push({
+      function_name:name,
+      fn_date:tr.querySelector('.eb-fn-date')?.value||null,
+      fn_time:tr.querySelector('.eb-fn-time')?.value||null,
+      person_count:tr.querySelector('.eb-fn-person')?.value||null,
+      pkg_detail:tr.querySelector('.eb-fn-pkg')?.value?.trim()||null,
+      addon_item:tr.querySelector('.eb-fn-addon-item')?.value?.trim()||null,
+      addon_amount:parseFloat(tr.querySelector('.eb-fn-addon-amt')?.value)||0,
+      // Not editable from this table — carried over from the existing row
+      // so re-saving doesn't wipe out an artist assigned at creation time.
+      artist_id:tr.dataset.artistId||null,
+      artist_name:tr.dataset.artistName||null
+    });
+  });
   const r=await apiCall('PATCH',`/bridal/${id}/edit`,{
     client_name:v('eb-name')?.value||'',
     phone:v('eb-phone')?.value||null,
@@ -4331,7 +4406,8 @@ async function saveBridalEdit(id){
     discount:parseFloat(v('eb-disc')?.value)||0,
     advance_paid:parseFloat(v('eb-adv')?.value)||0,
     status:v('eb-status')?.value||'Active',
-    notes:v('eb-notes')?.value||null
+    notes:v('eb-notes')?.value||null,
+    functions:functions
   });
   if(!r)return;
   toast('<i class="fas fa-check"></i> Booking updated!','var(--emerald)');
@@ -4363,6 +4439,14 @@ function clearBridal(type){
   }
 }
 
+// A booking's true total bill — package + every add-on's amount + transport.
+// Add-ons live in booking.functions (one row per function, addon_amount set
+// only on the rows that are actual add-ons), not in pkg_amount, so anywhere
+// that showed just pkg_amount as "the total" was silently leaving them out.
+function bkgTotal(b){
+  const addonTotal=(b.functions||[]).reduce((s,f)=>s+(parseFloat(f.addon_amount)||0),0);
+  return (b.pkg_amount||0)+addonTotal+(b.transport||0);
+}
 async function renderBridalList(search, typeF){
   const tb = v('br-lb'); if(!tb) return;
 
@@ -4388,7 +4472,7 @@ async function renderBridalList(search, typeF){
     const rows = all.filter(b => b.booking_type === t);
     const active = rows.filter(b => b.status === 'Active').length;
     const total = rows.length;
-    const rev = rows.reduce((a,b) => a+(b.pkg_amount||0), 0);
+    const rev = rows.reduce((a,b) => a+bkgTotal(b), 0);
     const key = t === 'Sider' ? 'sider' : t.toLowerCase();
     const el_a = v(`bs-${key}-active`); if(el_a) el_a.textContent = active;
     const el_t = v(`bs-${key}-total`); if(el_t) el_t.textContent = total;
@@ -4452,7 +4536,7 @@ async function renderBridalList(search, typeF){
     const mBride  = allInMonth.filter(b=>b.booking_type==='Bride').length;
     const mGroom  = allInMonth.filter(b=>b.booking_type==='Groom').length;
     const mSider  = allInMonth.filter(b=>b.booking_type==='Sider').length;
-    const mTotal  = allInMonth.reduce((a,b)=>a+(b.pkg_amount||0),0);
+    const mTotal  = allInMonth.reduce((a,b)=>a+bkgTotal(b),0);
     const mAdv    = allInMonth.reduce((a,b)=>a+(b.advance_paid||0),0);
     const mDue    = allInMonth.reduce((a,b)=>a+(b.balance_due||0),0);
 
@@ -4510,7 +4594,7 @@ async function renderBridalList(search, typeF){
           <td style="font-size:11px;color:var(--ink3)">${b.phone||'—'}</td>
           <td style="font-size:11px">${b.wedding_date||'—'}</td>
           <td style="font-size:11px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${b.package_name||''}">${b.package_name||'—'}</td>
-          <td style="font-size:12px;font-weight:600">${fmt(b.pkg_amount||0)}</td>
+          <td style="font-size:12px;font-weight:600">${fmt(bkgTotal(b))}</td>
           <td style="font-size:12px;color:var(--emerald)">${fmt(b.advance_paid||0)}</td>
           <td style="font-size:12px;font-weight:700;color:${b.balance_due>0?'var(--rose)':'var(--emerald)'}">${fmt(b.balance_due||0)}</td>
           <td><span class="pill ${sc[b.status]||'p-lt'}" style="font-size:10px">${b.status}</span></td>
@@ -4600,7 +4684,15 @@ async function showBridalDetail(id){
           <td style="padding:6px 10px">${f.fn_date||'—'}</td>
           <td style="padding:6px 10px">${f.fn_time||'—'}</td>
           <td style="padding:6px 10px">${f.person_name||f.person_count||'—'}</td>
-          <td style="padding:6px 10px">${f.pkg_detail||'—'}</td>
+          <td style="padding:6px 10px">${(()=>{
+            let pkg=f.pkg_detail||'';
+            const addonAmt=parseFloat(f.addon_amount)||0;
+            if(f.addon_item||addonAmt){
+              const addonTxt='+ '+(f.addon_item||'Add-on')+(addonAmt?' (Rs.'+addonAmt.toLocaleString('en-IN')+')':'');
+              pkg=pkg?pkg+'  '+addonTxt:addonTxt;
+            }
+            return pkg||'—';
+          })()}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div>`:''}
@@ -6665,7 +6757,7 @@ async function convertToExclusive(clientId){
   const btn=cfExcl?.querySelector('.btn-gold');
   if(btn){btn.innerHTML='<i class="fas fa-crown"></i>Save & Enroll Member';btn.setAttribute('onclick','saveExclusiveMember()');}
   // Clear form fields
-  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
+  ['em-name','em-phone','em-dob','em-ann','em-addr','em-pstaff','em-notes','em-mid'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const ef=v('em-fee');if(ef)ef.value='1000';
   if(cf)cf.style.display='none';
   _crmActiveType='Exclusive';renderClients('');renderDailyView();updateDash();

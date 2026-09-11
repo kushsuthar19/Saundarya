@@ -247,7 +247,18 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     story.append(_header(btype))
     story.append(Spacer(1, 3*mm))
 
-    today  = datetime.now().strftime("%d/%m/%Y")
+    # The date printed here is the booking date (when it was made/advance
+    # paid), not the day the PDF happens to be downloaded — a booking made
+    # 02/08 shouldn't show whatever today's date is just because the PDF
+    # was re-downloaded weeks later.
+    bd = booking.get("booking_date")
+    if isinstance(bd, date):
+        today = bd.strftime("%d/%m/%Y")
+    elif bd:
+        try:    today = datetime.strptime(str(bd)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except: today = str(bd)
+    else:
+        today = datetime.now().strftime("%d/%m/%Y")
     job_no = booking.get("job_no", "")
     story.append(Table([[
         Paragraph(f"<b>Job No.:</b>  {job_no}", SB("jn", fontSize=11)),

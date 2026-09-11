@@ -47,6 +47,20 @@ async def _next_membership_id(cursor) -> str:
     return f"SBC{str(int(nxt)).zfill(3)}"
 
 
+# Preview-only: what _next_membership_id() would hand out right now, so the
+# enrollment form can show/pre-fill it before the member is actually saved
+# (still editable there — this is just the suggested default). Doesn't
+# reserve or consume anything, since the real ID is only assigned MAX+1 at
+# actual insert time.
+@router.get("/next-membership-id")
+async def next_membership_id_preview(
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    return {"membership_id": await _next_membership_id(cursor)}
+
+
 # ── list clients ─────────────────────────────────────────────────────────────
 
 @router.get("", response_model=List[ClientOut])
@@ -565,10 +579,15 @@ async def create_membership(
 
     # Membership IDs can collide if a prior row was deleted; retry a couple
     # times on a unique-constraint violation instead of surfacing a raw 500.
+    # If the enrollment form's ID field was edited to something other than
+    # the auto-suggested default, use that instead — but only try it once
+    # (retrying with a different auto ID after the user typed a specific
+    # one would silently ignore what they asked for).
+    custom_mem_id = (data.get('membership_id') or '').strip().upper()
     new_mem_db_id = None
     last_err = None
-    for _attempt in range(3):
-        mem_id = await _next_membership_id(cursor)
+    for _attempt in range(1 if custom_mem_id else 3):
+        mem_id = custom_mem_id or await _next_membership_id(cursor)
         try:
             await cursor.execute(
                 """INSERT INTO memberships
@@ -591,6 +610,8 @@ async def create_membership(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to create membership: {str(e)}")
     if new_mem_db_id is None:
+        if custom_mem_id:
+            raise HTTPException(status_code=400, detail=f"Membership ID '{custom_mem_id}' is already in use")
         raise HTTPException(status_code=500, detail=f"Failed to create membership after retries: {str(last_err)}")
     await db.commit()
     # Log the 20 gift points
