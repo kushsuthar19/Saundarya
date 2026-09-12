@@ -198,20 +198,24 @@ async def create_entry(
     # Update client stats
     try:
         if is_new_day_visit:
+            # last_visit only ever moves FORWARD to a more recent date, never
+            # backward — a backdated entry (e.g. a membership-fee entry auto-
+            # created with an old date) must not overwrite a genuinely more
+            # recent real visit with an older one.
             await cursor.execute(
                 """UPDATE clients
                    SET visits = NVL(visits,0) + 1,
                        total_spent = NVL(total_spent,0) + :1,
                        visit_count = NVL(visit_count,0) + 1,
-                       last_visit = TO_DATE(:2,'YYYY-MM-DD'),
+                       last_visit = GREATEST(NVL(last_visit, TO_DATE(:2,'YYYY-MM-DD')), TO_DATE(:3,'YYYY-MM-DD')),
                        client_type = CASE
                            WHEN NVL(client_type,'New') = 'Exclusive' THEN 'Exclusive'
                            WHEN NVL(visit_count,0) >= 1 THEN 'Regular'
                            ELSE 'New'
                        END,
                        updated_at = SYSTIMESTAMP
-                   WHERE id = :3""",
-                [net, str(data.entry_date), client_id]
+                   WHERE id = :4""",
+                [net, str(data.entry_date), str(data.entry_date), client_id]
             )
         else:
             # Same day revisit — only update total_spent, not visit count
