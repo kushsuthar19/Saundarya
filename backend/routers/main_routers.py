@@ -2050,16 +2050,20 @@ async def membership_inactivity_alerts(
     if to_discontinue:
         await db.commit()
 
-    # Warn about still-Active members approaching the 60-day deadline
+    # Warn about still-Active members approaching the 60-day deadline. Uses
+    # the same GREATEST(last_visit, start_date, updated_at) baseline as the
+    # auto-discontinue check above — otherwise a just-reactivated member
+    # would still show an (incorrect, already-passed) deadline computed
+    # from their old stale last_visit instead of the fresh reactivation.
     await cursor.execute(
         """SELECT c.name, c.phone, m.membership_id, c.id as client_id,
-                  TO_CHAR(NVL(c.last_visit, m.start_date),'YYYY-MM-DD') as last_visit,
-                  TO_CHAR(NVL(c.last_visit, m.start_date) + 60,'YYYY-MM-DD') as visit_deadline,
-                  ROUND(NVL(c.last_visit, m.start_date) + 60 - SYSDATE) as days_left
+                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at),'YYYY-MM-DD') as last_visit,
+                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60,'YYYY-MM-DD') as visit_deadline,
+                  ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 - SYSDATE) as days_left
            FROM memberships m
            JOIN clients c ON c.id = m.client_id
            WHERE m.status = 'Active'
-             AND NVL(c.last_visit, m.start_date) <= SYSDATE - 45
+             AND GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) <= SYSDATE - 45
            ORDER BY days_left ASC"""
     )
     rows = await cursor.fetchall()
