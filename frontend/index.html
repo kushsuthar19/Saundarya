@@ -1145,13 +1145,13 @@ table tbody tr:hover td{background:var(--bg2)}
           </div>
         </div>
       </div>
-      <!-- Add-on services (e.g. a Sider package for the groom's brother/father) -->
+      <!-- Add-on services (e.g. a Sider makeup package for the groom's sister/mother) -->
       <div style="margin-bottom:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px"><i class="fas fa-plus-circle" style="color:var(--teal)"></i> Add-on Services (optional)</div>
-        <div class="ow"><table class="ptable"><thead><tr><th>For (e.g. Brother, Father)</th><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
+        <div class="ow"><table class="ptable"><thead><tr><th>For (e.g. Sister, Mother)</th><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
           <tbody id="groom-addons-list"></tbody>
         </table></div>
-        <button onclick="addGroomAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal);margin-top:6px"><i class="fas fa-plus"></i> Add Service / Package (e.g. a Sider for Brother/Father)</button>
+        <button onclick="addGroomAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal);margin-top:6px"><i class="fas fa-plus"></i> Add Service / Package (e.g. a Sider for Sister/Mother)</button>
       </div>
       <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="gb-t">₹0</span></div><div class="bill-row"><span class="bl">Add-ons</span><span class="br" id="gb-addons">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="gb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="gb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="gb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="gb-due">₹0</span></div></div>
       <div class="ar">
@@ -4977,15 +4977,26 @@ function addGroomAddon(){
   const row=document.createElement('tr');
   row.className='groom-addon-row';
   row.innerHTML=`
-    <td><input type="text" placeholder="Brother / Father / Friend" class="groom-addon-person" style="width:100%"></td>
+    <td><input type="text" placeholder="Sister / Mother / Friend" class="groom-addon-person" style="width:100%"></td>
     <td><input type="text" placeholder="Function (e.g. Sangeet)" class="groom-addon-fn" style="width:100%"></td>
     <td><input type="date" class="groom-addon-date" style="width:100%"></td>
     <td><input type="time" class="groom-addon-time" style="width:78px"></td>
     <td><select class="groom-addon-pkg" style="width:100%" onchange="groomAddonSelect(this)">
       <option value="">Select Package</option>
-      <option value="3500">Basic Groom (₹3,500)</option>
-      <option value="6000">Advance Groom (₹6,000)</option>
-      <option value="8000">Premium Groom (₹8,000)</option>
+      <optgroup label="Basic">
+        <option value="2299">Basic Makeup + Hair</option>
+        <option value="3999">+Lashes</option>
+        <option value="5999">+Extension</option>
+      </optgroup>
+      <optgroup label="Premium">
+        <option value="7999">+Lens (Nars/Huda)</option>
+        <option value="10500">+All (Too Faced)</option>
+      </optgroup>
+      <optgroup label="Engagement/Reception">
+        <option value="12500">HD Makeup</option>
+        <option value="15499">UHD Makeup</option>
+        <option value="18499">Airbrush + Flower</option>
+      </optgroup>
       <option value="0">Custom Amount</option>
     </select></td>
     <td><input type="number" placeholder="0" class="groom-addon-amt" style="width:72px" oninput="grBill()"></td>
