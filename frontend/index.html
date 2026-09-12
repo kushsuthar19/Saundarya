@@ -1498,7 +1498,7 @@ table tbody tr:hover td{background:var(--bg2)}
               <option>Cash</option><option>GPay/UPI</option><option>Card</option>
             </select>
           </div>
-          <div class="fl"><label>Start Date</label><input type="date" id="em-start" onchange="autoSetExpiry();"></div>
+          <div class="fl"><label>Start Date <span id="em-start-hint" style="font-size:9px;color:var(--gold);font-weight:400"></span></label><input type="date" id="em-start" onchange="autoSetExpiry();"></div>
           <div class="fl"><label>Expiry Date <span style="font-size:9px;color:var(--ink3);font-weight:400">(auto or edit)</span></label><input type="date" id="em-expiry" style="border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px"></div>
         </div>
         <!-- Staff & Notes -->
@@ -3135,6 +3135,8 @@ async function showCfExclusive(){
   v('cf-choose').style.display='none';
   v('cf-regular').style.display='none';
   v('cf-exclusive').style.display='block';
+  // Clear any leftover reactivation hint from a previous use of this form
+  const startHint=v('em-start-hint');if(startHint)startHint.textContent='';
   // Only set dates if empty — allow user to edit
   const emStart=v('em-start');
   if(emStart&&!emStart.value)emStart.value=td();
@@ -6940,6 +6942,10 @@ async function reactivateMembership(clientId, oldMemId){
   const emStart=v('em-start');if(emStart)emStart.value=td();
   const emExpiry=v('em-expiry');
   if(emExpiry){const d=new Date();d.setFullYear(d.getFullYear()+1);emExpiry.value=d.toISOString().split('T')[0];}
+  // Make it obvious what this date means here specifically, so it doesn't
+  // get mistaken for "her original join date" and reset back to that.
+  const startHint=v('em-start-hint');
+  if(startHint)startHint.textContent='— reactivation date, keep as today unless backdating on purpose';
   toast('<i class="fas fa-undo"></i> Reactivating Membership ID: '+oldMemId+' — review the dates and save','var(--gold)');
 }
 
