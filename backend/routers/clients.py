@@ -476,6 +476,27 @@ async def delete_client(
 ):
     cursor = db.cursor()
     try:
+        # Exclusive clients are never actually deleted — "Delete" instead
+        # downgrades them to Regular and discontinues their membership,
+        # keeping the client record, history and their membership_id intact
+        # (so it stays reusable via the reactivation flow, but is not lost).
+        await cursor.execute("SELECT client_type FROM clients WHERE id=:1", [client_id])
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Client not found")
+        if row[0] == 'Exclusive':
+            await cursor.execute(
+                "UPDATE memberships SET status='Discontinued', updated_at=SYSTIMESTAMP "
+                "WHERE client_id=:1 AND status='Active'",
+                [client_id]
+            )
+            await cursor.execute(
+                "UPDATE clients SET client_type='Regular' WHERE id=:1",
+                [client_id]
+            )
+            await db.commit()
+            return {"deleted": client_id, "downgraded": True}
+
         # Step 1: Nullify foreign keys in entries/appointments
         for sql in [
             "UPDATE daily_entries SET client_id=NULL WHERE client_id=:1",
@@ -529,6 +550,8 @@ async def delete_client(
         await cursor.execute("DELETE FROM clients WHERE id=:1", [client_id])
         await db.commit()
         return {"deleted": client_id}
+    except HTTPException:
+        raise
     except Exception as e:
         try: await db.rollback()
         except Exception: pass
@@ -585,42 +608,79 @@ async def create_membership(
     # one would silently ignore what they asked for).
     custom_mem_id = (data.get('membership_id') or '').strip().upper()
     new_mem_db_id = None
+    reused_existing_row = False
     last_err = None
-    for _attempt in range(1 if custom_mem_id else 3):
-        mem_id = custom_mem_id or await _next_membership_id(cursor)
-        try:
+
+    # A specific ID that already belongs to a Discontinued (not Active)
+    # membership is free to reuse — same idea as the NFC card fix: reuse
+    # that exact row (reassigning it, even to a different client) instead
+    # of inserting a second row with the same ID, which the unique
+    # constraint on membership_id would reject regardless of status.
+    if custom_mem_id:
+        await cursor.execute(
+            "SELECT id, status FROM memberships WHERE membership_id=:1",
+            [custom_mem_id]
+        )
+        existing_row = await cursor.fetchone()
+        if existing_row:
+            if existing_row[1] == 'Active':
+                raise HTTPException(status_code=400, detail=f"Membership ID '{custom_mem_id}' is already in use")
+            # Clear the old tenure's points history so the balance actually
+            # resets to the fresh 20 gift points below, instead of the new
+            # gift landing on top of whatever was left over from before.
             await cursor.execute(
-                """INSERT INTO memberships
-                       (client_id, membership_id, status, fee_paid, start_date, expiry_date,
-                        beauty_points, lifetime_points, notes)
-                   VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8)
-                   RETURNING id INTO :9""",
-                [client_id, mem_id, data.get('fee_paid', 1000),
-                 start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
-                 starting_pts, starting_pts,
-                 data.get('notes', ''),
-                 cursor.var(oracledb.NUMBER)]
+                "DELETE FROM beauty_points_log WHERE membership_id=:1", [existing_row[0]]
             )
-            new_mem_id = cursor.bindvars[-1].getvalue()
-            new_mem_db_id = int(new_mem_id[0] if isinstance(new_mem_id, list) else new_mem_id)
-            break
-        except oracledb.IntegrityError as e:
-            last_err = e
-            continue
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create membership: {str(e)}")
+            await cursor.execute(
+                """UPDATE memberships
+                   SET client_id=:1, status='Active', fee_paid=:2,
+                       start_date=TO_DATE(:3,'YYYY-MM-DD'), expiry_date=TO_DATE(:4,'YYYY-MM-DD'),
+                       beauty_points=:5, lifetime_points=:6, notes=:7, updated_at=SYSTIMESTAMP
+                   WHERE id=:8""",
+                [client_id, data.get('fee_paid', 1000),
+                 start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
+                 starting_pts, starting_pts, data.get('notes', ''), existing_row[0]]
+            )
+            new_mem_db_id = existing_row[0]
+            reused_existing_row = True
+
     if new_mem_db_id is None:
-        if custom_mem_id:
-            raise HTTPException(status_code=400, detail=f"Membership ID '{custom_mem_id}' is already in use")
-        raise HTTPException(status_code=500, detail=f"Failed to create membership after retries: {str(last_err)}")
+        for _attempt in range(1 if custom_mem_id else 3):
+            mem_id = custom_mem_id or await _next_membership_id(cursor)
+            try:
+                await cursor.execute(
+                    """INSERT INTO memberships
+                           (client_id, membership_id, status, fee_paid, start_date, expiry_date,
+                            beauty_points, lifetime_points, notes)
+                       VALUES (:1,:2,'Active',:3,TO_DATE(:4,'YYYY-MM-DD'),TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8)
+                       RETURNING id INTO :9""",
+                    [client_id, mem_id, data.get('fee_paid', 1000),
+                     start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
+                     starting_pts, starting_pts,
+                     data.get('notes', ''),
+                     cursor.var(oracledb.NUMBER)]
+                )
+                new_mem_id = cursor.bindvars[-1].getvalue()
+                new_mem_db_id = int(new_mem_id[0] if isinstance(new_mem_id, list) else new_mem_id)
+                break
+            except oracledb.IntegrityError as e:
+                last_err = e
+                continue
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to create membership: {str(e)}")
+        if new_mem_db_id is None:
+            if custom_mem_id:
+                raise HTTPException(status_code=400, detail=f"Membership ID '{custom_mem_id}' is already in use")
+            raise HTTPException(status_code=500, detail=f"Failed to create membership after retries: {str(last_err)}")
     await db.commit()
-    # Log the 20 gift points
-    # Log 20 gift points
+    # Log the 20 gift points — labelled differently for a reactivation so
+    # the points history makes clear this row picked back up rather than
+    # being a first-time signup.
     await cursor.execute(
         """INSERT INTO beauty_points_log
                (membership_id, entry_type, points, reference_inv, notes)
-           VALUES (:1,'add',20,'GIFT','Welcome gift — 20 joining points')""",
-        [new_mem_db_id]
+           VALUES (:1,'add',20,'GIFT',:2)""",
+        [new_mem_db_id, 'Reactivation gift — 20 points' if reused_existing_row else 'Welcome gift — 20 joining points']
     )
     # Log past service points if any
     if past_pts > 0:

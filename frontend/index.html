@@ -1041,11 +1041,11 @@ table tbody tr:hover td{background:var(--bg2)}
       <!-- Add-on services (e.g. Sider package for Sangeet) -->
       <div style="margin-bottom:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px"><i class="fas fa-plus-circle" style="color:var(--teal)"></i> Add-on Services (optional)</div>
-        <div class="ow"><table class="ptable"><thead><tr><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
+        <div class="ow"><table class="ptable"><thead><tr><th>For (e.g. Mom, Sister)</th><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
           <tbody id="bride-addons-list"></tbody>
         </table></div>
         <datalist id="br-addon-fn-suggestions"></datalist>
-        <button onclick="addBrideAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal);margin-top:6px"><i class="fas fa-plus"></i> Add Service / Package</button>
+        <button onclick="addBrideAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal);margin-top:6px"><i class="fas fa-plus"></i> Add Service / Package (e.g. a Sider for Mom/Sister)</button>
       </div>
       <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="bb-p">₹0</span></div><div class="bill-row"><span class="bl">Add-ons</span><span class="br" id="bb-addons">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="bb-t">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="bb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="bb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="bb-due">₹0</span></div></div>
       <div class="ar">
@@ -1145,7 +1145,15 @@ table tbody tr:hover td{background:var(--bg2)}
           </div>
         </div>
       </div>
-      <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="gb-t">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="gb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="gb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="gb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="gb-due">₹0</span></div></div>
+      <!-- Add-on services (e.g. a Sider package for the groom's brother/father) -->
+      <div style="margin-bottom:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:8px"><i class="fas fa-plus-circle" style="color:var(--teal)"></i> Add-on Services (optional)</div>
+        <div class="ow"><table class="ptable"><thead><tr><th>For (e.g. Brother, Father)</th><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
+          <tbody id="groom-addons-list"></tbody>
+        </table></div>
+        <button onclick="addGroomAddon()" style="font-size:11px;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;background:none;cursor:pointer;color:var(--teal);margin-top:6px"><i class="fas fa-plus"></i> Add Service / Package (e.g. a Sider for Brother/Father)</button>
+      </div>
+      <div class="bill-box"><div class="bill-row"><span class="bl">Package</span><span class="br" id="gb-t">₹0</span></div><div class="bill-row"><span class="bl">Add-ons</span><span class="br" id="gb-addons">₹0</span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="gb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="gb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="gb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="gb-due">₹0</span></div></div>
       <div class="ar">
         <button class="btn btn-ghost"><i class="fas fa-times"></i>Clear</button>
         <button class="btn btn-ink" onclick="saveBridal('groom')"><i class="fas fa-save"></i>Save Groom Booking</button>
@@ -3602,7 +3610,7 @@ async function showClientProfile(clientId){
     ${c.preferences?`<div style="background:var(--bg);border-radius:8px;padding:10px;grid-column:1/-1"><span style="color:var(--ink3)">📝 Notes:</span> ${c.preferences}</div>`:''}
   </div>
   <!-- Membership block for Exclusive -->
-  ${mem?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:16px">
+  ${mem&&mem.status==='Active'?`<div style="background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid var(--gold);border-radius:10px;padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div>
         <div style="font-size:10px;color:var(--amber);font-weight:700;text-transform:uppercase;margin-bottom:2px">⭐ Exclusive Membership</div>
@@ -3621,6 +3629,16 @@ async function showClientProfile(clientId){
     <div style="margin-top:10px;display:flex;gap:8px">
       <button onclick="showMemberProfile(${clientId})" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-crown"></i> Manage Points & Membership</button>
       <button onclick="renewMembership(${clientId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px"><i class="fas fa-redo"></i> Renew</button>
+    </div>
+  </div>`:''}
+  <!-- Past (Discontinued) membership — offer to reactivate the same ID -->
+  ${mem&&mem.status!=='Active'?`<div style="background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:10px;color:var(--ink3);font-weight:700;text-transform:uppercase;margin-bottom:2px">Past Exclusive Membership — ${mem.status}</div>
+        <div style="font-size:15px;font-weight:700;color:var(--ink2)">${mem.membership_id}</div>
+      </div>
+      <button onclick="reactivateMembership(${clientId},'${mem.membership_id}')" style="margin-left:auto;background:var(--gold);color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-undo"></i> Reactivate Membership</button>
     </div>
   </div>`:''}
   <!-- Invoice / Service History -->
@@ -3700,10 +3718,18 @@ async function updateExclusiveMember(clientId){
 }
 
 async function deleteClient(id,name){
-  if(!confirm(`Delete client "${name}"? This cannot be undone.`))return;
+  // Exclusive clients are never actually deleted — the backend downgrades
+  // them to Regular and discontinues their membership instead, keeping
+  // their record/history intact (and their Membership ID reusable later).
+  if(!confirm(`Delete client "${name}"?\n\nIf they are an Exclusive Member, this will discontinue their membership and move them to Regular (their record is kept) instead of deleting them. Otherwise this cannot be undone.`))return;
   const r=await apiCall('DELETE',`/clients/${id}`);
   if(!r)return;
-  toast(`Client "${name}" deleted`,'var(--rose)');
+  if(r.downgraded){
+    toast(`"${name}" moved to Regular — membership discontinued`,'var(--amber)');
+  } else {
+    toast(`Client "${name}" deleted`,'var(--rose)');
+  }
+  closeInvModal();
   renderClients('');
   updateRevKpis();
   updateDash();
@@ -4063,6 +4089,7 @@ function addBrideAddon(){
   const row=document.createElement('tr');
   row.className='bride-addon-row';
   row.innerHTML=`
+    <td><input type="text" placeholder="Mom / Sister / Friend" class="bride-addon-person" style="width:100%"></td>
     <td><input type="text" placeholder="Function (e.g. Sangeet)" class="bride-addon-fn" list="br-addon-fn-suggestions" style="width:100%"></td>
     <td><input type="date" class="bride-addon-date" style="width:100%"></td>
     <td><input type="time" class="bride-addon-time" style="width:78px"></td>
@@ -4154,6 +4181,7 @@ async function saveBridal(type){
     // Add-on Services (e.g. an extra Sider package for Sangeet on top of the
     // main package) — each becomes its own bridal_functions row.
     v('bride-addons-list')?.querySelectorAll('.bride-addon-row').forEach(row=>{
+      const personInp=row.querySelector('.bride-addon-person');
       const fnInp=row.querySelector('.bride-addon-fn');
       const dateInp=row.querySelector('.bride-addon-date');
       const timeInp=row.querySelector('.bride-addon-time');
@@ -4166,6 +4194,7 @@ async function saveBridal(type){
         function_name:fnInp?.value?.trim()||item,
         fn_date:dateInp?.value||null,
         fn_time:timeInp?.value||null,
+        person_name:personInp?.value?.trim()||null,
         addon_item:item,
         addon_amount:amt
       });
@@ -4185,6 +4214,26 @@ async function saveBridal(type){
       const fnTime=inputs[1]?.value||null;   // second input = time
       const notes=inputs[2]?.value||null;    // third input = notes
       if(fn&&fn!=='Wedding Day')funcs.push({function_name:fn,fn_date:fnDate,fn_time:fnTime,person_count:null,pkg_detail:notes});
+    });
+    // Add-on Services (e.g. a Sider package for the groom's brother/father)
+    v('groom-addons-list')?.querySelectorAll('.groom-addon-row').forEach(row=>{
+      const personInp=row.querySelector('.groom-addon-person');
+      const fnInp=row.querySelector('.groom-addon-fn');
+      const dateInp=row.querySelector('.groom-addon-date');
+      const timeInp=row.querySelector('.groom-addon-time');
+      const pkgSel=row.querySelector('.groom-addon-pkg');
+      const amtInp=row.querySelector('.groom-addon-amt');
+      const amt=parseFloat(amtInp?.value)||0;
+      if(amt<=0)return;  // nothing entered in this row — skip it
+      const item=pkgSel?.options[pkgSel.selectedIndex]?.text||'Add-on';
+      funcs.push({
+        function_name:fnInp?.value?.trim()||item,
+        fn_date:dateInp?.value||null,
+        fn_time:timeInp?.value||null,
+        person_name:personInp?.value?.trim()||null,
+        addon_item:item,
+        addon_amount:amt
+      });
     });
   } else { // sider
     name=v('sd-n').value.trim();if(!name){toast('Enter name','var(--rose)');return;}
@@ -4334,6 +4383,7 @@ async function editBridal(id){
           <th style="padding:5px 6px;text-align:left">Time</th>
           <th style="padding:5px 6px;text-align:left">Person</th>
           <th style="padding:5px 6px;text-align:left">Package</th>
+          <th style="padding:5px 6px;text-align:left">Add-on For</th>
           <th style="padding:5px 6px;text-align:left">Add-on Item</th>
           <th style="padding:5px 6px;text-align:left">Add-on ₹</th>
           <th></th>
@@ -4344,6 +4394,7 @@ async function editBridal(id){
           <td><input type="time" class="eb-fn-time" value="${f.fn_time||''}" style="width:78px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><input type="number" class="eb-fn-person" value="${f.person_count||''}" min="1" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><input class="eb-fn-pkg" value="${(f.pkg_detail||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input class="eb-fn-addon-for" placeholder="Mom / Sister" value="${(f.person_name||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><input class="eb-fn-addon-item" value="${(f.addon_item||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><input type="number" class="eb-fn-addon-amt" value="${f.addon_amount||0}" min="0" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><button type="button" onclick="this.closest('tr').remove()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>
@@ -4368,6 +4419,7 @@ function ebAddFuncRow(){
     <td><input type="time" class="eb-fn-time" style="width:78px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input type="number" class="eb-fn-person" min="1" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input class="eb-fn-pkg" placeholder="Package detail" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input class="eb-fn-addon-for" placeholder="Mom / Sister" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input class="eb-fn-addon-item" placeholder="Add-on item" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input type="number" class="eb-fn-addon-amt" placeholder="0" min="0" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><button type="button" onclick="this.closest('tr').remove()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>`;
@@ -4385,6 +4437,7 @@ async function saveBridalEdit(id){
       fn_time:tr.querySelector('.eb-fn-time')?.value||null,
       person_count:tr.querySelector('.eb-fn-person')?.value||null,
       pkg_detail:tr.querySelector('.eb-fn-pkg')?.value?.trim()||null,
+      person_name:tr.querySelector('.eb-fn-addon-for')?.value?.trim()||null,
       addon_item:tr.querySelector('.eb-fn-addon-item')?.value?.trim()||null,
       addon_amount:parseFloat(tr.querySelector('.eb-fn-addon-amt')?.value)||0,
       // Not editable from this table — carried over from the existing row
@@ -4459,17 +4512,38 @@ async function renderBridalList(search, typeF){
 
   tb.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px"><i class="fas fa-spinner fa-spin fa-2x" style="color:var(--ink3)"></i></td></tr>';
 
-  // Fetch all bookings
-  let path = '/bridal?limit=500';
-  if(srch) path += `&search=${encodeURIComponent(srch)}`;
-  if(type && type !== '') path += `&booking_type=${encodeURIComponent(type)}`;
-
-  const all = await apiCall('GET', path);
+  // Fetch the FULL unfiltered set — search/type are applied client-side
+  // below (instead of via query params) so embedded sider add-ons, which
+  // don't have their own bridal_bookings row, can be matched/counted too.
+  const all = await apiCall('GET', '/bridal?limit=500');
   if(!all){ tb.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--rose);padding:20px">Failed to load</td></tr>'; return; }
+
+  // A sider add-on inside a Bride/Groom booking (e.g. the bride's Mom or
+  // Sister) doesn't get its own bridal_bookings row — surface each one as
+  // a lightweight virtual "Sider" entry so it's counted in the Sider tab
+  // and listed there too, with its own downloadable invoice.
+  const virtualSiders = [];
+  all.forEach(b => {
+    if(b.booking_type!=='Bride' && b.booking_type!=='Groom') return;
+    (b.functions||[]).forEach(f => {
+      const addonAmt = parseFloat(f.addon_amount)||0;
+      if(!f.person_name || (!f.addon_item && addonAmt<=0)) return;
+      virtualSiders.push({
+        id: `v${b.id}_${f.id}`, _virtual: true, _parentId: b.id, _fnId: f.id,
+        _parentName: b.client_name, _parentType: b.booking_type,
+        job_no: b.job_no, booking_type: 'Sider', client_name: f.person_name,
+        phone: b.phone, booking_date: b.booking_date, wedding_date: b.wedding_date,
+        package_name: f.addon_item || f.pkg_detail || 'Add-on',
+        pkg_amount: 0, transport: 0, advance_paid: 0, balance_due: 0,
+        status: b.status, functions: [f]
+      });
+    });
+  });
+  const combined = [...all, ...virtualSiders];
 
   // ── Update summary cards ──────────────────────────────────
   ['Bride','Groom','Sider'].forEach(t => {
-    const rows = all.filter(b => b.booking_type === t);
+    const rows = combined.filter(b => b.booking_type === t);
     const active = rows.filter(b => b.status === 'Active').length;
     const total = rows.length;
     const rev = rows.reduce((a,b) => a+bkgTotal(b), 0);
@@ -4479,17 +4553,38 @@ async function renderBridalList(search, typeF){
     const el_r = v(`bs-${key}-revenue`); if(el_r) el_r.textContent = fmt(rev);
   });
 
+  // ── Filter by search (name/phone — also matches a sider's own name
+  // and the parent booking's client name) ───────────────────────────
+  let rows = [...combined];
+  if(srch){
+    const s = srch.toUpperCase();
+    rows = rows.filter(b =>
+      (b.client_name||'').toUpperCase().includes(s) ||
+      (b.phone||'').includes(srch) ||
+      (b._parentName||'').toUpperCase().includes(s)
+    );
+  }
+  // ── Filter by type ──────────────────────────────────────────
+  if(type) rows = rows.filter(b => b.booking_type === type);
+
   // ── Filter by month ───────────────────────────────────────
-  let rows = [...all];
+  // A booking can have functions on different days around the main wedding
+  // date (e.g. Haldi/Mehendi a day or two before) — match on ANY of those
+  // function dates too, not just wedding_date, so searching for a function
+  // day actually finds the booking it belongs to.
   if(month) {
     rows = rows.filter(b => {
       const wd = b.wedding_date || b.created_at || '';
-      return wd.startsWith(month);
+      if(wd.startsWith(month)) return true;
+      return (b.functions||[]).some(f => (f.fn_date||'').startsWith(month));
     });
   }
   // Filter by specific date
   if(dateFilter) {
-    rows = rows.filter(b => (b.wedding_date || '').startsWith(dateFilter));
+    rows = rows.filter(b => {
+      if((b.wedding_date||'').startsWith(dateFilter)) return true;
+      return (b.functions||[]).some(f => (f.fn_date||'').startsWith(dateFilter));
+    });
   }
 
   // ── Sort ─────────────────────────────────────────────────
@@ -4586,6 +4681,34 @@ async function renderBridalList(search, typeF){
 
       // Individual bookings for this date
       bookings.forEach(b => {
+        // Sider add-ons living inside a Bride/Groom booking (e.g. the
+        // bride's Mom or Sister) don't have their own booking row — they
+        // can't be edited/deleted/paid/WhatsApp-sent independently, that
+        // all still happens on the parent booking, so this row just shows
+        // who it's for and offers its own standalone invoice download.
+        if(b._virtual){
+          html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')} br-row" style="transition:background .1s" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
+          <td style="padding:8px 14px 8px 32px"><span style="font-size:10px;color:var(--ink3)">${b.job_no}</span></td>
+          <td><span class="pill ${tc[b.booking_type]||'p-lt'}" style="font-size:10px">${b.booking_type}</span></td>
+          <td style="font-size:10px;color:var(--ink3)">${String(b.booking_date||'—').substring(0,10)}</td>
+          <td><b style="font-size:12px">${b.client_name}</b><div style="font-size:9px;color:var(--ink3)">Sider for ${b._parentName} (${b._parentType})</div></td>
+          <td style="font-size:11px;color:var(--ink3)">${b.phone||'—'}</td>
+          <td style="font-size:11px">${b.wedding_date||'—'}</td>
+          <td style="font-size:11px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${b.package_name||''}">${b.package_name||'—'}</td>
+          <td style="font-size:12px;font-weight:600">${fmt(bkgTotal(b))}</td>
+          <td style="font-size:11px;color:var(--ink4)" colspan="2" title="Tracked combined with the parent booking's advance/balance">— included in parent —</td>
+          <td><span class="pill ${sc[b.status]||'p-lt'}" style="font-size:10px">${b.status}</span></td>
+          <td>
+            <div style="display:flex;gap:4px;align-items:center">
+              <button onclick="showBridalDetail(${b._parentId})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="View Parent Booking"><i class="fas fa-eye"></i></button>
+              <button onclick="apiDownload('/bridal/${b._parentId}/functions/${b._fnId}/pdf','Sider_${b.client_name.replace(/\s/g,'_')}_${b.job_no}.pdf')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="Download this sider's invoice"><i class="fas fa-download"></i></button>
+              <button onclick="editSiderAddon(${b._parentId},${b._fnId})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;color:var(--teal)" title="Edit this sider"><i class="fas fa-edit"></i></button>
+              <button onclick="deleteSiderAddon(${b._parentId},${b._fnId},'${b.client_name.replace(/'/g,'')}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;color:var(--rose)" title="Remove this sider"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+          return;
+        }
         html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')} br-row" style="transition:background .1s" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
           <td style="padding:8px 14px 8px 32px"><span style="font-size:10px;color:var(--ink3)">${b.job_no}</span></td>
           <td><span class="pill ${tc[b.booking_type]||'p-lt'}" style="font-size:10px">${b.booking_type}</span></td>
@@ -4620,6 +4743,69 @@ async function renderBridalList(search, typeF){
   });
 
   tb.innerHTML = html_rows;
+}
+
+// Edit a single sider add-on (e.g. Mom/Sister) living inside a Bride/Groom
+// booking — in place, without touching the rest of that booking.
+async function editSiderAddon(parentId, fnId){
+  const b = await apiCall('GET', `/bridal/${parentId}`);
+  if(!b) return;
+  const fn = (b.functions||[]).find(f => f.id === fnId);
+  if(!fn){ toast('Could not find this sider on the booking','var(--rose)'); return; }
+  const modal = v('inv-modal'); if(!modal) return;
+  modal.innerHTML = `
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:440px;max-width:96vw;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--ink)"><i class="fas fa-user-edit" style="color:var(--teal);margin-right:8px"></i>Edit Sider</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:14px">Part of ${b.client_name}'s ${b.booking_type} booking (${b.job_no})</div>
+    <div style="display:grid;gap:10px">
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">For (Name)</label>
+        <input id="esa-person" value="${(fn.person_name||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Function</label>
+        <input id="esa-fn" value="${(fn.function_name||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Date</label>
+          <input id="esa-date" type="date" value="${String(fn.fn_date||'').substring(0,10)}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+        <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Time</label>
+          <input id="esa-time" type="time" value="${fn.fn_time||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      </div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Item / Package</label>
+        <input id="esa-item" value="${(fn.addon_item||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Amount ₹</label>
+        <input id="esa-amt" type="number" min="0" value="${fn.addon_amount||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="saveSiderAddonEdit(${parentId},${fnId})" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>`;
+  modal.style.display = 'flex';
+}
+
+async function saveSiderAddonEdit(parentId, fnId){
+  const person = v('esa-person')?.value.trim();
+  if(!person){ toast('Enter a name','var(--rose)'); return; }
+  const payload = {
+    person_name: person,
+    function_name: v('esa-fn')?.value.trim() || null,
+    fn_date: v('esa-date')?.value || null,
+    fn_time: v('esa-time')?.value || null,
+    addon_item: v('esa-item')?.value.trim() || null,
+    addon_amount: parseFloat(v('esa-amt')?.value) || 0
+  };
+  const r = await apiCall('PATCH', `/bridal/${parentId}/functions/${fnId}`, payload);
+  if(!r) return;
+  toast('<i class="fas fa-check"></i> Sider updated','var(--emerald)');
+  closeInvModal();
+  renderBridalList();
+}
+
+async function deleteSiderAddon(parentId, fnId, personName){
+  if(!confirm(`Remove ${personName||'this sider'} from this booking? Their charge will be removed from the balance too.`)) return;
+  const r = await apiCall('DELETE', `/bridal/${parentId}/functions/${fnId}`);
+  if(!r) return;
+  toast(`${personName||'Sider'} removed`,'var(--rose)');
+  renderBridalList();
 }
 
 function toggleMonthGroup(cls){
@@ -4775,12 +4961,42 @@ async function sendBridalPdfWa(id,btn){
 function grBill(){
   const pa=parseFloat(v('gr-pa')?.value)||0,tr=parseFloat(v('gr-tr')?.value)||0;
   const di=parseFloat(v('gr-di')?.value)||0,ad=parseFloat(v('gr-ad')?.value)||0;
-  const due=Math.max(0,pa+tr-di-ad);
+  // Sum add-ons (e.g. a Sider package for the groom's brother/father)
+  let addons=0;
+  document.querySelectorAll('#groom-addons-list .groom-addon-amt').forEach(inp=>{addons+=parseFloat(inp.value)||0;});
+  const due=Math.max(0,pa+addons+tr-di-ad);
   const gt=v('gb-t');if(gt)gt.textContent=fmt(pa);
+  const gaEl=v('gb-addons');if(gaEl)gaEl.textContent=fmt(addons);
   const gtr=v('gb-tr');if(gtr)gtr.textContent=fmt(tr);
   const gd=v('gb-d');if(gd)gd.textContent='—'+fmt(di);
   const ga=v('gb-a');if(ga)ga.textContent=fmt(ad);
   const gdue=v('gb-due');if(gdue)gdue.textContent=fmt(due);
+}
+function addGroomAddon(){
+  const list=v('groom-addons-list');if(!list)return;
+  const row=document.createElement('tr');
+  row.className='groom-addon-row';
+  row.innerHTML=`
+    <td><input type="text" placeholder="Brother / Father / Friend" class="groom-addon-person" style="width:100%"></td>
+    <td><input type="text" placeholder="Function (e.g. Sangeet)" class="groom-addon-fn" style="width:100%"></td>
+    <td><input type="date" class="groom-addon-date" style="width:100%"></td>
+    <td><input type="time" class="groom-addon-time" style="width:78px"></td>
+    <td><select class="groom-addon-pkg" style="width:100%" onchange="groomAddonSelect(this)">
+      <option value="">Select Package</option>
+      <option value="3500">Basic Groom (₹3,500)</option>
+      <option value="6000">Advance Groom (₹6,000)</option>
+      <option value="8000">Premium Groom (₹8,000)</option>
+      <option value="0">Custom Amount</option>
+    </select></td>
+    <td><input type="number" placeholder="0" class="groom-addon-amt" style="width:72px" oninput="grBill()"></td>
+    <td><button class="rm-r" onclick="this.closest('tr').remove();grBill()">×</button></td>`;
+  list.appendChild(row);
+}
+function groomAddonSelect(sel){
+  const val=parseFloat(sel.value)||0;
+  const amtInp=sel.closest('.groom-addon-row')?.querySelector('.groom-addon-amt');
+  if(amtInp&&val>0)amtInp.value=val;
+  grBill();
 }
 function getStaffOpts(){
   return '<option value="">— Assign Staff —</option>'+(_staffCache||[]).map(st=>`<option value="${st.id}">${st.name}</option>`).join('');
@@ -6679,12 +6895,16 @@ async function loadMemInactivityNotifications(){
 }
 
 
-async function giveMembership(clientId, clientName){
+async function giveMembership(clientId, clientName, reuseMemId){
   // Load existing client details to pre-fill the form
   const c=await apiCall('GET',`/clients/${clientId}`);
   if(!c)return;
   // Open exclusive form pre-filled
   const cf=v('cf');if(cf)cf.style.display='block';
+  // Reactivating a past Membership ID — fill it in BEFORE showCfExclusive()
+  // runs, so its "only suggest if empty" check skips fetching a fresh
+  // auto-generated ID and keeps this exact one instead.
+  if(reuseMemId){const emMid=v('em-mid');if(emMid)emMid.value=reuseMemId;}
   showCfExclusive();
   const set=(eid,val)=>{const el=v(eid);if(el)el.value=val||'';};
   set('em-name',c.name);set('em-phone',c.phone);
@@ -6701,6 +6921,17 @@ async function giveMembership(clientId, clientName){
   toast('Fill missing details and save to convert','var(--sky)');
 }
 
+async function reactivateMembership(clientId, oldMemId){
+  closeInvModal();
+  await giveMembership(clientId, null, oldMemId);
+  // Fresh validity period for the reactivated membership, regardless of
+  // whatever leftover dates the form may have had from before.
+  const emStart=v('em-start');if(emStart)emStart.value=td();
+  const emExpiry=v('em-expiry');
+  if(emExpiry){const d=new Date();d.setFullYear(d.getFullYear()+1);emExpiry.value=d.toISOString().split('T')[0];}
+  toast('<i class="fas fa-undo"></i> Reactivating Membership ID: '+oldMemId+' — review the dates and save','var(--gold)');
+}
+
 async function convertToExclusive(clientId){
   const nm=v('em-name')?.value.trim();
   const ph=v('em-phone')?.value.trim();
@@ -6710,6 +6941,7 @@ async function convertToExclusive(clientId){
   const fee=parseFloat(v('em-fee')?.value||1000);
   const startDate=v('em-start')?.value||td();
   const expiryDate=v('em-expiry')?.value||'';
+  const midOverride=(v('em-mid')?.value||'').trim()||null;
 
   // Step 1: Update existing client details
   await apiCall('PUT',`/clients/${clientId}`,{
@@ -6723,10 +6955,13 @@ async function convertToExclusive(clientId){
   });
 
   // Step 2: Enroll membership — starts with 20 gift points only; points
-  // accrue from visits after the join date, not before
+  // accrue from visits after the join date, not before. membership_id is
+  // passed through so a reactivated (Discontinued) ID, or any manual edit
+  // of the suggested ID, actually reaches the backend instead of always
+  // getting a fresh auto-generated one.
   const mem=await apiCall('POST',`/clients/${clientId}/membership`,{
     fee_paid:fee,start_date:startDate,
-    expiry_date:expiryDate||null
+    expiry_date:expiryDate||null,membership_id:midOverride
   });
   if(!mem){
     // Membership may already exist — fetch and show it

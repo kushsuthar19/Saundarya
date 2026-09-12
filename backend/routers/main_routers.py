@@ -729,6 +729,105 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
     return booking
 
 
+async def _recalc_bridal_balance(cursor, booking_id: int) -> float:
+    """Recompute and persist a booking's balance_due from its current
+    pkg_amount/transport/discount/advance_paid plus the live sum of its
+    functions' addon_amount — used after editing or deleting a single
+    Add-on Service row, since that changes what's owed without touching
+    any of the other top-level booking fields."""
+    await cursor.execute(
+        "SELECT pkg_amount, transport, discount, advance_paid FROM bridal_bookings WHERE id=:1",
+        [booking_id]
+    )
+    row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Bridal booking not found")
+    pkg, transport, discount, advance = [float(x or 0) for x in row]
+    addon_total = 0.0
+    try:
+        await cursor.execute(
+            "SELECT NVL(SUM(addon_amount),0) FROM bridal_functions WHERE booking_id=:1",
+            [booking_id]
+        )
+        addon_row = await cursor.fetchone()
+        addon_total = float(addon_row[0] or 0) if addon_row else 0.0
+    except oracledb.DatabaseError:
+        pass  # addon_amount column not migrated yet on this DB — treat as 0
+    balance = max(0, pkg + transport + addon_total - discount - advance)
+    await cursor.execute(
+        "UPDATE bridal_bookings SET balance_due=:1, updated_at=SYSTIMESTAMP WHERE id=:2",
+        [balance, booking_id]
+    )
+    return balance
+
+
+@bridal_router.patch("/{booking_id}/functions/{function_id}")
+async def edit_bridal_function(
+    booking_id: int,
+    function_id: int,
+    data: dict,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Edit a single function/add-on row in place — e.g. renaming a sider
+    (Mom/Sister) or changing their function/date/item/amount — without
+    touching the rest of the booking or replacing the whole schedule."""
+    cursor = db.cursor()
+    await cursor.execute(
+        "SELECT id FROM bridal_functions WHERE id=:1 AND booking_id=:2",
+        [function_id, booking_id]
+    )
+    if not await cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Function/add-on row not found on this booking")
+
+    allowed = ['function_name', 'fn_date', 'fn_time', 'person_count', 'person_name',
+               'pkg_detail', 'addon_item', 'addon_amount']
+    fields, values = [], []
+    for k, v2 in data.items():
+        if k not in allowed:
+            continue
+        if k == 'fn_date' and v2:
+            fields.append(f"fn_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+        else:
+            fields.append(f"{k}=:{len(values)+1}")
+        values.append(v2)
+    if fields:
+        values.append(function_id)
+        try:
+            await cursor.execute(
+                f"UPDATE bridal_functions SET {','.join(fields)} WHERE id=:{len(values)}",
+                values
+            )
+        except oracledb.DatabaseError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to update: {str(e)}")
+
+    balance = await _recalc_bridal_balance(cursor, booking_id)
+    await db.commit()
+    return {"updated": function_id, "balance_due": balance}
+
+
+@bridal_router.delete("/{booking_id}/functions/{function_id}")
+async def delete_bridal_function(
+    booking_id: int,
+    function_id: int,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Remove a single function/add-on row (e.g. drop a sider like Mom or
+    Sister) without touching the rest of the booking, then re-total the
+    balance_due since that add-on's amount no longer applies."""
+    cursor = db.cursor()
+    await cursor.execute(
+        "DELETE FROM bridal_functions WHERE id=:1 AND booking_id=:2",
+        [function_id, booking_id]
+    )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Function/add-on row not found on this booking")
+    balance = await _recalc_bridal_balance(cursor, booking_id)
+    await db.commit()
+    return {"deleted": function_id, "balance_due": balance}
+
+
 @bridal_router.get("", response_model=List[BridalOut])
 async def list_bridal(
     booking_type: Optional[str] = Query(None),
@@ -973,6 +1072,33 @@ async def bridal_invoice_pdf(
     else:
         pdf_bytes = generate_bridal_invoice(booking, booking["functions"])
     filename = f"Invoice_{booking['job_no']}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@bridal_router.get("/{booking_id}/functions/{function_id}/pdf")
+async def bridal_sider_addon_pdf(
+    booking_id: int,
+    function_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Standalone one-off PDF for a single sider person added as an Add-on
+    Service inside a Bride/Groom booking (e.g. the bride's Mom or Sister) —
+    downloadable on its own from the Sider tab, without needing the whole
+    parent booking's invoice."""
+    from backend.services.pdf_service import generate_sider_addon_invoice
+    cursor = db.cursor()
+    booking = await _get_bridal(booking_id, cursor)
+    fn = next((f for f in booking["functions"] if f.get("id") == function_id), None)
+    if not fn:
+        raise HTTPException(status_code=404, detail="Function/add-on row not found on this booking")
+    pdf_bytes = generate_sider_addon_invoice(booking, fn)
+    person = (fn.get("person_name") or "Guest").replace(" ", "_")
+    filename = f"Sider_{person}_{booking['job_no']}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

@@ -311,13 +311,22 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         "Ganesh Pooja","Sangeet","Mahendi","Mamera/Mosadu",
         "Grah Santi Pooja","Party","Baby Shower","Other Function",
     ]
-    # A function can appear as more than one bridal_functions row — the
-    # auto-populated schedule row (date/time/artist) and a separate Add-on
-    # Services row (addon_item/addon_amount) tied to the same function name.
-    # Merge them instead of letting one silently overwrite the other.
+    # A booking can have several Add-on Services rows tied to the same
+    # function name — e.g. a Bride's own Sangeet schedule row, PLUS a
+    # separate Sider add-on for her Mom and another for her Sister, both
+    # also logged against "Sangeet". Those must stay as distinct, clearly
+    # attributed line items (who each charge is for) rather than being
+    # merged into one combined row by function name, which would silently
+    # drop all but one person's name/amount. So split add-on rows out from
+    # the plain schedule rows up front, and only merge-by-name the latter.
+    def _is_addon_row(fn):
+        return bool(fn.get("addon_item")) or float(fn.get("addon_amount") or 0) > 0
+    addon_rows = [fn for fn in functions if _is_addon_row(fn)]
+    schedule_fns = [fn for fn in functions if not _is_addon_row(fn)]
+
     fn_map: Dict[str, Dict] = {}
     extra: List[str] = []
-    for fn in functions:
+    for fn in schedule_fns:
         nm = (fn.get("function_name") or "").strip()
         if not nm:
             continue
@@ -330,14 +339,12 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         for k in ("fn_date", "fn_time", "person_count", "pkg_detail", "artist_name"):
             if not existing.get(k) and fn.get(k):
                 existing[k] = fn.get(k)
-        addon_amt = float(fn.get("addon_amount") or 0)
-        if addon_amt or fn.get("addon_item"):
-            existing["addon_amount"] = float(existing.get("addon_amount") or 0) + addon_amt
-            prev_item = existing.get("addon_item")
-            new_item = fn.get("addon_item")
-            existing["addon_item"] = f"{prev_item} + {new_item}" if prev_item and new_item else (new_item or prev_item)
 
-    all_fn = STANDARD + extra
+    # Only list functions that were actually booked — an empty checklist row
+    # for every standard function type the client never chose just clutters
+    # the invoice (e.g. a Bride who only booked "Bridal" doesn't need 10
+    # blank rows for Engagement/Reception/Haldi/etc. printed underneath it).
+    all_fn = [nm for nm in (STANDARD + extra) if nm in fn_map]
     TH_W = SB("fth", fontSize=9, textColor=WHITE, alignment=TA_CENTER, leading=11)
     fn_data = [[
         Paragraph("", S("fh0", leading=11)),
@@ -367,11 +374,6 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         pc_str = str(int(pc)) if (pc is not None and pc != "") else ""
 
         pkg = fn.get("pkg_detail") or ""
-        addon_item = fn.get("addon_item")
-        addon_amt = float(fn.get("addon_amount") or 0)
-        if addon_item or addon_amt:
-            addon_txt = f"+ {addon_item or 'Add-on'}" + (f" (Rs.{int(addon_amt):,})" if addon_amt else "")
-            pkg = f"{pkg}  {addon_txt}".strip() if pkg else addon_txt
 
         fn_data.append([
             Paragraph(
@@ -405,6 +407,41 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     fn_tbl.setStyle(TableStyle(style_cmds))
     story.append(fn_tbl)
     story.append(Spacer(1, 3*mm))
+
+    # Add-on Services — e.g. a Sider makeup package for the Bride/Groom's
+    # Mom, Sister, Brother etc., each billed on this SAME invoice. Listed
+    # as its own table (not merged into the schedule above) so every
+    # person's charge stays individually visible even when several share
+    # the same function name.
+    if addon_rows:
+        AH = SB("ah", fontSize=9, textColor=WHITE, alignment=TA_CENTER)
+        addon_data = [[
+            Paragraph("<b>For</b>",      AH),
+            Paragraph("<b>Function</b>", AH),
+            Paragraph("<b>Item</b>",     AH),
+            Paragraph("<b>Amount</b>",   AH),
+        ]]
+        for fn in addon_rows:
+            addon_data.append([
+                Paragraph(fn.get("person_name") or "—", S("af", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(fn.get("function_name") or "—", S("afn", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(fn.get("addon_item") or "Add-on", S("ai", fontSize=9)),
+                Paragraph(f"Rs.{int(float(fn.get('addon_amount') or 0)):,}",
+                          SB("aa", fontSize=9, alignment=TA_CENTER)),
+            ])
+        addon_tbl = Table(addon_data, colWidths=[36*mm, 36*mm, 60*mm, 50*mm])
+        addon_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0),(-1,0),  DARK_GREEN),
+            ("TEXTCOLOR",     (0,0),(-1,0),  WHITE),
+            ("GRID",          (0,0),(-1,-1), 0.4, MED_GRAY),
+            ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
+            ("TOPPADDING",    (0,0),(-1,-1), 3),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ]))
+        story.append(Paragraph("<b>Add-on Services</b>", SB("aoh", fontSize=10, textColor=DARK_GREEN)))
+        story.append(Spacer(1, 2*mm))
+        story.append(addon_tbl)
+        story.append(Spacer(1, 3*mm))
 
     # Payment history — when the advance was paid, and when each due
     # payment (if any) was paid, so this isn't just a single snapshot.
@@ -884,6 +921,111 @@ def generate_sider_invoice(booking: Dict[str, Any],
     combined.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "TOP")]))
     story.append(combined)
     story.append(Spacer(1, 4*mm))
+    story.append(_footer())
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+def generate_sider_addon_invoice(booking: Dict[str, Any], fn: Dict[str, Any]) -> bytes:
+    """
+    A small one-off invoice for a single sider person added as an Add-on
+    Service inside a Bride/Groom booking (e.g. the bride's Mom or Sister).
+    They don't have their own advance/balance — that's tracked combined
+    with the parent booking — so this just states their line item plus a
+    reference back to whose booking it's part of, instead of fabricating a
+    standalone due amount that doesn't really exist for them individually.
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=M, rightMargin=M,
+                            topMargin=8*mm, bottomMargin=8*mm)
+    story = []
+
+    story.append(_header("Sider / Guest"))
+    story.append(Spacer(1, 4*mm))
+
+    job_no = booking.get("job_no", "")
+    today  = datetime.now().strftime("%d/%m/%Y")
+    story.append(Table([[
+        Paragraph(f"<b>Job No.:</b>  {job_no}", SB("jn", fontSize=11)),
+        Paragraph(f"<b>Date:</b>  {today}", SB("jd", fontSize=11, alignment=TA_RIGHT)),
+    ]], colWidths=[95*mm, 87*mm]))
+    story.append(Spacer(1, 3*mm))
+
+    wd = booking.get("wedding_date")
+    if isinstance(wd, (date, datetime)):
+        wd_str = wd.strftime("%d/%m/%Y")
+    elif wd:
+        try:    wd_str = datetime.strptime(str(wd)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except: wd_str = str(wd)[:10]
+    else:
+        wd_str = "—"
+
+    person_nm = str(fn.get("person_name") or "").strip() or "Guest"
+    info = Table([[
+        Paragraph(
+            f"<b>Guest Name:</b>  {person_nm}<br/>"
+            f"<b>Sider for:</b>  {booking.get('client_name','')}'s "
+            f"{booking.get('booking_type','Bridal')} — {wd_str}<br/>"
+            f"<b>Reference Booking:</b>  {job_no}",
+            S("ci", fontSize=10, leading=15)
+        ),
+    ]], colWidths=[182*mm])
+    info.setStyle(TableStyle([
+        ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
+        ("TOPPADDING",    (0,0),(-1,-1), 8),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 8),
+        ("LEFTPADDING",   (0,0),(-1,-1), 8),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 8),
+        ("BACKGROUND",    (0,0),(-1,-1), LIGHT_GRAY),
+    ]))
+    story.append(info)
+    story.append(Spacer(1, 5*mm))
+
+    fd = fn.get("fn_date")
+    if isinstance(fd, (date, datetime)):
+        fd_str = fd.strftime("%d/%m/%y")
+    elif fd:
+        try:    fd_str = datetime.strptime(str(fd)[:10], "%Y-%m-%d").strftime("%d/%m/%y")
+        except: fd_str = str(fd)
+    else:
+        fd_str = "—"
+
+    TH = SB("th", fontSize=9, textColor=WHITE, alignment=TA_CENTER)
+    svc_rows = [[
+        Paragraph("<b>Function</b>", TH),
+        Paragraph("<b>Date</b>",     TH),
+        Paragraph("<b>Time</b>",     TH),
+        Paragraph("<b>Item</b>",     TH),
+        Paragraph("<b>Amount</b>",   TH),
+    ], [
+        Paragraph(fn.get("function_name") or "—",              S("f1", fontSize=10)),
+        Paragraph(fd_str,                                       S("f2", fontSize=10, alignment=TA_CENTER)),
+        Paragraph(fn.get("fn_time") or "—",                     S("f3", fontSize=10, alignment=TA_CENTER)),
+        Paragraph(fn.get("addon_item") or fn.get("pkg_detail") or "—", S("f4", fontSize=10)),
+        Paragraph(f"Rs.{int(float(fn.get('addon_amount') or 0)):,}",
+                  SB("f5", fontSize=10, alignment=TA_RIGHT)),
+    ]]
+    svc_tbl = Table(svc_rows, colWidths=[40*mm, 26*mm, 24*mm, 60*mm, 32*mm])
+    svc_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,0),  DARK_GREEN),
+        ("GRID",          (0,0),(-1,-1), 0.4, MED_GRAY),
+        ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
+        ("TOPPADDING",    (0,0),(-1,-1), 6),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 6),
+        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+    ]))
+    story.append(svc_tbl)
+    story.append(Spacer(1, 6*mm))
+
+    story.append(Paragraph(
+        f"This amount is included in the combined invoice for "
+        f"{booking.get('client_name','')} (Job {job_no}) — payment is tracked "
+        f"there, not separately for this guest.",
+        S("note", fontSize=9, textColor=TEXT_GRAY, leading=13)
+    ))
+    story.append(Spacer(1, 8*mm))
     story.append(_footer())
 
     doc.build(story)
