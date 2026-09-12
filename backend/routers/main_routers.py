@@ -2014,13 +2014,20 @@ async def membership_inactivity_alerts(
     """
     cursor = db.cursor()
 
-    # Auto-discontinue memberships whose last visit was 60+ days ago
+    # Auto-discontinue memberships whose last visit was 60+ days ago.
+    # Uses whichever is MORE RECENT of the client's last visit or the
+    # membership's own start_date — not just last_visit with start_date as
+    # a fallback only when last_visit is empty. Without GREATEST, a
+    # reactivated membership (start_date reset to today) would still get
+    # judged by the client's old stale last_visit (which is, by definition,
+    # already 60+ days old — that's why they were discontinued in the
+    # first place), auto-discontinuing it again on the very next check.
     await cursor.execute(
         """SELECT m.id, c.id, c.name
            FROM memberships m
            JOIN clients c ON c.id = m.client_id
            WHERE m.status = 'Active'
-             AND NVL(c.last_visit, m.start_date) <= SYSDATE - 60"""
+             AND GREATEST(NVL(c.last_visit, m.start_date), m.start_date) <= SYSDATE - 60"""
     )
     to_discontinue = await cursor.fetchall()
     discontinued = []
