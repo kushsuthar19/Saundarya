@@ -245,7 +245,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     story = []
     btype = booking.get("booking_type", "Bride")
     story.append(_header(btype))
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 5*mm))
 
     # The date printed here is the booking date (when it was made/advance
     # paid), not the day the PDF happens to be downloaded — a booking made
@@ -265,7 +265,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         Paragraph(f"<b>Date:</b>  {today}",
                   SB("jd", fontSize=11, alignment=TA_RIGHT)),
     ]], colWidths=[95*mm, 87*mm]))
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 5*mm))
 
     # Client info
     wd = booking.get("wedding_date")
@@ -289,21 +289,25 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         dotted("Reference",           booking.get("reference") or ""),
         dotted("Contact",             booking.get("phone") or ""),
     ]
-    info_inner = Table([[r[0]] for r in info_rows], colWidths=[172*mm])
+    # Matches the 182mm content width every other table on this page uses
+    # (A4 minus the 14mm margins) — it was 176mm before, which ReportLab's
+    # default centered table alignment then inset evenly on both sides,
+    # making this box's left AND right edges sit inboard of the others.
+    info_inner = Table([[r[0]] for r in info_rows], colWidths=[178*mm])
     info_inner.setStyle(TableStyle([
         ("TOPPADDING",    (0,0),(-1,-1), 3),
         ("BOTTOMPADDING", (0,0),(-1,-1), 3),
         ("LEFTPADDING",   (0,0),(-1,-1), 8),
         ("RIGHTPADDING",  (0,0),(-1,-1), 8),
     ]))
-    info_box = Table([[info_inner]], colWidths=[176*mm])
+    info_box = Table([[info_inner]], colWidths=[182*mm])
     info_box.setStyle(TableStyle([
         ("BOX",           (0,0),(-1,-1), 1.2, DARK_GREEN),
         ("TOPPADDING",    (0,0),(-1,-1), 3),
         ("BOTTOMPADDING", (0,0),(-1,-1), 3),
     ]))
     story.append(info_box)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 5*mm))
 
     # Function schedule
     STANDARD = [
@@ -347,27 +351,26 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     all_fn = [nm for nm in (STANDARD + extra) if nm in fn_map]
     TH_W = SB("fth", fontSize=9, textColor=WHITE, alignment=TA_CENTER, leading=11)
     fn_data = [[
-        Paragraph("", S("fh0", leading=11)),
+        Paragraph("<b>Function</b>", SB("fh0", fontSize=9, textColor=WHITE, leading=11)),
         Paragraph("<b>Date</b>",    TH_W),
         Paragraph("<b>Timing</b>",  TH_W),
         Paragraph("<b>Person</b>",  TH_W),
         Paragraph("<b>Package</b>", TH_W),
     ]]
 
+    def _fmt_short_date(fd):
+        if isinstance(fd, date):
+            return fd.strftime("%d/%m/%y")
+        if fd:
+            try:    return datetime.strptime(str(fd)[:10], "%Y-%m-%d").strftime("%d/%m/%y")
+            except: return str(fd)
+        return ""
+
     booked_rows = []
     for idx, fn_name in enumerate(all_fn):
         fn  = fn_map.get(fn_name, {})
         is_booked = fn_name in fn_map
-
-        # Date
-        fd = fn.get("fn_date")
-        if isinstance(fd, date):
-            fd_str = fd.strftime("%d/%m/%y")
-        elif fd:
-            try:    fd_str = datetime.strptime(str(fd)[:10], "%Y-%m-%d").strftime("%d/%m/%y")
-            except: fd_str = str(fd)
-        else:
-            fd_str = ""
+        fd_str = _fmt_short_date(fn.get("fn_date"))
 
         # person_count is NUMBER in Oracle
         pc = fn.get("person_count")
@@ -392,12 +395,12 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     fn_cols = [46*mm, 36*mm, 32*mm, 26*mm, 42*mm]
     fn_tbl  = Table(fn_data, colWidths=fn_cols, repeatRows=1)
     style_cmds = [
-        ("BACKGROUND",    (1,0),(-1,0),  DARK_GREEN),
-        ("TEXTCOLOR",     (1,0),(-1,0),  WHITE),
+        ("BACKGROUND",    (0,0),(-1,0),  DARK_GREEN),
+        ("TEXTCOLOR",     (0,0),(-1,0),  WHITE),
         ("GRID",          (0,0),(-1,-1), 0.4, MED_GRAY),
         ("BOX",           (0,0),(-1,-1), 0.8, DARK_GREEN),
-        ("TOPPADDING",    (0,0),(-1,-1), 2),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 2),
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
         ("LEFTPADDING",   (0,0),(-1,-1), 5),
         ("RIGHTPADDING",  (0,0),(-1,-1), 5),
         ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
@@ -406,7 +409,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         style_cmds.append(("BACKGROUND", (0,r),(-1,r), GREEN_LIGHT))
     fn_tbl.setStyle(TableStyle(style_cmds))
     story.append(fn_tbl)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 5*mm))
 
     # Add-on Services — e.g. a Sider makeup package for the Bride/Groom's
     # Mom, Sister, Brother etc., each billed on this SAME invoice. Listed
@@ -418,6 +421,8 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         addon_data = [[
             Paragraph("<b>For</b>",      AH),
             Paragraph("<b>Function</b>", AH),
+            Paragraph("<b>Date</b>",     AH),
+            Paragraph("<b>Timing</b>",   AH),
             Paragraph("<b>Item</b>",     AH),
             Paragraph("<b>Amount</b>",   AH),
         ]]
@@ -425,11 +430,13 @@ def generate_bridal_invoice(booking: Dict[str, Any],
             addon_data.append([
                 Paragraph(fn.get("person_name") or "—", S("af", fontSize=9, alignment=TA_CENTER)),
                 Paragraph(fn.get("function_name") or "—", S("afn", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(_fmt_short_date(fn.get("fn_date")), S("afd", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(fn.get("fn_time") or "", S("aft", fontSize=9, alignment=TA_CENTER)),
                 Paragraph(fn.get("addon_item") or "Add-on", S("ai", fontSize=9)),
                 Paragraph(f"Rs.{int(float(fn.get('addon_amount') or 0)):,}",
                           SB("aa", fontSize=9, alignment=TA_CENTER)),
             ])
-        addon_tbl = Table(addon_data, colWidths=[36*mm, 36*mm, 60*mm, 50*mm])
+        addon_tbl = Table(addon_data, colWidths=[30*mm, 30*mm, 24*mm, 22*mm, 44*mm, 32*mm])
         addon_tbl.setStyle(TableStyle([
             ("BACKGROUND",    (0,0),(-1,0),  DARK_GREEN),
             ("TEXTCOLOR",     (0,0),(-1,0),  WHITE),
@@ -441,7 +448,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         story.append(Paragraph("<b>Add-on Services</b>", SB("aoh", fontSize=10, textColor=DARK_GREEN)))
         story.append(Spacer(1, 2*mm))
         story.append(addon_tbl)
-        story.append(Spacer(1, 3*mm))
+        story.append(Spacer(1, 5*mm))
 
     # Payment history — when the advance was paid, and when each due
     # payment (if any) was paid, so this isn't just a single snapshot.
@@ -470,7 +477,9 @@ def generate_bridal_invoice(booking: Dict[str, Any],
                 Paragraph(f"Rs.{int(p.get('amount') or 0):,}",
                           SB("pa", fontSize=9, alignment=TA_CENTER)),
             ])
-        pay_tbl = Table(pay_data, colWidths=[42*mm, 46*mm, 42*mm, 46*mm])
+        # Matches the 182mm content width every other table on this page
+        # uses — it was 176mm before, which centered inboard of the rest.
+        pay_tbl = Table(pay_data, colWidths=[44*mm, 47*mm, 44*mm, 47*mm])
         pay_tbl.setStyle(TableStyle([
             ("BACKGROUND",    (0,0),(-1,0),  DARK_GREEN),
             ("TEXTCOLOR",     (0,0),(-1,0),  WHITE),
@@ -482,7 +491,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         story.append(Paragraph("<b>Payment History</b>", SB("phh", fontSize=10, textColor=DARK_GREEN)))
         story.append(Spacer(1, 2*mm))
         story.append(pay_tbl)
-        story.append(Spacer(1, 3*mm))
+        story.append(Spacer(1, 5*mm))
 
     # Billing
     pkg_amt    = float(booking.get("pkg_amount",  0))
@@ -539,7 +548,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
                      colWidths=[114*mm, 4*mm, 64*mm])
     combined.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP")]))
     story.append(combined)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1, 6*mm))
     story.append(_footer())
     doc.build(story)
     return buf.getvalue()
