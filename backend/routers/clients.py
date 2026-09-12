@@ -625,6 +625,10 @@ async def create_membership(
         if existing_row:
             if existing_row[1] == 'Active':
                 raise HTTPException(status_code=400, detail=f"Membership ID '{custom_mem_id}' is already in use")
+            # This path skips the INSERT loop below (which is where mem_id
+            # normally gets set) — set it here too so the response at the
+            # end of this function doesn't reference an undefined name.
+            mem_id = custom_mem_id
             # Clear the old tenure's points history so the balance actually
             # resets to the fresh 20 gift points below, instead of the new
             # gift landing on top of whatever was left over from before.
