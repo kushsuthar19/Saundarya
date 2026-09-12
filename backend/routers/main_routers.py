@@ -1186,7 +1186,15 @@ async def bridal_whatsapp_pdf(
     addon_total = sum(float(fn.get("addon_amount") or 0) for fn in functions)
     total_bill = float(booking.get("pkg_amount") or 0) + float(booking.get("transport") or 0) \
         + addon_total - float(booking.get("discount") or 0)
-    doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/bridal/{booking_id}/pdf/public?token={_bridal_pdf_token(booking_id)}"
+    # A cache-busting query param (ignored by the endpoint itself, which
+    # only checks `token`) so WhatsApp/AiSensy's media cache treats every
+    # send as a brand-new file — without it, the URL is identical on every
+    # send for this booking, so after editing the booking (new dates,
+    # add-ons, amounts) a re-send here kept delivering the stale PDF that
+    # was cached from the very first send.
+    from datetime import datetime as _dt
+    doc_url = (f"{str(request.base_url).rstrip('/')}/api/v1/bridal/{booking_id}/pdf/public"
+               f"?token={_bridal_pdf_token(booking_id)}&v={int(_dt.now().timestamp())}")
     result = await send_whatsapp_template(
         db, booking["phone"], template_key,
         [booking.get("client_name", ""), event_dates, f"₹{int(total_bill):,}", f"₹{int(booking.get('advance_paid') or 0):,}"],
