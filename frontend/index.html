@@ -7561,6 +7561,145 @@ function clearBridalFilters(){
 <!-- INVOICE MODAL -->
 <div id="inv-modal" style="display:none;position:fixed;inset:0;z-index:8000;align-items:center;justify-content:center"></div>
 
+<!-- IDLE SCREENSAVER — shown after 60s of no mouse/keyboard activity,
+     dismissed instantly on the next touch. Purely decorative/branding,
+     no lock/security behavior — nothing is lost, it just sits on top. -->
+<style>
+  #idle-screensaver{
+    position:fixed; inset:0; z-index:99999; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    background:#f2e9da; opacity:0; pointer-events:none;
+    transition:opacity .5s ease;
+  }
+  #idle-screensaver.isc-awake{ opacity:1; pointer-events:auto; transition:opacity .9s ease; }
+  #idle-screensaver.isc-leaving{ opacity:0; pointer-events:none; transition:opacity .5s ease; }
+
+  /* Organic, slowly morphing colour mesh — four soft blobs in a warm
+     beauty-brand palette that drift/scale/reshape independently. */
+  .isc-mesh{ position:absolute; inset:-10%; z-index:0; filter:blur(50px) saturate(115%); }
+  .isc-blob{ position:absolute; mix-blend-mode:multiply; opacity:.62; }
+  .isc-blob1{ width:46vw; height:40vw; left:6%; top:8%; background:radial-gradient(circle,#e3c07c,transparent 72%); animation:iscMorph1 17s ease-in-out infinite; }
+  .isc-blob2{ width:40vw; height:46vw; right:4%; top:2%; background:radial-gradient(circle,#ddb0a8,transparent 72%); animation:iscMorph2 21s ease-in-out infinite; }
+  .isc-blob3{ width:44vw; height:38vw; left:14%; bottom:-6%; background:radial-gradient(circle,#eecf9c,transparent 72%); animation:iscMorph3 19s ease-in-out infinite; }
+  .isc-blob4{ width:36vw; height:36vw; right:10%; bottom:0; background:radial-gradient(circle,#cf9878,transparent 72%); animation:iscMorph4 24s ease-in-out infinite; }
+  @keyframes iscMorph1{
+    0%,100%{ border-radius:42% 58% 65% 35%/45% 40% 60% 55%; transform:translate(0,0) scale(1); }
+    33%{ border-radius:65% 35% 40% 60%/55% 65% 35% 45%; transform:translate(4vw,3vw) scale(1.12); }
+    66%{ border-radius:35% 65% 55% 45%/40% 50% 50% 60%; transform:translate(-2vw,5vw) scale(.96); }
+  }
+  @keyframes iscMorph2{
+    0%,100%{ border-radius:55% 45% 40% 60%/60% 45% 55% 40%; transform:translate(0,0) scale(1); }
+    33%{ border-radius:40% 60% 60% 40%/45% 60% 40% 55%; transform:translate(-5vw,4vw) scale(1.1); }
+    66%{ border-radius:60% 40% 45% 55%/50% 55% 45% 50%; transform:translate(-3vw,-4vw) scale(.94); }
+  }
+  @keyframes iscMorph3{
+    0%,100%{ border-radius:50% 50% 35% 65%/55% 45% 55% 45%; transform:translate(0,0) scale(1); }
+    50%{ border-radius:35% 65% 60% 40%/40% 60% 40% 60%; transform:translate(5vw,-4vw) scale(1.14); }
+  }
+  @keyframes iscMorph4{
+    0%,100%{ border-radius:60% 40% 45% 55%/50% 60% 40% 50%; transform:translate(0,0) scale(1); }
+    50%{ border-radius:45% 55% 60% 40%/60% 40% 60% 40%; transform:translate(-4vw,-3vw) scale(1.08); }
+  }
+
+  /* A fine gold ring slowly turning behind the logo. */
+  .isc-ring{
+    position:absolute; width:min(58vw,420px); height:min(58vw,420px);
+    left:50%; top:50%; transform:translate(-50%,-50%);
+    z-index:0; animation:iscSpin 90s linear infinite;
+  }
+  @keyframes iscSpin{ to{ transform:translate(-50%,-50%) rotate(360deg); } }
+
+  .isc-center{ position:relative; text-align:center; z-index:1;
+    transform:scale(.94); opacity:0; transition:transform .9s cubic-bezier(.2,.7,.2,1), opacity .9s ease;
+  }
+  #idle-screensaver.isc-awake .isc-center{ transform:scale(1); opacity:1; }
+  #idle-screensaver.isc-leaving .isc-center{
+    transform:scale(.97); opacity:0; transition:transform .5s ease, opacity .5s ease;
+  }
+  .isc-logo-wrap{ position:relative; display:inline-block; overflow:hidden; }
+  .isc-logo{
+    width:260px; height:auto; display:block;
+    animation:iscBreathe 4.5s ease-in-out infinite;
+    filter:drop-shadow(0 6px 18px rgba(120,95,40,.18));
+  }
+  @keyframes iscBreathe{
+    0%,100%{ transform:scale(1); opacity:.96; }
+    50%{ transform:scale(1.03); opacity:1; }
+  }
+  /* Slow diagonal sheen sweeping across the logo every few seconds. */
+  .isc-logo-wrap::after{
+    content:''; position:absolute; top:-40%; bottom:-40%; left:-60%; width:34%;
+    background:linear-gradient(75deg,transparent,rgba(255,255,255,.75),transparent);
+    transform:skewX(-18deg); animation:iscSheen 7s ease-in-out infinite;
+    mix-blend-mode:soft-light;
+  }
+  @keyframes iscSheen{ 0%,55%{ left:-60%; } 85%,100%{ left:130%; } }
+
+  @media (max-width:520px){ .isc-logo{ width:70vw; max-width:280px; } }
+  @media (prefers-reduced-motion: reduce){
+    #idle-screensaver, #idle-screensaver *{
+      animation-duration:.001ms !important; animation-iteration-count:1 !important;
+      transition-duration:.001ms !important;
+    }
+  }
+</style>
+<div id="idle-screensaver" aria-hidden="true">
+  <div class="isc-mesh">
+    <div class="isc-blob isc-blob1"></div>
+    <div class="isc-blob isc-blob2"></div>
+    <div class="isc-blob isc-blob3"></div>
+    <div class="isc-blob isc-blob4"></div>
+  </div>
+  <svg class="isc-ring" viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="47" fill="none" stroke="#b98f42" stroke-width=".5" stroke-dasharray="1.2 4.6" opacity=".5"/>
+    <circle cx="50" cy="50" r="41" fill="none" stroke="#b98f42" stroke-width=".35" stroke-dasharray="0.6 3.2" opacity=".35"/>
+  </svg>
+  <div class="isc-center">
+    <div class="isc-logo-wrap">
+      <img class="isc-logo" src="/static/logo-transparent.png" alt="Saundarya Beauty Care" onerror="this.style.display='none'">
+    </div>
+  </div>
+</div>
+<script>
+  // Idle screensaver — purely decorative branding overlay, no lock/security
+  // behavior. Shows after 60s of no mouse/keyboard/touch activity, hides
+  // instantly (with a smooth fade+scale) on the next touch. Only runs once
+  // logged in, so it never covers the login screen.
+  (function(){
+    const IDLE_MS = 60000;
+    const el = document.getElementById('idle-screensaver');
+    if(!el) return;
+    let idleTimer = null;
+    let showing = false;
+
+    function showIdle(){
+      // Not logged in yet (still on the login screen) — keep rechecking
+      // every IDLE_MS instead of giving up, so it starts working the
+      // moment login happens without needing any other activity first.
+      if(!_token){ idleTimer = setTimeout(showIdle, IDLE_MS); return; }
+      if(showing) return;
+      showing = true;
+      el.classList.remove('isc-leaving');
+      el.classList.add('isc-awake');
+    }
+    function hideIdle(){
+      if(!showing) return;
+      showing = false;
+      el.classList.remove('isc-awake');
+      el.classList.add('isc-leaving');
+    }
+    function resetIdleTimer(){
+      if(idleTimer) clearTimeout(idleTimer);
+      if(showing) hideIdle();
+      idleTimer = setTimeout(showIdle, IDLE_MS);
+    }
+    ['mousemove','mousedown','keydown','touchstart','wheel','scroll'].forEach(function(evt){
+      document.addEventListener(evt, resetIdleTimer, {passive:true});
+    });
+    resetIdleTimer();
+  })();
+</script>
+
 </div>
 </body>
 </html>
