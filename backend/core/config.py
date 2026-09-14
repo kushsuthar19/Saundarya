@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     ORACLE_MAX_POOL: int = 10
     ORACLE_INCREMENT: int = 1
 
+    # Publicly reachable base URL of this server — needed only by background
+    # jobs (like the scheduler) that build a media URL to send with a
+    # WhatsApp message without an incoming HTTP request to derive it from
+    # (routes triggered by a real request build theirs from request.base_url
+    # instead, e.g. the Bridal invoice PDF send).
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "")
+
     # WhatsApp (UltraMsg / CallMeBot / Meta Cloud API / AiSensy)
     WA_API_URL: str = os.getenv("WA_API_URL", "")
     WA_INSTANCE_ID: str = os.getenv("WA_INSTANCE_ID", "")
@@ -72,6 +79,9 @@ class Settings(BaseSettings):
     AISENSY_CAMPAIGN_INQUIRY: str = os.getenv("AISENSY_CAMPAIGN_INQUIRY", "")
     AISENSY_CAMPAIGN_INQUIRY_PDF: str = os.getenv("AISENSY_CAMPAIGN_INQUIRY_PDF", "")
     AISENSY_CAMPAIGN_WINBACK: str = os.getenv("AISENSY_CAMPAIGN_WINBACK", "")
+    # First, gentler reminder at 30 days since last visit — the existing
+    # WINBACK one above stays as the second, 60-day follow-up.
+    AISENSY_CAMPAIGN_WINBACK_30: str = os.getenv("AISENSY_CAMPAIGN_WINBACK_30", "")
     AISENSY_CAMPAIGN_MEMBERSHIP: str = os.getenv("AISENSY_CAMPAIGN_MEMBERSHIP", "")
 
     # Rate limiting

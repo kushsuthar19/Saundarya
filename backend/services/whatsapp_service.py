@@ -256,6 +256,7 @@ TEMPLATE_CAMPAIGNS = {
     "inquiry": settings.AISENSY_CAMPAIGN_INQUIRY,
     "inquiry_pdf": settings.AISENSY_CAMPAIGN_INQUIRY_PDF,
     "winback": settings.AISENSY_CAMPAIGN_WINBACK,
+    "winback_30": settings.AISENSY_CAMPAIGN_WINBACK_30,
     "membership": settings.AISENSY_CAMPAIGN_MEMBERSHIP,
 }
 
