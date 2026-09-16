@@ -2027,7 +2027,7 @@ function go(btn,id){
   if(sec){sec.classList.add("on")}
   if(btn){btn.classList.add("on")}
   v("bc-current").textContent=PAGE_NAMES[id]||id;
-  if(id==="dash"){updateDash();if(_role==='admin')setTimeout(loadMemNotifications,600);}
+  if(id==="dash"){updateDash();setTimeout(loadMemNotifications,600);}
   if(id==="revenue"){updateRevKpis();renderRevDaily();}
   if(id==="reports")updateReports();
   if(id==="staff"){renderStaffGrid();renderSalary();renderAtt();}
@@ -6516,8 +6516,8 @@ async function loadApptNotifications(){
   const tomDate=new Date();tomDate.setDate(tomDate.getDate()+1);
   const tomStr=tomDate.toISOString().split('T')[0];
   const [todayAppts,tomAppts]=await Promise.all([
-    apiCall('GET',`/appointments?date=${todayStr}&limit=50`).catch(()=>null),
-    apiCall('GET',`/appointments?date=${tomStr}&limit=50`).catch(()=>null)
+    apiCall('GET',`/appointments?appt_date=${todayStr}`).catch(()=>null),
+    apiCall('GET',`/appointments?appt_date=${tomStr}`).catch(()=>null)
   ]);
   const all=[
     ...(todayAppts||[]).map(a=>({...a,when:'🔴 TODAY',color:'var(--emerald)',isToday:true,dateStr:todayStr})),
@@ -6850,7 +6850,6 @@ function toggleDashAtt(){
 }
 
 async function loadMemNotifications(){
-  if(_role!=='admin')return;
   const alerts=await apiCall('GET','/dashboard/membership-expiry');
   if(!alerts||!alerts.length)return;
   // Push into notification bell
@@ -6885,7 +6884,6 @@ async function loadMemNotifications(){
 }
 
 async function loadMemInactivityNotifications(){
-  if(_role!=='admin')return;
   const res=await apiCall('GET','/dashboard/membership-inactivity');
   if(!res)return;
   const {discontinued=[],warnings=[]}=res;
