@@ -4541,11 +4541,38 @@ async function renderBridalList(search, typeF){
       });
     });
   });
-  const combined = [...all, ...virtualSiders];
+  // A Bride/Groom booking can have functions (Haldi, Sangeet, Grahshanti…)
+  // on different days than its main wedding_date — surface a lightweight,
+  // view-only reference row on each of those extra days too, so browsing
+  // any given day shows everything happening then. The real booking (with
+  // Edit/Delete/Pay) stays exactly once, filed under wedding_date as
+  // before; these carry zeroed amounts so totals/counts aren't inflated.
+  const dateRefs = [];
+  all.forEach(b => {
+    if(b.booking_type!=='Bride' && b.booking_type!=='Groom') return;
+    const mainDate = String(b.wedding_date||'').substring(0,10);
+    const byDate = {};
+    (b.functions||[]).forEach(f => {
+      const fd = String(f.fn_date||'').substring(0,10);
+      if(!fd || fd===mainDate) return;
+      (byDate[fd] = byDate[fd]||[]).push(f.function_name||'Function');
+    });
+    Object.entries(byDate).forEach(([fd, names]) => {
+      dateRefs.push({
+        id: `d${b.id}_${fd}`, _dateRef: true, _parentId: b.id,
+        job_no: b.job_no, booking_type: b.booking_type, client_name: b.client_name,
+        phone: b.phone, booking_date: b.booking_date, wedding_date: fd,
+        package_name: names.join(' + '),
+        pkg_amount: 0, transport: 0, advance_paid: 0, balance_due: 0,
+        status: b.status
+      });
+    });
+  });
+  const combined = [...all, ...virtualSiders, ...dateRefs];
 
   // ── Update summary cards ──────────────────────────────────
   ['Bride','Groom','Sider'].forEach(t => {
-    const rows = combined.filter(b => b.booking_type === t);
+    const rows = combined.filter(b => b.booking_type === t && !b._dateRef);
     const active = rows.filter(b => b.status === 'Active').length;
     const total = rows.length;
     const rev = rows.reduce((a,b) => a+bkgTotal(b), 0);
@@ -4630,8 +4657,8 @@ async function renderBridalList(search, typeF){
   Object.entries(monthGroups).forEach(([mLabel, dates]) => {
     // Month header row — shows Bride/Groom/Sider counts for that month
     const allInMonth = Object.values(dates).flat();
-    const mBride  = allInMonth.filter(b=>b.booking_type==='Bride').length;
-    const mGroom  = allInMonth.filter(b=>b.booking_type==='Groom').length;
+    const mBride  = allInMonth.filter(b=>b.booking_type==='Bride' && !b._dateRef).length;
+    const mGroom  = allInMonth.filter(b=>b.booking_type==='Groom' && !b._dateRef).length;
     const mSider  = allInMonth.filter(b=>b.booking_type==='Sider').length;
     const mTotal  = allInMonth.reduce((a,b)=>a+bkgTotal(b),0);
     const mAdv    = allInMonth.reduce((a,b)=>a+(b.advance_paid||0),0);
@@ -4665,8 +4692,8 @@ async function renderBridalList(search, typeF){
     // Date sub-groups within this month
     Object.entries(dates).sort((a,b)=>a[0]>b[0]?1:-1).forEach(([dKey, bookings]) => {
       const dLabel = dKey !== 'No Date' ? new Date(dKey+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short',year:'numeric'}) : 'No Wedding Date';
-      const dBride = bookings.filter(b=>b.booking_type==='Bride').length;
-      const dGroom = bookings.filter(b=>b.booking_type==='Groom').length;
+      const dBride = bookings.filter(b=>b.booking_type==='Bride' && !b._dateRef).length;
+      const dGroom = bookings.filter(b=>b.booking_type==='Groom' && !b._dateRef).length;
       const dSider = bookings.filter(b=>b.booking_type==='Sider').length;
 
       html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')}" style="background:var(--surface)">
@@ -4683,6 +4710,29 @@ async function renderBridalList(search, typeF){
 
       // Individual bookings for this date
       bookings.forEach(b => {
+        // A Bride/Groom booking's own function (Haldi, Sangeet…) falling
+        // on a different day than wedding_date — view-only pointer back to
+        // the real booking, which still lives under wedding_date with its
+        // full Edit/Delete/Pay actions; nothing is edited/deleted from here.
+        if(b._dateRef){
+          html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')} br-row" style="transition:background .1s" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
+          <td style="padding:8px 14px 8px 32px"><span style="font-size:10px;color:var(--ink3)">${b.job_no}</span></td>
+          <td><span class="pill ${tc[b.booking_type]||'p-lt'}" style="font-size:10px">${b.booking_type}</span></td>
+          <td style="font-size:10px;color:var(--ink3)">${String(b.booking_date||'—').substring(0,10)}</td>
+          <td><b style="font-size:12px">${b.client_name}</b><div style="font-size:9px;color:var(--ink3)">${b.package_name} — see main booking</div></td>
+          <td style="font-size:11px;color:var(--ink3)">${b.phone||'—'}</td>
+          <td style="font-size:11px">${b.wedding_date||'—'}</td>
+          <td style="font-size:11px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${b.package_name||''}">${b.package_name||'—'}</td>
+          <td style="font-size:11px;color:var(--ink4)" colspan="3" title="Tracked on the main booking, filed under its Wedding Date">— see main booking —</td>
+          <td><span class="pill ${sc[b.status]||'p-lt'}" style="font-size:10px">${b.status}</span></td>
+          <td>
+            <div style="display:flex;gap:4px;align-items:center">
+              <button onclick="showBridalDetail(${b._parentId})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px" title="View Main Booking"><i class="fas fa-eye"></i></button>
+            </div>
+          </td>
+        </tr>`;
+          return;
+        }
         // Sider add-ons living inside a Bride/Groom booking (e.g. the
         // bride's Mom or Sister) don't have their own booking row — they
         // can't be edited/deleted/paid/WhatsApp-sent independently, that
