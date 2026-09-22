@@ -4534,7 +4534,7 @@ async function renderBridalList(search, typeF){
         id: `v${b.id}_${f.id}`, _virtual: true, _parentId: b.id, _fnId: f.id,
         _parentName: b.client_name, _parentType: b.booking_type,
         job_no: b.job_no, booking_type: 'Sider', client_name: f.person_name,
-        phone: b.phone, booking_date: b.booking_date, wedding_date: b.wedding_date,
+        phone: b.phone, booking_date: b.booking_date, wedding_date: f.fn_date || b.wedding_date,
         package_name: f.addon_item || f.pkg_detail || 'Add-on',
         pkg_amount: 0, transport: 0, advance_paid: 0, balance_due: 0,
         status: b.status, functions: [f]
