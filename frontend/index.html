@@ -4547,9 +4547,12 @@ async function renderBridalList(search, typeF){
   // any given day shows everything happening then. The real booking (with
   // Edit/Delete/Pay) stays exactly once, filed under wedding_date as
   // before; these carry zeroed amounts so totals/counts aren't inflated.
+  // Applies to standalone Sider bookings (their own job_no/wedding_date)
+  // too, same as Bride/Groom — not the embedded add-on siders above,
+  // which already get a full row per date on their own.
   const dateRefs = [];
   all.forEach(b => {
-    if(b.booking_type!=='Bride' && b.booking_type!=='Groom') return;
+    if(b.booking_type!=='Bride' && b.booking_type!=='Groom' && b.booking_type!=='Sider') return;
     const mainDate = String(b.wedding_date||'').substring(0,10);
     const byDate = {};
     (b.functions||[]).forEach(f => {
@@ -4659,7 +4662,7 @@ async function renderBridalList(search, typeF){
     const allInMonth = Object.values(dates).flat();
     const mBride  = allInMonth.filter(b=>b.booking_type==='Bride' && !b._dateRef).length;
     const mGroom  = allInMonth.filter(b=>b.booking_type==='Groom' && !b._dateRef).length;
-    const mSider  = allInMonth.filter(b=>b.booking_type==='Sider').length;
+    const mSider  = allInMonth.filter(b=>b.booking_type==='Sider' && !b._dateRef).length;
     const mTotal  = allInMonth.reduce((a,b)=>a+bkgTotal(b),0);
     const mAdv    = allInMonth.reduce((a,b)=>a+(b.advance_paid||0),0);
     const mDue    = allInMonth.reduce((a,b)=>a+(b.balance_due||0),0);
@@ -4694,7 +4697,7 @@ async function renderBridalList(search, typeF){
       const dLabel = dKey !== 'No Date' ? new Date(dKey+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short',year:'numeric'}) : 'No Wedding Date';
       const dBride = bookings.filter(b=>b.booking_type==='Bride' && !b._dateRef).length;
       const dGroom = bookings.filter(b=>b.booking_type==='Groom' && !b._dateRef).length;
-      const dSider = bookings.filter(b=>b.booking_type==='Sider').length;
+      const dSider = bookings.filter(b=>b.booking_type==='Sider' && !b._dateRef).length;
 
       html_rows += `<tr class="mg-${mLabel.replace(/\s/g,'_')}" style="background:var(--surface)">
         <td colspan="12" style="padding:6px 14px 6px 28px;border-top:1px solid var(--border)">
