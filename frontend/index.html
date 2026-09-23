@@ -2792,6 +2792,12 @@ async function editEntry(id){
   if(!e)return;
   if(!_staffCache||!_staffCache.length){await updateStaffSels();}
   const items=e.items||[];
+  // Some entries (e.g. the auto-created "Bridal Advance" one from booking a
+  // bridal function) carry their amount directly on gross_total/net_total
+  // with no service line items — keep it around so eeCalc()/saveEntryEdit()
+  // can fall back to it instead of recalculating from an empty items table
+  // (which would zero the amount out on save).
+  window._eeOrigGross=e.gross_total||0;
   const modal=v('inv-modal');if(!modal)return;
 
   // Build service rows
@@ -2883,7 +2889,8 @@ function eeCalc(){
   // Recalculate totals from rows
   let gross=0;
   const tbody=document.getElementById('ee-svc-tbody');if(!tbody)return;
-  tbody.querySelectorAll('tr').forEach((tr,i)=>{
+  const rows=tbody.querySelectorAll('tr');
+  rows.forEach((tr,i)=>{
     const price=parseFloat(tr.querySelector(`[id^="ee-price-"]`)?.value||0);
     const qty=parseInt(tr.querySelector(`[id^="ee-qty-"]`)?.value||1);
     const tot=price*qty;
@@ -2891,6 +2898,9 @@ function eeCalc(){
     const totEl=tr.querySelector(`[id^="ee-tot-"]`);
     if(totEl)totEl.textContent=fmt(tot);
   });
+  // No service rows (e.g. a Bridal Advance entry) — keep its original
+  // amount instead of showing/saving ₹0.
+  if(!rows.length)gross=window._eeOrigGross||0;
   const disc=parseFloat(document.getElementById('ee-disc')?.value||0);
   const net=Math.max(0,gross-disc);
   const ge=document.getElementById('ee-gross');if(ge)ge.textContent=fmt(gross);
@@ -2938,7 +2948,9 @@ async function saveEntryEdit(id){
     if(name)items.push({service_name:name,price,qty,line_total:price*qty,staff_id:staffId?parseInt(staffId):null,staff_name:staffName});
   });
   const disc=parseFloat(v('ee-disc')?.value)||0;
-  const gross=items.reduce((s,it)=>s+(it.price||0)*(it.qty||1),0);
+  // No service rows (e.g. a Bridal Advance entry) — keep its original
+  // amount instead of recalculating to ₹0 from an empty items list.
+  const gross=items.length?items.reduce((s,it)=>s+(it.price||0)*(it.qty||1),0):(window._eeOrigGross||0);
   const net=Math.max(0,gross-disc);
   // Split needs its Cash/UPI/Card breakdown rebuilt into the same
   // "Split|Cash:X|UPI:Y|Card:Z" string the rest of the app expects — sending
