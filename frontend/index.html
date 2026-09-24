@@ -1195,7 +1195,16 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label>Transport (₹)</label><input type="number" id="sd-tr" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="sd-di" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="sd-ad" placeholder="0" oninput="sdBill()"></div>
-        <div class="fl"><label>Advance Payment</label><select id="sd-pay-method" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px"><option value="Cash">Cash</option><option value="GPay/UPI">GPay / UPI</option><option value="Card">Card</option></select></div>
+        <div class="fl"><label>Advance Payment</label><select id="sd-pay-method" onchange="toggleBridalSplit('sd')" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px"><option value="Cash">Cash</option><option value="GPay/UPI">GPay / UPI</option><option value="Card">Card</option><option value="Split">Split</option></select></div>
+        <div id="sd-split-wrap" style="display:none;grid-column:1/-1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:8px">Split Advance Payment</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div><label style="font-size:10px;color:var(--ink3)">Cash ₹</label><br><input type="number" id="sd-split-cash" placeholder="0" oninput="calcBridalSplit('sd')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div><label style="font-size:10px;color:var(--ink3)">GPay/UPI ₹</label><br><input type="number" id="sd-split-upi" placeholder="0" oninput="calcBridalSplit('sd')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div><label style="font-size:10px;color:var(--ink3)">Card ₹</label><br><input type="number" id="sd-split-card" placeholder="0" oninput="calcBridalSplit('sd')" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:4px"><span id="sd-split-total" style="font-size:11px;font-weight:600;color:var(--teal)">₹0</span></div>
+          </div>
+        </div>
       </div>
       <div class="bill-box"><div class="bill-row"><span class="bl">Total</span><span style="display:flex;align-items:center;gap:6px"><span class="br" id="sb-t">₹0</span><input type="number" id="sd-total-override" placeholder="Edit total" title="Type to override the auto-calculated total; clear to go back to auto" style="width:90px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:11px" oninput="sdBill()"></span></div><div class="bill-row"><span class="bl">Transport</span><span class="br" id="sb-tr">₹0</span></div><div class="bill-row"><span class="bl">Discount</span><span class="br" id="sb-d">—₹0</span></div><div class="bill-row"><span class="bl">Advance</span><span class="br" id="sb-a">₹0</span></div><div class="bill-row"><span class="bl">Balance Due</span><span class="br" id="sb-due">₹0</span></div></div>
       <div class="ar">
@@ -4069,6 +4078,19 @@ function calcBridalSplit(prefix){
   const adv=v(prefix+'-ad');if(adv&&total>0){adv.value=total;adv.dispatchEvent(new Event('input'));}
 }
 
+// Builds the actual pay_method string to save — when Split is picked, this
+// is "Split|Cash:X|UPI:Y|Card:Z" (the same format Daily Entry uses, so
+// revenue reports/dashboards can read the real breakdown via
+// parseSplitPay() instead of falling back to a 50/50 guess).
+function buildBridalPayMethod(prefix){
+  const pm=v(prefix+'-pay-method')?.value||'Cash';
+  if(pm!=='Split')return pm;
+  const cash=parseFloat(v(prefix+'-split-cash')?.value||0);
+  const upi=parseFloat(v(prefix+'-split-upi')?.value||0);
+  const card=parseFloat(v(prefix+'-split-card')?.value||0);
+  return 'Split|Cash:'+cash+'|UPI:'+upi+'|Card:'+card;
+}
+
 function brBill(){
   const pa=parseFloat(v('br-pa')?.value)||0,tr=parseFloat(v('br-tr')?.value)||0;
   const di=parseFloat(v('br-di')?.value)||0,ad=parseFloat(v('br-ad')?.value)||0;
@@ -4300,13 +4322,13 @@ async function saveBridal(type){
   let bookingDate=null, advPayMethod='Cash';
   if(type==='bride'){
     bookingDate=v('br-bkd')?.value||td();
-    advPayMethod=v('br-pay-method')?.value||'Cash';
+    advPayMethod=buildBridalPayMethod('br');
   } else if(type==='groom'){
     bookingDate=v('gr-bkd')?.value||td();
-    advPayMethod=v('gr-pay-method')?.value||'Cash';
+    advPayMethod=buildBridalPayMethod('gr');
   } else {
     bookingDate=v('sd-bkd')?.value||td();
-    advPayMethod=v('sd-pay-method')?.value||'Cash';
+    advPayMethod=buildBridalPayMethod('sd');
   }
   const payload={
     booking_type:type==='bride'?'Bride':type==='groom'?'Groom':'Sider',
@@ -6205,9 +6227,17 @@ async function recordPayment(bookingId,clientName,balanceDue){
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Payment Date</label>
         <input id="pay-date" type="date" value="${td()}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);margin-top:4px"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Payment Method</label>
-        <select id="pay-method" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);margin-top:4px">
-          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Card">Card</option>
+        <select id="pay-method" onchange="togglePaySplit()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);margin-top:4px">
+          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Card">Card</option><option value="Split">Split</option>
         </select></div>
+      <div id="pay-split-wrap" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:600;margin-bottom:8px">Split Payment</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div><label style="font-size:10px;color:var(--ink3)">Cash ₹</label><br><input type="number" id="pay-split-cash" placeholder="0" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--ink3)">UPI ₹</label><br><input type="number" id="pay-split-upi" placeholder="0" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--ink3)">Card ₹</label><br><input type="number" id="pay-split-card" placeholder="0" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px"></div>
+        </div>
+      </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
@@ -6217,10 +6247,18 @@ async function recordPayment(bookingId,clientName,balanceDue){
   modal.style.display='flex';
 }
 
+function togglePaySplit(){
+  const wrap=v('pay-split-wrap');if(!wrap)return;
+  wrap.style.display=v('pay-method')?.value==='Split'?'block':'none';
+}
+
 async function submitBridalPayment(bookingId,clientName,balanceDue){
   const amt=parseFloat(v('pay-amt')?.value||0);
   const payDate=v('pay-date')?.value||td();
-  const payMethod=v('pay-method')?.value||'Cash';
+  const rawMethod=v('pay-method')?.value||'Cash';
+  const payMethod=rawMethod==='Split'
+    ? 'Split|Cash:'+parseFloat(v('pay-split-cash')?.value||0)+'|UPI:'+parseFloat(v('pay-split-upi')?.value||0)+'|Card:'+parseFloat(v('pay-split-card')?.value||0)
+    : rawMethod;
   if(isNaN(amt)||amt<=0){toast('Enter a valid amount','var(--rose)');return;}
   if(amt>balanceDue){if(!confirm('Amount exceeds balance. Continue?'))return;}
   const r=await apiCall('PATCH',`/bridal/${bookingId}/payment?amount=${amt}&pay_method=${encodeURIComponent(payMethod)}&entry_date=${encodeURIComponent(payDate)}`);
