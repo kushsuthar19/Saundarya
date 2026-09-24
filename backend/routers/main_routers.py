@@ -660,6 +660,39 @@ async def _credit_beauty_points(cursor, client_id, inv_no, amount: float):
         pass  # non-member or table not ready — don't fail the payment over this
 
 
+async def _reverse_beauty_points(cursor, client_id, inv_no):
+    """Undo what _credit_beauty_points() did for this inv_no — used when the
+    bridal booking/payment it was earned from gets deleted, so the client
+    isn't left holding points for a payment that no longer exists."""
+    if not client_id:
+        return
+    try:
+        await cursor.execute(
+            """DELETE FROM beauty_points_log
+               WHERE notes=:1
+                 AND membership_id IN (SELECT id FROM memberships WHERE client_id=:2)""",
+            ['Service: ' + str(inv_no), client_id]
+        )
+        await cursor.execute(
+            """SELECT m.id,
+                   NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
+                   NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END),0)
+               FROM memberships m
+               LEFT JOIN beauty_points_log l ON l.membership_id=m.id
+               WHERE m.client_id=:1 AND m.status='Active'
+               GROUP BY m.id""",
+            [client_id]
+        )
+        sync_row = await cursor.fetchone()
+        if sync_row:
+            await cursor.execute(
+                "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+                [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
+            )
+    except Exception:
+        pass  # non-member or table not ready — don't fail the delete over this
+
+
 async def _get_bridal(booking_id: int, cursor) -> dict:
     try:
         await cursor.execute(
@@ -1459,6 +1492,24 @@ async def delete_bridal(
 ):
     cursor = db.cursor()
     try:
+        # Clean up the Daily Entry row(s) this booking generated — the
+        # initial advance (inv_no 'BR-ADV-<id>') and any later due payments
+        # (matched by their exact remarks text) — since they're only linked
+        # by text, not a real foreign key, and would otherwise keep showing
+        # in Daily Entry / revenue reports / the client's Service History
+        # forever after the booking itself is gone.
+        await cursor.execute(
+            """SELECT id, client_id, inv_no FROM daily_entries
+               WHERE inv_no=:1 OR remarks=:2""",
+            [f"BR-ADV-{booking_id}", f"Bridal due payment for booking #{booking_id}"]
+        )
+        linked_entries = await cursor.fetchall()
+        for entry_id, client_id, inv_no in linked_entries:
+            await _reverse_beauty_points(cursor, client_id, inv_no)
+            await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
+            await cursor.execute("DELETE FROM daily_entries WHERE id=:1", [entry_id])
+        await db.commit()
+
         # Delete child records first
         await cursor.execute("DELETE FROM bridal_functions WHERE booking_id=:1", [booking_id])
         await db.commit()
