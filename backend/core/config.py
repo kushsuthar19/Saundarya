@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     # WINBACK one above stays as the second, 60-day follow-up.
     AISENSY_CAMPAIGN_WINBACK_30: str = os.getenv("AISENSY_CAMPAIGN_WINBACK_30", "")
     AISENSY_CAMPAIGN_MEMBERSHIP: str = os.getenv("AISENSY_CAMPAIGN_MEMBERSHIP", "")
+    # Manual "WA" button on the bridal notification card — day-before
+    # reminder for a specific function (Haldi/Sangeet/Bridal/etc).
+    AISENSY_CAMPAIGN_MAKEUP_REMINDER: str = os.getenv("AISENSY_CAMPAIGN_MAKEUP_REMINDER", "")
+    # Manual "WA" button on the membership-expiry notification card —
+    # separate from AISENSY_CAMPAIGN_MEMBERSHIP above, which is the
+    # scheduled 7/3/0-day auto-send; this one is its own template with
+    # its own wording for the one-off manual click.
+    AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY: str = os.getenv("AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY", "")
 
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60

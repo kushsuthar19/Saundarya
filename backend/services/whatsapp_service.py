@@ -258,6 +258,8 @@ TEMPLATE_CAMPAIGNS = {
     "winback": settings.AISENSY_CAMPAIGN_WINBACK,
     "winback_30": settings.AISENSY_CAMPAIGN_WINBACK_30,
     "membership": settings.AISENSY_CAMPAIGN_MEMBERSHIP,
+    "makeup_reminder": settings.AISENSY_CAMPAIGN_MAKEUP_REMINDER,
+    "membership_expiry_manual": settings.AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY,
 }
 
 

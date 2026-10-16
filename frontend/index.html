@@ -6604,6 +6604,7 @@ async function loadBridalNotifications(){
           </div>
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
+            ${phoneClean?`<button onclick="sendMakeupReminderWa(${u.id},'${String(u.fn_name).replace(/'/g,'')}','${u.fn_date}','${u.fn_time||''}',this)" title="Send WhatsApp Reminder" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;line-height:1"><i class="fab fa-whatsapp"></i></button>`:''}
             <button onclick="v('notif-panel').classList.remove('show');showBridalDetail(${u.id})" style="background:var(--sky);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">View Booking</button>
             ${u.balance_due>0?`<button onclick="v('notif-panel').classList.remove('show');recordPayment(${u.id},'${String(u.name).replace(/'/g,'')}',${u.balance_due})" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">💰 Pay</button>`:''}
             <button onclick="v('notif-panel').classList.remove('show');go(null,'bridal');setTimeout(()=>editBridal(${u.id}),300)" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">✏️ Edit</button>
@@ -6613,6 +6614,15 @@ async function loadBridalNotifications(){
       </div>`);
   });
   return upcoming.length;
+}
+
+async function sendMakeupReminderWa(bookingId,fnName,fnDate,fnTime,btn){
+  const icon='<i class="fab fa-whatsapp"></i>';
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>';}
+  const r=await apiCall('POST',`/bridal/${bookingId}/reminder-whatsapp?function_name=${encodeURIComponent(fnName)}&fn_date=${encodeURIComponent(fnDate)}&fn_time=${encodeURIComponent(fnTime||'')}`);
+  if(btn){btn.disabled=false;btn.innerHTML=icon;}
+  if(r&&r.success)toast('<i class="fas fa-check"></i> Reminder sent!','var(--emerald)');
+  else if(r)toast('Send failed: '+(r.error||'unknown error'),'var(--rose)');
 }
 
 async function loadApptNotifications(){
@@ -6977,7 +6987,7 @@ async function loadMemNotifications(){
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
             <button onclick="renewMembership(${a.client_id})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:600">Renew</button>
-            <button onclick="openWaModal('${a.phone||''}','${a.name}','Hello ${a.name}! Your Saundarya Exclusive Membership (${a.membership_id}) expires on ${a.expiry_date}. Renew today to continue enjoying your exclusive benefits. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">WA</button>
+            <button onclick="sendMembershipExpiryWa(${a.client_id},this)" title="Send WhatsApp Reminder" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;line-height:1"><i class="fab fa-whatsapp"></i></button>
           </div>
         </div>
       </div>`;
@@ -6985,6 +6995,15 @@ async function loadMemNotifications(){
     // Prepend to notif list
     list.insertAdjacentHTML('afterbegin', notifItems);
   }
+}
+
+async function sendMembershipExpiryWa(clientId,btn){
+  const icon='<i class="fab fa-whatsapp"></i>';
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>';}
+  const r=await apiCall('POST',`/clients/${clientId}/membership/expiry-whatsapp`);
+  if(btn){btn.disabled=false;btn.innerHTML=icon;}
+  if(r&&r.success)toast('<i class="fas fa-check"></i> Reminder sent!','var(--emerald)');
+  else if(r)toast('Send failed: '+(r.error||'unknown error'),'var(--rose)');
 }
 
 async function loadMemInactivityNotifications(){

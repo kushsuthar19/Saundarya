@@ -413,6 +413,37 @@ async def send_client_whatsapp(
     return result
 
 
+@router.post("/{client_id}/membership/expiry-whatsapp")
+async def send_membership_expiry_whatsapp(
+    client_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Manual 'WA' button on the membership-expiry notification card —
+    separate template/wording from the scheduled 7/3/0-day auto-send."""
+    cursor = db.cursor()
+    client = await _get_client(client_id, cursor)
+    if not client.get("phone"):
+        raise HTTPException(status_code=400, detail="No phone number for this client")
+    await cursor.execute(
+        """SELECT membership_id, TO_CHAR(expiry_date,'YYYY-MM-DD'),
+                  GREATEST(0, ROUND(expiry_date - SYSDATE))
+           FROM memberships WHERE client_id=:1 AND status='Active'
+           ORDER BY created_at DESC FETCH FIRST 1 ROW ONLY""",
+        [client_id]
+    )
+    mem_row = await cursor.fetchone()
+    if not mem_row:
+        raise HTTPException(status_code=404, detail="No active membership for this client")
+    membership_id, expiry_date, days_left = mem_row
+    result = await send_whatsapp_template(
+        db, client["phone"], "membership_expiry_manual",
+        [client["name"], membership_id, int(days_left), expiry_date],
+        client_id=client_id, ref_id=client_id, user_name=client["name"],
+    )
+    return result
+
+
 # ── update client ─────────────────────────────────────────────────────────────
 
 @router.put("/{client_id}", response_model=ClientOut)

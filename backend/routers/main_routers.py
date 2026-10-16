@@ -1183,6 +1183,32 @@ async def bridal_whatsapp(
     return result
 
 
+@bridal_router.post("/{booking_id}/reminder-whatsapp")
+async def bridal_reminder_whatsapp(
+    booking_id: int,
+    function_name: str = Query(...),
+    fn_date: str = Query(...),
+    fn_time: str = Query(""),
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Manual 'WA Reminder' button on the bridal notification card — sends
+    the day-before reminder for one specific function. The function/date/
+    time are passed in from the notification itself (already known there)
+    rather than re-looked-up, since a booking can have several functions
+    and the notification is always about one particular one."""
+    cursor = db.cursor()
+    booking = await _get_bridal(booking_id, cursor)
+    if not booking.get("phone"):
+        raise HTTPException(400, "No phone number")
+    result = await send_whatsapp_template(
+        db, booking["phone"], "makeup_reminder",
+        [booking["client_name"], function_name, fn_date, fn_time or "the scheduled time"],
+        ref_id=booking_id, user_name=booking["client_name"],
+    )
+    return result
+
+
 @bridal_router.post("/{booking_id}/whatsapp/pdf")
 async def bridal_whatsapp_pdf(
     booking_id: int,
