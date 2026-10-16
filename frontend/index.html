@@ -599,6 +599,7 @@ table tbody tr:hover td{background:var(--bg2)}
 }
 .notif-panel.show{display:block}
 .notif-hd{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;color:var(--ink)}
+#notif-list{max-height:60vh;overflow-y:auto}
 @keyframes notifSlideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 .notif-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--t);display:flex;gap:10px;align-items:flex-start;animation:notifSlideIn .25s ease}
 .notif-item:hover{background:var(--bg2)}
