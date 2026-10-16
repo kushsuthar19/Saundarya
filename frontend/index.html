@@ -7035,7 +7035,7 @@ async function loadMemInactivityNotifications(){
           <div style="color:${color};font-weight:700;font-size:11px;margin-top:2px">Visit needed by ${w.visit_deadline} (${days}d left) or membership auto-discontinues</div>
           <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
             ${phoneClean?`<a href="tel:${phoneClean}" style="background:var(--emerald);color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px;font-weight:700;text-decoration:none">📞 Call Now</a>`:''}
-            <button onclick="openWaModal('${w.phone||''}','${w.name}','Hello ${w.name}! We miss you at Saundarya 💛 Your Exclusive Membership (${w.membership_id}) requires at least one visit every 2 months. Please visit us by ${w.visit_deadline} to keep your membership active. - Team Saundarya Beauty Care')" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">WA</button>
+            <button onclick="sendMembershipRevisitWa(${w.client_id},this)" title="Send WhatsApp Reminder" style="background:#128C7E;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;line-height:1"><i class="fab fa-whatsapp"></i></button>
           </div>
         </div>
       </div>`;
@@ -7044,6 +7044,14 @@ async function loadMemInactivityNotifications(){
   }
 }
 
+async function sendMembershipRevisitWa(clientId,btn){
+  const icon='<i class="fab fa-whatsapp"></i>';
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>';}
+  const r=await apiCall('POST',`/clients/${clientId}/membership/revisit-whatsapp`);
+  if(btn){btn.disabled=false;btn.innerHTML=icon;}
+  if(r&&r.success)toast('<i class="fas fa-check"></i> Reminder sent!','var(--emerald)');
+  else if(r)toast('Send failed: '+(r.error||'unknown error'),'var(--rose)');
+}
 
 async function giveMembership(clientId, clientName, reuseMemId){
   // Load existing client details to pre-fill the form

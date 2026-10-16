@@ -444,6 +444,45 @@ async def send_membership_expiry_whatsapp(
     return result
 
 
+@router.post("/{client_id}/membership/revisit-whatsapp")
+async def send_membership_revisit_whatsapp(
+    client_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Manual 'WA' button on the membership-inactivity/revisit-warning
+    notification card ("Visit needed by... or membership auto-discontinues").
+    Reuses the same membership_expiry_manual template/campaign as the plain
+    expiry button — one less template to create/approve — just fed the
+    visit-deadline date and its own days-left instead of the literal
+    expiry_date, since for an inactivity warning that's the number that
+    actually matters. Same GREATEST(last_visit, start_date, updated_at)
+    baseline the notification itself uses, recomputed fresh at send time."""
+    cursor = db.cursor()
+    client = await _get_client(client_id, cursor)
+    if not client.get("phone"):
+        raise HTTPException(status_code=400, detail="No phone number for this client")
+    await cursor.execute(
+        """SELECT m.membership_id,
+                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60,'YYYY-MM-DD') as visit_deadline,
+                  GREATEST(0, ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 - SYSDATE)) as days_left
+           FROM memberships m JOIN clients c ON c.id = m.client_id
+           WHERE m.client_id=:1 AND m.status='Active'
+           ORDER BY m.created_at DESC FETCH FIRST 1 ROW ONLY""",
+        [client_id]
+    )
+    mem_row = await cursor.fetchone()
+    if not mem_row:
+        raise HTTPException(status_code=404, detail="No active membership for this client")
+    membership_id, visit_deadline, days_left = mem_row
+    result = await send_whatsapp_template(
+        db, client["phone"], "membership_expiry_manual",
+        [client["name"], membership_id, int(days_left), visit_deadline],
+        client_id=client_id, ref_id=client_id, user_name=client["name"],
+    )
+    return result
+
+
 # ── update client ─────────────────────────────────────────────────────────────
 
 @router.put("/{client_id}", response_model=ClientOut)
