@@ -856,6 +856,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label><i class="fas fa-map-marker-alt"></i>Venue</label><input type="text" id="br-v"></div>
         <div class="fl"><label><i class="fas fa-share-alt"></i>Reference</label><input type="text" id="br-rf"></div>
         <div class="fl"><label><i class="fas fa-hashtag"></i>Job No.</label><input type="text" id="br-jn"></div>
+        <div class="fl" style="grid-column:1/-1"><label><i class="fas fa-sticky-note"></i>Notes</label><textarea id="br-notes" rows="2" placeholder="e.g. allergic to a foundation brand, wants matte finish — shows on the invoice PDF" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical"></textarea></div>
       </div>
     </div></div>
     <div class="card"><div class="card-hd rose"><div class="card-hd-t"><i class="fas fa-gem"></i>Select Bridal Package</div><span style="font-size:9px;color:rgba(255,255,255,0.5)">Tap a card to select</span></div><div class="card-body">
@@ -1068,6 +1069,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label><i class="fas fa-map-marker-alt"></i>Venue</label><input type="text" id="gr-v"></div>
         <div class="fl"><label><i class="fas fa-share-alt"></i>Reference</label><input type="text" id="gr-rf"></div>
         <div class="fl"><label><i class="fas fa-hashtag"></i>Job No.</label><input type="text" id="gr-jn"></div>
+        <div class="fl" style="grid-column:1/-1"><label><i class="fas fa-sticky-note"></i>Notes</label><textarea id="gr-notes" rows="2" placeholder="e.g. allergic to a foundation brand, wants matte finish — shows on the invoice PDF" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical"></textarea></div>
       </div>
     </div></div>
     <div class="card"><div class="card-hd gold"><div class="card-hd-t"><i class="fas fa-crown"></i>Select Groom Package</div><span style="font-size:9px;color:rgba(255,255,255,0.5)">Tap card to select</span></div><div class="card-body">
@@ -1172,6 +1174,7 @@ table tbody tr:hover td{background:var(--bg2)}
         <div class="fl"><label><i class="fas fa-calendar-check"></i>Booking Date <span style="font-weight:400;color:var(--ink4)">(when advance was paid)</span></label><input type="date" id="sd-bkd"></div>
         <div class="fl"><label>Linked Wedding</label><input type="text" id="sd-lw"></div>
         <div class="fl"><label>Event Date</label><input type="date" id="sd-dt"></div>
+        <div class="fl" style="grid-column:1/-1"><label><i class="fas fa-sticky-note"></i>Notes</label><textarea id="sd-notes" rows="2" placeholder="e.g. allergic to a foundation brand, wants matte finish — shows on the invoice PDF" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface);resize:vertical"></textarea></div>
       </div>
       <div class="ow" style="margin-top:12px"><table class="ptable"><thead><tr><th>#</th><th>Person Name</th><th>Function</th><th>Date</th><th>Time</th><th>Package</th><th>Amount (₹)</th><th></th></tr></thead>
         <tbody id="sd-body"><tr>
@@ -4338,7 +4341,8 @@ async function saveBridal(type){
     advance_pay_method:advPayMethod,
     venue:venue||null,reference:(type==='bride'?v('br-rf')?.value||null:type==='groom'?v('gr-rf')?.value||null:null),package_name:pkgName||null,
     pkg_amount:total||0,transport:transport||0,discount:discount||0,advance_paid:advance||0,
-    notes:null,functions:funcs
+    notes:(type==='bride'?v('br-notes')?.value:type==='groom'?v('gr-notes')?.value:v('sd-notes')?.value)?.trim()||null,
+    functions:funcs
   };
   const r=await apiCall('POST','/bridal',payload);
   if(!r)return;
@@ -4556,7 +4560,7 @@ async function saveBridalEdit(id){
 
 function clearBridal(type){
   if(!type||type==='bride'){
-    ['br-n','br-wd','br-bkd','br-ph','br-v','br-rf','br-jn','br-pa','br-tr','br-di','br-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['br-n','br-wd','br-bkd','br-ph','br-v','br-rf','br-jn','br-pa','br-tr','br-di','br-ad','br-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
     const sel=v('br-pkg');if(sel)sel.value='';
     const fb=v('br-fb');if(fb)fb.innerHTML='';
     const d=v('br-sel-display');if(d)d.style.display='none';
@@ -4565,14 +4569,14 @@ function clearBridal(type){
     brBill();
   }
   if(!type||type==='groom'){
-    ['gr-n','gr-ph','gr-wd','gr-bkd','gr-pa','gr-tr','gr-di','gr-ad'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['gr-n','gr-ph','gr-wd','gr-bkd','gr-pa','gr-tr','gr-di','gr-ad','gr-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
     const ps=v('gr-pkg-sel');if(ps)ps.value='';
     const fb=v('gr-fb');if(fb)fb.innerHTML='';
     document.querySelectorAll('.gpkg').forEach(c=>c.classList.remove('sel-pkg'));
     grBill();
   }
   if(!type||type==='sider'){
-    ['sd-n','sd-ph','sd-bkd','sd-dt','sd-tr','sd-di','sd-ad','sd-total-override'].forEach(id=>{const el=v(id);if(el)el.value='';});
+    ['sd-n','sd-ph','sd-bkd','sd-dt','sd-tr','sd-di','sd-ad','sd-total-override','sd-notes'].forEach(id=>{const el=v(id);if(el)el.value='';});
     sdBill();
   }
 }
@@ -7239,6 +7243,18 @@ async function saveMidEdit(clientId){
   toast('<i class="fas fa-check"></i> Membership ID updated','var(--emerald)');
   await _loadMemberProfile(clientId);
 }
+async function giveGracePeriod(clientId){
+  const daysStr=prompt('How many extra days to give before the membership auto-discontinues?','3');
+  if(daysStr===null)return;
+  const days=parseInt(daysStr);
+  if(isNaN(days)||days<1){toast('Enter a valid number of days','var(--rose)');return;}
+  const r=await apiCall('POST',`/clients/${clientId}/membership/grace-period?days=${days}`);
+  if(!r)return;
+  toast(`<i class="fas fa-check"></i> Grace period given — ${r.total_grace_days} day(s) total`,'var(--emerald)');
+  await _loadMemberProfile(clientId);
+  if(typeof loadAllNotifications==='function')loadAllNotifications();
+}
+
 async function showMemberProfile(clientId){
   const modal=v('inv-modal');if(!modal)return;
   modal.innerHTML='<div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div><div style="background:var(--surface);border-radius:var(--r12);padding:22px 26px;width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><div style="font-size:16px;font-weight:700"><i class="fas fa-crown" style="color:var(--gold)"></i> Exclusive Member Profile</div><button onclick="closeInvModal()" style="margin-left:auto;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3)">×</button></div><div id="mem-profile-body"><div style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i> Loading...</div></div></div>';
@@ -7343,6 +7359,12 @@ async function _loadMemberProfile(clientId){
         <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:2px">Status</div>
       </div>
     </div>
+
+    ${mem?.status==='Active' && mem.visit_days_left!==undefined && mem.visit_days_left!==null && mem.visit_days_left<=15 ? `
+    <div style="background:rgba(255,255,255,.08);border:1px solid rgba(201,168,76,.4);border-radius:10px;padding:10px 12px;margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative">
+      <div style="font-size:11px;color:#f5d78e"><i class="fas fa-hourglass-half" style="margin-right:4px"></i>Visit needed by <b>${mem.visit_deadline}</b> (${mem.visit_days_left}d left)${mem.grace_days>0?` · +${mem.grace_days}d grace already given`:''}</div>
+      <button onclick="giveGracePeriod(${clientId})" style="margin-left:auto;background:var(--gold);color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:600"><i class="fas fa-plus"></i> Give Grace Period</button>
+    </div>` : ''}
   </div>
 
   <!-- ACTIONS -->

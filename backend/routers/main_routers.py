@@ -2103,12 +2103,16 @@ async def membership_inactivity_alerts(
     # actually submitted on that form (e.g. if it was mistakenly left/reset
     # to an old date), so a just-touched membership always gets a fresh
     # 60-day window either way.
+    # grace_days (staff-granted, per-client, see /membership/grace-period)
+    # pushes this deadline out further for that one client only — 0 for
+    # everyone else, so this is a no-op unless someone was actually granted
+    # extra days.
     await cursor.execute(
         """SELECT m.id, c.id, c.name
            FROM memberships m
            JOIN clients c ON c.id = m.client_id
            WHERE m.status = 'Active'
-             AND GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) <= SYSDATE - 60"""
+             AND GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) <= SYSDATE - 60 - NVL(m.grace_days,0)"""
     )
     to_discontinue = await cursor.fetchall()
     discontinued = []
@@ -2135,8 +2139,8 @@ async def membership_inactivity_alerts(
     await cursor.execute(
         """SELECT c.name, c.phone, m.membership_id, c.id as client_id,
                   TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at),'YYYY-MM-DD') as last_visit,
-                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60,'YYYY-MM-DD') as visit_deadline,
-                  ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 - SYSDATE) as days_left
+                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 + NVL(m.grace_days,0),'YYYY-MM-DD') as visit_deadline,
+                  ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 + NVL(m.grace_days,0) - SYSDATE) as days_left
            FROM memberships m
            JOIN clients c ON c.id = m.client_id
            WHERE m.status = 'Active'

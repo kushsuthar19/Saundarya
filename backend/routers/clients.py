@@ -464,8 +464,8 @@ async def send_membership_revisit_whatsapp(
         raise HTTPException(status_code=400, detail="No phone number for this client")
     await cursor.execute(
         """SELECT m.membership_id,
-                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60,'YYYY-MM-DD') as visit_deadline,
-                  GREATEST(0, ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 - SYSDATE)) as days_left
+                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 + NVL(m.grace_days,0),'YYYY-MM-DD') as visit_deadline,
+                  GREATEST(0, ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 + NVL(m.grace_days,0) - SYSDATE)) as days_left
            FROM memberships m JOIN clients c ON c.id = m.client_id
            WHERE m.client_id=:1 AND m.status='Active'
            ORDER BY m.created_at DESC FETCH FIRST 1 ROW ONLY""",
@@ -481,6 +481,40 @@ async def send_membership_revisit_whatsapp(
         client_id=client_id, ref_id=client_id, user_name=client["name"],
     )
     return result
+
+
+@router.post("/{client_id}/membership/grace-period")
+async def grant_membership_grace_period(
+    client_id: int,
+    days: int = Query(..., ge=1, le=90),
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Staff-granted extra days on top of the normal 60-day revisit
+    deadline, from that client's own Exclusive Member Profile — no reason
+    required, any logged-in role can use it. Stored as a running day-count
+    (added to, not replaced, on repeated use) so it keeps combining
+    correctly with whatever the GREATEST(...) baseline recalculates to.
+    Only covers the current cycle — reset to 0 automatically the next time
+    the client's last_visit genuinely advances (see entries.py)."""
+    cursor = db.cursor()
+    await cursor.execute(
+        "SELECT id FROM memberships WHERE client_id=:1 AND status='Active'",
+        [client_id]
+    )
+    row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="No active membership for this client")
+    await cursor.execute(
+        "UPDATE memberships SET grace_days=NVL(grace_days,0)+:1, updated_at=SYSTIMESTAMP WHERE id=:2",
+        [days, row[0]]
+    )
+    await db.commit()
+    await cursor.execute(
+        "SELECT NVL(grace_days,0) FROM memberships WHERE id=:1", [row[0]]
+    )
+    total_row = await cursor.fetchone()
+    return {"granted_days": days, "total_grace_days": int(total_row[0])}
 
 
 # ── update client ─────────────────────────────────────────────────────────────
@@ -699,21 +733,30 @@ async def create_membership(
             # normally gets set) — set it here too so the response at the
             # end of this function doesn't reference an undefined name.
             mem_id = custom_mem_id
-            # Clear the old tenure's points history so the balance actually
-            # resets to the fresh 20 gift points below, instead of the new
-            # gift landing on top of whatever was left over from before.
+            # Past points history is kept, never deleted — it stays fully
+            # redeemable and the balance just continues from wherever it
+            # was before discontinuation, instead of resetting to a fresh
+            # gift. beauty_points/lifetime_points get resynced from the
+            # (untouched) log here so they're accurate even if they'd
+            # drifted, matching the same sync _credit_beauty_points() does.
             await cursor.execute(
-                "DELETE FROM beauty_points_log WHERE membership_id=:1", [existing_row[0]]
+                """SELECT NVL(SUM(CASE WHEN entry_type='redeem' THEN -points ELSE points END),0),
+                          NVL(SUM(CASE WHEN entry_type!='redeem' THEN points ELSE 0 END),0)
+                   FROM beauty_points_log WHERE membership_id=:1""",
+                [existing_row[0]]
             )
+            pts_row = await cursor.fetchone()
+            resumed_balance = max(0, int(pts_row[0] or 0))
+            resumed_lifetime = int(pts_row[1] or 0)
             await cursor.execute(
                 """UPDATE memberships
                    SET client_id=:1, status='Active', fee_paid=:2,
                        start_date=TO_DATE(:3,'YYYY-MM-DD'), expiry_date=TO_DATE(:4,'YYYY-MM-DD'),
-                       beauty_points=:5, lifetime_points=:6, notes=:7, updated_at=SYSTIMESTAMP
+                       beauty_points=:5, lifetime_points=:6, notes=:7, grace_days=0, updated_at=SYSTIMESTAMP
                    WHERE id=:8""",
                 [client_id, data.get('fee_paid', 1000),
                  start.strftime('%Y-%m-%d'), expiry.strftime('%Y-%m-%d'),
-                 starting_pts, starting_pts, data.get('notes', ''), existing_row[0]]
+                 resumed_balance, resumed_lifetime, data.get('notes', ''), existing_row[0]]
             )
             new_mem_db_id = existing_row[0]
             reused_existing_row = True
@@ -796,8 +839,12 @@ async def get_membership(
                   NVL((SELECT SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END)
                        FROM beauty_points_log l WHERE l.membership_id=m.id), m.beauty_points) as log_balance,
                   NVL((SELECT SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END)
-                       FROM beauty_points_log l WHERE l.membership_id=m.id), 0) as log_earned
+                       FROM beauty_points_log l WHERE l.membership_id=m.id), 0) as log_earned,
+                  NVL(m.grace_days,0) as grace_days,
+                  TO_CHAR(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 + NVL(m.grace_days,0),'YYYY-MM-DD') as visit_deadline,
+                  ROUND(GREATEST(NVL(c.last_visit, m.start_date), m.start_date, m.updated_at) + 60 + NVL(m.grace_days,0) - SYSDATE) as visit_days_left
            FROM memberships m
+           JOIN clients c ON c.id = m.client_id
            WHERE m.client_id=:1
            ORDER BY m.created_at DESC""",
         [client_id]

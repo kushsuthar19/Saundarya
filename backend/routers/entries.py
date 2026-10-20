@@ -180,6 +180,7 @@ async def create_entry(
     # Check if this is a NEW day visit (different from last_visit date)
     # This determines New→Regular promotion (only after 2nd DIFFERENT day)
     is_new_day_visit = True
+    last_v_str = None
     try:
         await cursor.execute(
             "SELECT TO_CHAR(last_visit,'YYYY-MM-DD'), NVL(visit_count,0), NVL(client_type,'New') FROM clients WHERE id=:1",
@@ -192,6 +193,22 @@ async def create_entry(
             # Same day = not a new visit (e.g. 2 entries on same day)
             if last_v_str and last_v_str == today_str:
                 is_new_day_visit = False
+    except Exception:
+        pass
+
+    # A grace period (extra days added past the normal 60-day revisit
+    # deadline) only ever covers ONE cycle — once the client genuinely
+    # visits on a newer date than their last recorded one, the next
+    # deadline is simply last_visit+60 again, same as any normal visit,
+    # so any leftover grace_days must not silently carry into that next
+    # cycle too.
+    try:
+        if is_new_day_visit and (not last_v_str or str(data.entry_date) > last_v_str):
+            await cursor.execute(
+                """UPDATE memberships SET grace_days=0
+                   WHERE client_id=:1 AND status='Active' AND NVL(grace_days,0)!=0""",
+                [client_id]
+            )
     except Exception:
         pass
 

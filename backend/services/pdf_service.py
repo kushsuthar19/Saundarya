@@ -493,6 +493,13 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         story.append(pay_tbl)
         story.append(Spacer(1, 5*mm))
 
+    notes = (booking.get("notes") or "").strip()
+    if notes:
+        story.append(Paragraph("<b>Notes</b>", SB("nth", fontSize=10, textColor=DARK_GREEN)))
+        story.append(Spacer(1, 2*mm))
+        story.append(Paragraph(notes, S("ntv", fontSize=9.5, leading=13)))
+        story.append(Spacer(1, 5*mm))
+
     # Billing
     pkg_amt    = float(booking.get("pkg_amount",  0))
     transport  = float(booking.get("transport",   0))
@@ -880,6 +887,13 @@ def generate_sider_invoice(booking: Dict[str, Any],
     ]))
     story.append(svc)
     story.append(Spacer(1, 4*mm))
+
+    notes = (booking.get("notes") or "").strip()
+    if notes:
+        story.append(Paragraph("<b>Notes</b>", SB("nth", fontSize=10, textColor=DARK_GREEN)))
+        story.append(Spacer(1, 2*mm))
+        story.append(Paragraph(notes, S("ntv", fontSize=9.5, leading=13)))
+        story.append(Spacer(1, 4*mm))
 
     # ── Billing summary ───────────────────────────────────
     pkg_amt   = float(booking.get("pkg_amount",  0)) or total_amount
