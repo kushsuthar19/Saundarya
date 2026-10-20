@@ -4388,13 +4388,13 @@ async function editBridal(id){
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Package Name</label>
         <input id="eb-pkg" value="${b.package_name||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Package Amount ₹</label>
-        <input id="eb-amt" type="number" value="${b.pkg_amount||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+        <input id="eb-amt" type="number" value="${b.pkg_amount||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Transport ₹</label>
-        <input id="eb-tr" type="number" value="${b.transport||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+        <input id="eb-tr" type="number" value="${b.transport||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Discount ₹</label>
-        <input id="eb-disc" type="number" value="${b.discount||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+        <input id="eb-disc" type="number" value="${b.discount||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Advance Paid ₹</label>
-        <input id="eb-adv" type="number" value="${b.advance_paid||0}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+        <input id="eb-adv" type="number" value="${b.advance_paid||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Status</label>
         <select id="eb-status" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)">
           <option ${b.status==='Active'?'selected':''}>Active</option>
@@ -4432,12 +4432,18 @@ async function editBridal(id){
           <td><input type="number" class="eb-fn-person" value="${f.person_count||''}" min="1" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><input class="eb-fn-pkg" value="${(f.pkg_detail||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
           <td><input class="eb-fn-addon-for" placeholder="Mom / Sister" value="${(f.person_name||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
-          <td><input class="eb-fn-addon-item" value="${(f.addon_item||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
-          <td><input type="number" class="eb-fn-addon-amt" value="${f.addon_amount||0}" min="0" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
-          <td><button type="button" onclick="this.closest('tr').remove()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>
+          <td>${ebPkgSelectHtml()}<input class="eb-fn-addon-item" value="${(f.addon_item||'').replace(/"/g,'&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><input type="number" class="eb-fn-addon-amt" value="${f.addon_amount||0}" min="0" oninput="ebCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+          <td><button type="button" onclick="this.closest('tr').remove();ebCalc()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>
         </tr>`).join('')}</tbody>
       </table>
       </div>
+    </div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;display:flex;gap:20px;justify-content:flex-end;font-size:12px">
+      <span>Package+Add-ons+Transport: <b id="eb-gross">₹0</b></span>
+      <span>Discount: <b id="eb-disc-show">₹0</b></span>
+      <span>Advance: <b id="eb-adv-show">₹0</b></span>
+      <span style="color:var(--rose)">Balance Due: <b id="eb-due">₹0</b></span>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
@@ -4445,6 +4451,48 @@ async function editBridal(id){
     </div>
   </div>`;
   modal.style.display='flex';
+  ebCalc();
+}
+
+// Quick-pick dropdown next to the Add-on Item text field — picking one just
+// fills in the name + price, same catalog the Sider booking form uses. The
+// text field stays editable too, so a custom item typed before isn't lost.
+function ebPkgSelectHtml(){
+  return `<select onchange="ebPkgPick(this)" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px;font-size:10px;margin-bottom:2px;color:var(--ink3)">
+    <option value="">Quick pick package…</option>
+    <optgroup label="Basic"><option value="2299">Basic Makeup + Hair</option><option value="3999">+Lashes</option><option value="5999">+Extension</option></optgroup>
+    <optgroup label="Premium"><option value="7999">+Lens (Nars/Huda)</option><option value="10500">+All (Too Faced)</option></optgroup>
+    <optgroup label="Engagement/Reception"><option value="12500">HD Makeup</option><option value="15499">UHD Makeup</option><option value="18499">Airbrush + Flower</option></optgroup>
+  </select>`;
+}
+
+function ebPkgPick(sel){
+  if(!sel.value)return;
+  const tr=sel.closest('tr');if(!tr)return;
+  const nameInp=tr.querySelector('.eb-fn-addon-item');
+  const amtInp=tr.querySelector('.eb-fn-addon-amt');
+  if(nameInp)nameInp.value=sel.options[sel.selectedIndex].text;
+  if(amtInp)amtInp.value=parseFloat(sel.value)||0;
+  sel.value='';
+  ebCalc();
+}
+
+// Live Total/Due preview — the create-booking forms already show this as
+// you type, but the edit modal never did, so editing felt like a blind
+// save with no feedback until you reopened the list.
+function ebCalc(){
+  const pkg=parseFloat(v('eb-amt')?.value)||0;
+  const tr=parseFloat(v('eb-tr')?.value)||0;
+  const disc=parseFloat(v('eb-disc')?.value)||0;
+  const adv=parseFloat(v('eb-adv')?.value)||0;
+  let addons=0;
+  document.querySelectorAll('#eb-func-tbody .eb-fn-addon-amt').forEach(inp=>{addons+=parseFloat(inp.value)||0;});
+  const gross=pkg+addons+tr;
+  const due=Math.max(0,gross-disc-adv);
+  const ge=v('eb-gross');if(ge)ge.textContent=fmt(gross);
+  const de=v('eb-disc-show');if(de)de.textContent=fmt(disc);
+  const ae=v('eb-adv-show');if(ae)ae.textContent=fmt(adv);
+  const due_el=v('eb-due');if(due_el)due_el.textContent=fmt(due);
 }
 
 function ebAddFuncRow(){
@@ -4457,9 +4505,9 @@ function ebAddFuncRow(){
     <td><input type="number" class="eb-fn-person" min="1" style="width:55px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input class="eb-fn-pkg" placeholder="Package detail" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
     <td><input class="eb-fn-addon-for" placeholder="Mom / Sister" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
-    <td><input class="eb-fn-addon-item" placeholder="Add-on item" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
-    <td><input type="number" class="eb-fn-addon-amt" placeholder="0" min="0" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
-    <td><button type="button" onclick="this.closest('tr').remove()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>`;
+    <td>${ebPkgSelectHtml()}<input class="eb-fn-addon-item" placeholder="Add-on item" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><input type="number" class="eb-fn-addon-amt" placeholder="0" min="0" oninput="ebCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px"></td>
+    <td><button type="button" onclick="this.closest('tr').remove();ebCalc()" title="Remove" style="background:none;border:none;color:var(--rose);font-size:14px;cursor:pointer">×</button></td>`;
   tbody.appendChild(row);
 }
 
