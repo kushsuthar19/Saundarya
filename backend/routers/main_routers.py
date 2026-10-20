@@ -799,7 +799,7 @@ async def edit_bridal_function(
     booking_id: int,
     function_id: int,
     data: dict,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     """Edit a single function/add-on row in place — e.g. renaming a sider
@@ -843,7 +843,7 @@ async def edit_bridal_function(
 async def delete_bridal_function(
     booking_id: int,
     function_id: int,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     """Remove a single function/add-on row (e.g. drop a sider like Mom or
@@ -1272,7 +1272,7 @@ async def bridal_whatsapp_pdf(
 async def edit_bridal(
     booking_id: int,
     data: dict,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
