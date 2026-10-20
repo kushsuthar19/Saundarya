@@ -497,7 +497,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     if notes:
         story.append(Paragraph("<b>Notes</b>", SB("nth", fontSize=10, textColor=DARK_GREEN)))
         story.append(Spacer(1, 2*mm))
-        story.append(Paragraph(notes, S("ntv", fontSize=9.5, leading=13)))
+        story.append(Paragraph(notes, SB("ntv", fontSize=9.5, leading=13)))
         story.append(Spacer(1, 5*mm))
 
     # Billing
@@ -892,7 +892,7 @@ def generate_sider_invoice(booking: Dict[str, Any],
     if notes:
         story.append(Paragraph("<b>Notes</b>", SB("nth", fontSize=10, textColor=DARK_GREEN)))
         story.append(Spacer(1, 2*mm))
-        story.append(Paragraph(notes, S("ntv", fontSize=9.5, leading=13)))
+        story.append(Paragraph(notes, SB("ntv", fontSize=9.5, leading=13)))
         story.append(Spacer(1, 4*mm))
 
     # ── Billing summary ───────────────────────────────────

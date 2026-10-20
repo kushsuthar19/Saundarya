@@ -698,7 +698,7 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
         await cursor.execute(
             """SELECT id, job_no, booking_type, client_name, phone, booking_date, wedding_date,
                       venue, reference, package_name, pkg_amount, transport, discount,
-                      advance_paid, balance_due, status, wa_sent, created_at
+                      advance_paid, balance_due, status, wa_sent, created_at, notes
                FROM bridal_bookings WHERE id=:1""",
             [booking_id]
         )
@@ -707,7 +707,7 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
         await cursor.execute(
             """SELECT id, job_no, booking_type, client_name, phone, wedding_date, venue,
                       reference, package_name, pkg_amount, transport, discount, advance_paid,
-                      balance_due, status, wa_sent, created_at
+                      balance_due, status, wa_sent, created_at, notes
                FROM bridal_bookings WHERE id=:1""",
             [booking_id]
         )
