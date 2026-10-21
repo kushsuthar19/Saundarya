@@ -174,14 +174,18 @@ def _daily_story(entry, items):
         group = it.get("split_group")
         key = group if group else f"__row{idx}"
         if key not in merged:
-            merged[key] = {"name": name, "qty": 0, "total": 0.0}
+            merged[key] = {"name": name, "qty": 0, "total": 0.0, "is_split": bool(group)}
             merged_order.append(key)
         merged[key]["qty"] += qty
         merged[key]["total"] += price * qty
 
     for i, key in enumerate(merged_order, 1):
         g = merged[key]
-        disp_name = g["name"] + (f" x{g['qty']}" if g['qty'] > 1 else "")
+        # No "xN" for a split service — the client should just see the
+        # service name once, not anything hinting it was split between
+        # staff. A genuine single line with qty > 1 (someone ordered 2 of
+        # the same thing) still shows its real quantity as before.
+        disp_name = g["name"] + (f" x{g['qty']}" if (g['qty'] > 1 and not g["is_split"]) else "")
         rows.append([
             Paragraph(str(i), S("sr", alignment=TA_CENTER)),
             Paragraph(disp_name, S("sn")),
