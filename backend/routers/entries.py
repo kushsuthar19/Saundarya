@@ -39,14 +39,27 @@ async def _get_next_inv_no(cursor) -> str:
 
 
 def _wa_services_list(items) -> str:
-    """Unique service names only, for the client-facing WhatsApp message —
-    a service split between several staff (e.g. "Pedicure" done by 2
-    people) is stored as 2 separate line items so each staff member's
-    share counts correctly, but the client just needs to see "Pedicure"
-    once, not once per staff member. The internal services column/list
-    view is untouched — this is only for the WhatsApp text."""
-    names = (it.service_name if hasattr(it, "service_name") else it.get("service_name", "") for it in items)
-    return ", ".join(dict.fromkeys(n for n in names if n))
+    """Service names for the client-facing WhatsApp message, collapsing
+    only the rows that came from the same "Split between staff" action
+    (tracked by split_group) into one name — NOT any two rows that merely
+    happen to share a service name. Two separate, unrelated services
+    billed under the same name (e.g. two different Threading charges)
+    still both show, since neither has a split_group linking them. The
+    internal services column/list view is untouched — this is only for
+    the WhatsApp text."""
+    seen_groups = set()
+    names = []
+    for it in items:
+        name = it.service_name if hasattr(it, "service_name") else it.get("service_name", "")
+        group = it.split_group if hasattr(it, "split_group") else it.get("split_group")
+        if not name:
+            continue
+        if group:
+            if group in seen_groups:
+                continue
+            seen_groups.add(group)
+        names.append(name)
+    return ", ".join(names)
 
 
 async def _get_entry_with_items(entry_id: int, cursor) -> dict:
@@ -64,7 +77,7 @@ async def _get_entry_with_items(entry_id: int, cursor) -> dict:
     entry = dict(zip(cols, row))
     # Get items
     await cursor.execute(
-        """SELECT id, service_name, price, qty, staff_id, staff_name, line_total
+        """SELECT id, service_name, price, qty, staff_id, staff_name, line_total, split_group
            FROM entry_items WHERE entry_id = :1 ORDER BY id""",
         [entry_id]
     )
@@ -126,7 +139,7 @@ async def list_entries(
     for r in rows:
         e = dict(zip(cols, r))
         await cursor.execute(
-            "SELECT id, service_name, price, qty, staff_id, staff_name, line_total FROM entry_items WHERE entry_id = :1",
+            "SELECT id, service_name, price, qty, staff_id, staff_name, line_total, split_group FROM entry_items WHERE entry_id = :1",
             [e["id"]]
         )
         item_rows = await cursor.fetchall()
@@ -321,10 +334,10 @@ async def create_entry(
     for item in data.items:
         line_total = item.price * item.qty
         await cursor.execute(
-            """INSERT INTO entry_items (entry_id, service_name, price, qty, staff_id, staff_name, line_total)
-               VALUES (:1,:2,:3,:4,:5,:6,:7)""",
+            """INSERT INTO entry_items (entry_id, service_name, price, qty, staff_id, staff_name, line_total, split_group)
+               VALUES (:1,:2,:3,:4,:5,:6,:7,:8)""",
             [entry_id, item.service_name, item.price, item.qty,
-             item.staff_id, item.staff_name, line_total]
+             item.staff_id, item.staff_name, line_total, item.split_group]
         )
         if item.staff_id:
             await cursor.execute(
@@ -656,11 +669,11 @@ async def update_entry(
         await cursor.execute("DELETE FROM entry_items WHERE entry_id=:1", [entry_id])
         for it in items:
             await cursor.execute(
-                """INSERT INTO entry_items (entry_id, service_name, price, qty, staff_id, staff_name, line_total)
-                   VALUES (:1,:2,:3,:4,:5,:6,:7)""",
+                """INSERT INTO entry_items (entry_id, service_name, price, qty, staff_id, staff_name, line_total, split_group)
+                   VALUES (:1,:2,:3,:4,:5,:6,:7,:8)""",
                 [entry_id, it.get('service_name',''), it.get('price',0),
                  it.get('qty',1), it.get('staff_id'), it.get('staff_name'),
-                 it.get('line_total',0)]
+                 it.get('line_total',0), it.get('split_group') or None]
             )
         # Update services string in main entry
         svc_str = ', '.join(it.get('service_name','') for it in items if it.get('service_name'))

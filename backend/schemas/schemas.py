@@ -213,8 +213,12 @@ class EntryItem(BaseModel):
     qty: int = Field(1, ge=1)
     staff_id: Optional[int] = None
     staff_name: Optional[str] = None
+    # Ties together rows created by the same "Split between staff" action,
+    # so the invoice PDF/WhatsApp text can merge only those back into one
+    # line — never just because two rows happen to share a service name.
+    split_group: Optional[str] = Field(None, max_length=40)
 
-    @field_validator("staff_name", mode="before")
+    @field_validator("staff_name", "split_group", mode="before")
     @classmethod
     def coerce_staff(cls, v):
         return None if v == "" else v
@@ -264,6 +268,7 @@ class EntryItemOut(BaseModel):
     staff_id: Optional[int]
     staff_name: Optional[str]
     line_total: float
+    split_group: Optional[str] = None
 
 
 class DailyEntryOut(BaseModel):

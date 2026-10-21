@@ -158,13 +158,34 @@ def _daily_story(entry, items):
         Paragraph("<b>Service / Work Done</b>", SB("th2", fontSize=9, textColor=WHITE)),
         Paragraph("<b>Amount (Rs)</b>", SB("th3", fontSize=9, textColor=WHITE, alignment=TA_RIGHT)),
     ]]
-    for i, it in enumerate(items, 1):
-        qty = it.get("qty", 1); price = it.get("price", 0); total = price * qty
-        name = it.get("service_name", "") + (f" x{qty}" if qty > 1 else "")
+    # A service split between several staff (e.g. "Pedicure" done by 2
+    # people) is stored as separate line items so each staff member's
+    # share counts correctly internally, but the client just needs one
+    # "Pedicure" line with the combined amount — not the same name
+    # repeated once per staff member. Only rows sharing the same
+    # split_group (set by the actual Split action) are merged — two
+    # unrelated rows that merely happen to share a service name (e.g.
+    # two separate Threading charges) are never merged with each other.
+    merged = {}
+    merged_order = []
+    for idx, it in enumerate(items):
+        name = it.get("service_name", "")
+        qty = it.get("qty", 1); price = it.get("price", 0)
+        group = it.get("split_group")
+        key = group if group else f"__row{idx}"
+        if key not in merged:
+            merged[key] = {"name": name, "qty": 0, "total": 0.0}
+            merged_order.append(key)
+        merged[key]["qty"] += qty
+        merged[key]["total"] += price * qty
+
+    for i, key in enumerate(merged_order, 1):
+        g = merged[key]
+        disp_name = g["name"] + (f" x{g['qty']}" if g['qty'] > 1 else "")
         rows.append([
             Paragraph(str(i), S("sr", alignment=TA_CENTER)),
-            Paragraph(name, S("sn")),
-            Paragraph(f"Rs.{int(total):,}", S("am", alignment=TA_RIGHT)),
+            Paragraph(disp_name, S("sn")),
+            Paragraph(f"Rs.{int(g['total']):,}", S("am", alignment=TA_RIGHT)),
         ])
     while len(rows) <= 6:
         rows.append(["", "", ""])
@@ -193,7 +214,7 @@ def _daily_story(entry, items):
 
     tr = [
         [Paragraph("Total Services", S("tl")),
-         Paragraph(str(len(items)),  SB("tv", alignment=TA_RIGHT))],
+         Paragraph(str(len(merged_order)),  SB("tv", alignment=TA_RIGHT))],
         [Paragraph("Total Amount",   S("tl")),
          Paragraph(f"Rs.{int(gross):,}", SB("tv", alignment=TA_RIGHT))],
     ]
