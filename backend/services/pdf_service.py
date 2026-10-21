@@ -151,12 +151,11 @@ def _daily_story(entry, items):
         S("ci")))
     story.append(Spacer(1, 4*mm))
 
-    COL = [14*mm, 90*mm, 42*mm, 36*mm]
+    COL = [14*mm, 132*mm, 36*mm]
     TH = SB("th", fontSize=9, textColor=WHITE, alignment=TA_CENTER)
     rows = [[
         Paragraph("<b>Sr.</b>", TH),
         Paragraph("<b>Service / Work Done</b>", SB("th2", fontSize=9, textColor=WHITE)),
-        Paragraph("<b>Staff</b>", TH),
         Paragraph("<b>Amount (Rs)</b>", SB("th3", fontSize=9, textColor=WHITE, alignment=TA_RIGHT)),
     ]]
     for i, it in enumerate(items, 1):
@@ -165,11 +164,10 @@ def _daily_story(entry, items):
         rows.append([
             Paragraph(str(i), S("sr", alignment=TA_CENTER)),
             Paragraph(name, S("sn")),
-            Paragraph(it.get("staff_name") or "-", S("sf", fontSize=9, textColor=TEXT_GRAY)),
             Paragraph(f"Rs.{int(total):,}", S("am", alignment=TA_RIGHT)),
         ])
     while len(rows) <= 6:
-        rows.append(["", "", "", ""])
+        rows.append(["", "", ""])
 
     svc = Table(rows, colWidths=COL, repeatRows=1)
     svc.setStyle(TableStyle([
@@ -179,7 +177,7 @@ def _daily_story(entry, items):
         ("TOPPADDING",    (0,0),(-1,-1), 6),
         ("BOTTOMPADDING", (0,0),(-1,-1), 6),
         ("LEFTPADDING",   (0,0),(-1,-1), 5),
-        ("ALIGN",         (3,0),(3,-1),  "RIGHT"),
+        ("ALIGN",         (2,0),(2,-1),  "RIGHT"),
         ("ALIGN",         (0,0),(0,-1),  "CENTER"),
     ]))
     story.append(svc)

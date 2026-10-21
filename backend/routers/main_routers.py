@@ -1052,7 +1052,7 @@ async def create_bridal(
                 total_bill = data.pkg_amount + data.transport + addon_total - data.discount
                 await send_whatsapp_template(
                     db, data.phone, template_key,
-                    [data.client_name, event_dates, f"₹{int(total_bill):,}", f"₹{int(data.advance_paid):,}"],
+                    [data.client_name, event_dates, f"{int(total_bill):,}", f"{int(data.advance_paid):,}"],
                     ref_id=new_id, user_name=data.client_name,
                 )
         except Exception as wa_err:
@@ -1256,7 +1256,7 @@ async def bridal_whatsapp_pdf(
                f"?token={_bridal_pdf_token(booking_id)}&v={int(_dt.now().timestamp())}")
     result = await send_whatsapp_template(
         db, booking["phone"], template_key,
-        [booking.get("client_name", ""), event_dates, f"₹{int(total_bill):,}", f"₹{int(booking.get('advance_paid') or 0):,}"],
+        [booking.get("client_name", ""), event_dates, f"{int(total_bill):,}", f"{int(booking.get('advance_paid') or 0):,}"],
         media_url=doc_url, media_filename=f"Invoice_{booking['job_no']}.pdf",
         ref_id=booking_id, user_name=booking.get("client_name", ""),
     )

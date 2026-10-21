@@ -38,6 +38,17 @@ async def _get_next_inv_no(cursor) -> str:
     return f"INV-{row[0]}"
 
 
+def _wa_services_list(items) -> str:
+    """Unique service names only, for the client-facing WhatsApp message —
+    a service split between several staff (e.g. "Pedicure" done by 2
+    people) is stored as 2 separate line items so each staff member's
+    share counts correctly, but the client just needs to see "Pedicure"
+    once, not once per staff member. The internal services column/list
+    view is untouched — this is only for the WhatsApp text."""
+    names = (it.service_name if hasattr(it, "service_name") else it.get("service_name", "") for it in items)
+    return ", ".join(dict.fromkeys(n for n in names if n))
+
+
 async def _get_entry_with_items(entry_id: int, cursor) -> dict:
     await cursor.execute(
         """SELECT id, inv_no, client_id, client_name, phone, entry_date, visit_type,
@@ -339,6 +350,7 @@ async def create_entry(
             await cursor.execute("SELECT NVL(client_type,'New') FROM clients WHERE id=:1", [client_id])
             ct_row = await cursor.fetchone()
             is_exclusive = bool(ct_row and ct_row[0] == 'Exclusive')
+            wa_services_str = _wa_services_list(data.items)
 
             if is_exclusive:
                 # Balance was already recomputed and saved above (points
@@ -352,13 +364,13 @@ async def create_entry(
                 new_balance = int(bal_row[0]) if bal_row else 0
                 await send_whatsapp_template(
                     db, data.phone, "exclusive_points",
-                    [data.client_name, services_str, f"₹{int(net):,}", pts_to_add, new_balance],
+                    [data.client_name, wa_services_str, f"{int(net):,}", pts_to_add, new_balance],
                     client_id=client_id, ref_id=entry_id, user_name=data.client_name,
                 )
             else:
                 await send_whatsapp_template(
                     db, data.phone, "daily_entry",
-                    [data.client_name, services_str, f"₹{int(net):,}", str(data.entry_date)],
+                    [data.client_name, wa_services_str, f"{int(net):,}", str(data.entry_date)],
                     client_id=client_id, ref_id=entry_id, user_name=data.client_name,
                 )
         except Exception as wa_err:
@@ -501,7 +513,7 @@ async def send_invoice_whatsapp_pdf(
     doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/entries/{entry_id}/pdf/public?token={_entry_pdf_token(entry_id)}"
     result = await send_whatsapp_template(
         db, entry["phone"], "daily_entry_pdf",
-        [entry.get("client_name", ""), entry.get("services", ""), f"₹{int(entry.get('net_total', 0)):,}", str(entry.get("entry_date", ""))],
+        [entry.get("client_name", ""), _wa_services_list(entry.get("items", [])), f"{int(entry.get('net_total', 0)):,}", str(entry.get("entry_date", ""))],
         media_url=doc_url, media_filename=f"Invoice_{entry['inv_no']}.pdf",
         client_id=entry.get("client_id"), ref_id=entry_id, user_name=entry.get("client_name", ""),
     )
