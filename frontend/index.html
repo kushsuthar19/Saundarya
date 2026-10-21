@@ -1267,8 +1267,8 @@ table tbody tr:hover td{background:var(--bg2)}
     <input type="month" id="bl-month" onchange="renderBridalList()" placeholder="Filter month" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;font-size:12px;background:var(--surface);font-family:'Inter',sans-serif;color:var(--ink)">
     <input type="date" id="bl-date" onchange="renderBridalList()" title="Filter by wedding date" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 10px;font-size:12px;background:var(--surface)" placeholder="Wedding date">
     <select id="bl-sort" onchange="renderBridalList()" style="border:1px solid var(--border);border-radius:var(--r8);padding:8px 12px;font-size:12px;background:var(--surface);font-family:'Inter',sans-serif">
-      <option value="date_desc">Date ↓ Newest</option>
       <option value="date_asc">Date ↑ Oldest</option>
+      <option value="date_desc">Date ↓ Newest</option>
       <option value="name">Name A-Z</option>
       <option value="amount_desc">Amount ↓ High</option>
       <option value="amount_asc">Amount ↑ Low</option>
@@ -4700,7 +4700,7 @@ async function renderBridalList(search, typeF){
   const srch = search !== undefined ? search : (v('bl-search')?.value || '');
   const type = typeF !== undefined ? typeF : (v('bl-type')?.value || '');
   const month = v('bl-month')?.value || '';   // YYYY-MM filter
-  const sortBy = v('bl-sort')?.value || 'date_desc';
+  const sortBy = v('bl-sort')?.value || 'date_asc';
   const dateFilter = v('bl-date')?.value || '';  // specific date YYYY-MM-DD
 
   tb.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px"><i class="fas fa-spinner fa-spin fa-2x" style="color:var(--ink3)"></i></td></tr>';
@@ -4989,6 +4989,18 @@ async function renderBridalList(search, typeF){
   });
 
   tb.innerHTML = html_rows;
+
+  // Auto-collapse a month group only when every date in it has already
+  // passed — keeps the list focused on what's still upcoming; the arrow
+  // still opens it manually any time. A month with even one today/future
+  // date stays open. Reuses the existing toggle rather than duplicating
+  // its show/hide + chevron logic.
+  const todayStr = td();
+  Object.entries(monthGroups).forEach(([mLabel, dates]) => {
+    const dateKeys = Object.keys(dates).filter(k => k !== 'No Date');
+    const isPast = dateKeys.length > 0 && dateKeys.every(k => k < todayStr);
+    if(isPast) toggleMonthGroup('mg-'+mLabel.replace(/\s/g,'_'));
+  });
 }
 
 // Edit a single sider add-on (e.g. Mom/Sister) living inside a Bride/Groom
@@ -7857,7 +7869,7 @@ function clearBridalFilters(){
   ['bl-search','bl-month','bl-date'].forEach(id=>{const el=v(id);if(el)el.value=''});
   const t=v('bl-type');if(t)t.value='';
   const s=v('bl-status');if(s)s.value='';
-  const sr=v('bl-sort');if(sr)sr.value='date_desc';
+  const sr=v('bl-sort');if(sr)sr.value='date_asc';
   renderBridalList('','');
 }
 
