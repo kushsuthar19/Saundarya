@@ -505,8 +505,13 @@ async def grant_membership_grace_period(
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="No active membership for this client")
+    # Deliberately does NOT touch updated_at — the GREATEST(last_visit,
+    # start_date, updated_at) deadline formula used everywhere else treats
+    # a fresh updated_at as "just reactivated today," which would silently
+    # reset her whole deadline to a brand-new ~60-day runway instead of
+    # her real near-due deadline + these extra days.
     await cursor.execute(
-        "UPDATE memberships SET grace_days=NVL(grace_days,0)+:1, updated_at=SYSTIMESTAMP WHERE id=:2",
+        "UPDATE memberships SET grace_days=NVL(grace_days,0)+:1 WHERE id=:2",
         [days, row[0]]
     )
     await db.commit()

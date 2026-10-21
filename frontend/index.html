@@ -2234,6 +2234,7 @@ function revTab(el,id){
 // ════════════════════════════════
 let currentCat=null;
 let selectedSvcs=[];
+let _splitGroupSeq=1; // ties together rows created by the same "Split" action
 
 const SERVICES={
   haircut:[
@@ -2436,28 +2437,39 @@ function renderSelSvcs(){
 function removeSelSvc(i){
   const removed=selectedSvcs[i];
   selectedSvcs.splice(i,1);
-  // If this was a split row, find its partner and restore full price
-  if(removed.splitFrom!==undefined && removed.originalPrice){
-    // Find partner split row (same name, also has splitFrom)
-    const partner=selectedSvcs.find(s=>s.splitFrom!==undefined && s.name===removed.name);
-    if(partner){
-      partner.price=removed.originalPrice;
-      delete partner.splitFrom;
-      delete partner.originalPrice;
+  // If this was a split row, redistribute the original price across
+  // whichever sibling rows are still left (or fully restore the one
+  // that's left if it's down to a single row again).
+  if(removed.splitGroup!==undefined && removed.originalPrice){
+    const siblings=selectedSvcs.filter(s=>s.splitGroup===removed.splitGroup);
+    if(siblings.length===1){
+      siblings[0].price=removed.originalPrice;
+      delete siblings[0].splitGroup;
+      delete siblings[0].originalPrice;
+    } else if(siblings.length>1){
+      const share=Math.round(removed.originalPrice/siblings.length);
+      siblings.forEach(s=>{s.price=share;});
     }
   }
   renderSelSvcs();deBill();
 }
 
 function splitService(i){
+  const nStr=prompt('Split this service between how many staff members?','2');
+  if(nStr===null)return;
+  const n=parseInt(nStr);
+  if(isNaN(n)||n<2||n>10){toast('Enter a number between 2 and 10','var(--rose)');return;}
   const orig=selectedSvcs[i];
   const fullPrice=orig.price||0;
-  const half=Math.round(fullPrice/2);
-  // Store original price so removing one part restores the other
-  selectedSvcs[i]={...orig,price:half,staff:'',staffId:null,splitFrom:i,originalPrice:fullPrice};
-  selectedSvcs.splice(i+1,0,{...orig,price:half,staff:'',staffId:null,splitFrom:i,originalPrice:fullPrice});
+  const share=Math.round(fullPrice/n);
+  const groupId=_splitGroupSeq++;
+  const parts=[];
+  for(let k=0;k<n;k++){
+    parts.push({...orig,price:share,staff:'',staffId:null,splitGroup:groupId,originalPrice:fullPrice});
+  }
+  selectedSvcs.splice(i,1,...parts);
   renderSelSvcs();deBill();
-  toast('<i class="fas fa-cut"></i> Split into 2 — assign staff to each','var(--teal)');
+  toast(`<i class="fas fa-cut"></i> Split into ${n} — assign staff to each`,'var(--teal)');
 }
 function deBill(){
   const tot=selectedSvcs.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
@@ -2821,7 +2833,10 @@ async function editEntry(id){
       <td><input type="number" value="${it.price||0}" id="ee-price-${i}" oninput="eeCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
       <td><input type="number" value="${it.qty||1}" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:50px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
       <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${i}">${fmt((it.price||0)*(it.qty||1))}</td>
-      <td><button onclick="eeRemoveRow(${i})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>
+      <td style="display:flex;gap:3px">
+        <button title="Split between staff" onclick="eeSplitRow(${i})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px">Split</button>
+        <button onclick="eeRemoveRow(${i})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button>
+      </td>
     </tr>`).join('');
 
   modal.innerHTML=`
@@ -2933,12 +2948,79 @@ function eeAddRow(){
     <td><input type="number" value="0" id="ee-price-${i}" oninput="eeCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
     <td><input type="number" value="1" id="ee-qty-${i}" min="1" oninput="eeCalc()" style="width:50px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
     <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${i}">₹0</td>
-    <td><button onclick="this.closest('tr').remove();eeCalc()" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>`;
+    <td style="display:flex;gap:3px">
+      <button title="Split between staff" onclick="eeSplitRow(${i})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px">Split</button>
+      <button onclick="eeRemoveRow(${i})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button>
+    </td>`;
   tbody.appendChild(tr);
 }
 
+// Splits one service row between several staff — same idea as the "Split"
+// button already on the Daily Entry create form, just operating on the
+// Edit Entry modal's plain DOM rows instead of the selectedSvcs array.
+function eeSplitRow(i){
+  const row=document.getElementById(`ee-row-${i}`);if(!row)return;
+  const name=document.getElementById(`ee-svc-${i}`)?.value||'';
+  const fullPrice=parseFloat(document.getElementById(`ee-price-${i}`)?.value)||0;
+  const qty=parseInt(document.getElementById(`ee-qty-${i}`)?.value)||1;
+  const nStr=prompt('Split this service between how many staff members?','2');
+  if(nStr===null)return;
+  const n=parseInt(nStr);
+  if(isNaN(n)||n<2||n>10){toast('Enter a number between 2 and 10','var(--rose)');return;}
+  const share=Math.round(fullPrice/n);
+  const groupId='g'+(_splitGroupSeq++);
+  const tbody=document.getElementById('ee-svc-tbody');if(!tbody)return;
+  row.remove();
+  for(let k=0;k<n;k++){
+    const idx=window._eeRowCount||0;
+    window._eeRowCount=idx+1;
+    const tr=document.createElement('tr');
+    tr.id=`ee-row-${idx}`;
+    tr.dataset.splitGroup=groupId;
+    tr.dataset.splitOriginal=fullPrice;
+    tr.innerHTML=`
+      <td><input value="${name.replace(/"/g,'&quot;')}" id="ee-svc-${idx}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"><br><small style="color:var(--ink3);font-size:9px">Split</small></td>
+      <td><select id="ee-staff-${idx}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)">${eeStaffOpts(null)}</select></td>
+      <td><input type="number" value="${share}" id="ee-price-${idx}" oninput="eeCalc()" style="width:75px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td><input type="number" value="${qty}" id="ee-qty-${idx}" min="1" oninput="eeCalc()" style="width:50px;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)"></td>
+      <td style="font-weight:600;color:var(--emerald);font-size:12px" id="ee-tot-${idx}">${fmt(share*qty)}</td>
+      <td><button onclick="eeRemoveRow(${idx})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button></td>`;
+    tbody.appendChild(tr);
+  }
+  eeCalc();
+  toast(`<i class="fas fa-cut"></i> Split into ${n} — assign staff to each`,'var(--teal)');
+}
+
 function eeRemoveRow(i){
-  document.getElementById(`ee-row-${i}`)?.remove();
+  const row=document.getElementById(`ee-row-${i}`);
+  if(!row){eeCalc();return;}
+  const groupId=row.dataset.splitGroup;
+  const originalPrice=parseFloat(row.dataset.splitOriginal)||0;
+  row.remove();
+  if(groupId){
+    const tbody=document.getElementById('ee-svc-tbody');
+    const siblings=tbody?[...tbody.querySelectorAll('tr')].filter(tr=>tr.dataset.splitGroup===groupId):[];
+    if(siblings.length===1){
+      const solo=siblings[0];
+      const idx=solo.id.replace('ee-row-','');
+      const priceInp=document.getElementById(`ee-price-${idx}`);
+      if(priceInp)priceInp.value=originalPrice;
+      delete solo.dataset.splitGroup;
+      delete solo.dataset.splitOriginal;
+      const nameVal=document.getElementById(`ee-svc-${idx}`)?.value||'';
+      const nameTd=solo.querySelector('td:first-child');
+      if(nameTd)nameTd.innerHTML=`<input value="${nameVal.replace(/"/g,'&quot;')}" id="ee-svc-${idx}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:5px;font-size:11px;background:var(--surface)">`;
+      const actionsTd=solo.querySelector('td:last-child');
+      if(actionsTd)actionsTd.innerHTML=`<button title="Split between staff" onclick="eeSplitRow(${idx})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px">Split</button><button onclick="eeRemoveRow(${idx})" style="background:none;border:none;color:var(--rose);font-size:16px;cursor:pointer">×</button>`;
+    } else if(siblings.length>1){
+      const share=Math.round(originalPrice/siblings.length);
+      siblings.forEach(tr=>{
+        const idx=tr.id.replace('ee-row-','');
+        const priceInp=document.getElementById(`ee-price-${idx}`);
+        if(priceInp)priceInp.value=share;
+      });
+    }
+  }
   eeCalc();
 }
 
@@ -3834,7 +3916,7 @@ function renderSelSvcs(){
   wrap.classList.add('show');
   const staffOpts=['<option value="">— Staff —</option>',..._staffCache.map(st=>`<option value="${st.id}">${st.name}</option>`)].join('');
   tbody.innerHTML=selectedSvcs.map((s,i)=>`<tr class="anim-fade">
-    <td style="font-size:11.5px;font-weight:500">${s.name}${s.splitFrom!==undefined?'<br><small style="color:var(--ink3);font-size:9px">Split '+(s.splitFrom+1)+'</small>':''}</td>
+    <td style="font-size:11.5px;font-weight:500">${s.name}${s.splitGroup!==undefined?'<br><small style="color:var(--ink3);font-size:9px">Split</small>':''}</td>
     <td>
       <select style="width:100%;font-size:11px" onchange="selectedSvcs[${i}].staff=this.options[this.selectedIndex].text;selectedSvcs[${i}].staffId=this.value||null">
         ${staffOpts.replace(`value="${s.staffId||''}"`,`value="${s.staffId||''}" selected`)}
@@ -3844,7 +3926,7 @@ function renderSelSvcs(){
     <td><input type="number" value="${s.price}" style="width:80px" onchange="selectedSvcs[${i}].price=parseFloat(this.value)||0;deBill()"></td>
     <td style="font-weight:600;color:var(--emerald)">${fmt((s.price||0)*(s.qty||1))}</td>
     <td style="display:flex;gap:3px">
-      ${s.splitFrom===undefined?`<button title="Split between 2 staff" onclick="splitService(${i})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px">Split</button>`:''}
+      ${s.splitGroup===undefined?`<button title="Split between staff" onclick="splitService(${i})" style="background:var(--teal);color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px">Split</button>`:''}
       <button class="rm-r" onclick="removeSelSvc(${i})">×</button>
     </td>
   </tr>`).join('');
@@ -3959,7 +4041,7 @@ async function renderDailyView(){
     return fp==='UPI'?isUpiMethod(pm):pm===fp;
   }):allRows;
   if(!rows.length){dv.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--ink4);padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r12)"><i class="fas fa-receipt" style="font-size:22px;margin-bottom:8px;display:block;opacity:.4"></i>No entries found</div>';return;}
-  dv.innerHTML=rows.map(e=>`<div class="de-card" onclick='showInvoiceModal(${JSON.stringify(e)})'>
+  dv.innerHTML=rows.map(e=>`<div class="de-card" onclick='openDailyEntryCard(${JSON.stringify(e)})'>
     <div class="de-card-top">
       <div><div class="de-name"><i class="fas fa-user"></i> ${e.client_name}</div><div class="de-phone">${e.phone||''}</div></div>
       <div style="text-align:right"><div class="de-inv">${e.inv_no}</div><div class="de-date">${e.entry_date||''}${e.created_at?' · '+fmtTime(e.created_at):''}</div></div>
@@ -3981,6 +4063,27 @@ async function renderDailyView(){
       </div>
     </div>
   </div>`).join('');
+}
+
+// A bridal booking's advance/due payment auto-creates a matching Daily
+// Entry row (inv_no "BR-ADV-<booking id>" or "BR-DUE-<sequence>") purely
+// so it counts in revenue — it has no service line items of its own, so
+// opening it in the normal entry receipt popup just shows an empty "No
+// items" view. Clicking one of these instead opens the real booking
+// (Bride/Groom/Sider, whichever it is) exactly like the Bridal list's own
+// 👁 button does. Any other entry opens the normal receipt as before.
+function openDailyEntryCard(e){
+  if(e.inv_no && e.inv_no.startsWith('BR-ADV-')){
+    const bookingId=parseInt(e.inv_no.replace('BR-ADV-',''));
+    if(bookingId){showBridalDetail(bookingId);return;}
+  }
+  if(e.inv_no && e.inv_no.startsWith('BR-DUE-')){
+    // BR-DUE- uses its own global sequence, not the booking id — the
+    // booking id only lives in the remarks/services text ("...booking #123").
+    const m=/#(\d+)/.exec(e.remarks||e.services||'');
+    if(m){showBridalDetail(parseInt(m[1]));return;}
+  }
+  showInvoiceModal(e);
 }
 
 function showInvoiceModal(entry){

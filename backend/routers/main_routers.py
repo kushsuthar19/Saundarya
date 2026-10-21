@@ -1833,15 +1833,39 @@ async def revenue_monthly(
     db: oracledb.AsyncConnection = Depends(get_db),
 ):
     cursor = db.cursor()
+    # Split-aware cash/upi/card totals — same pattern /revenue/stats already
+    # uses. Handles: Cash, UPI/GPay/GPay-UPI, Card, Split|Cash:N|UPI:N|Card:N.
+    # Previously only matched the exact words 'Cash'/'UPI'/'Card', so a
+    # Split-paid entry's pay_method ("Split|Cash:6500|UPI:3400|Card:0")
+    # never matched any of the three and silently contributed ₹0 to all of
+    # them here, even though the Net column next to it was already correct.
     await cursor.execute(
         """SELECT TO_CHAR(entry_date,'MM') as month_num,
                   COUNT(*) as entries,
                   SUM(gross_total) as gross,
                   SUM(discount) as discounts,
                   SUM(net_total) as net,
-                  SUM(CASE WHEN pay_method='Cash' THEN net_total ELSE 0 END) as cash,
-                  SUM(CASE WHEN pay_method='UPI' THEN net_total ELSE 0 END) as upi,
-                  SUM(CASE WHEN pay_method='Card' THEN net_total ELSE 0 END) as card
+                  SUM(CASE
+                      WHEN pay_method='Cash' THEN net_total
+                      WHEN pay_method LIKE 'Split|%' THEN
+                          CASE WHEN REGEXP_SUBSTR(pay_method,'Cash:([0-9]+)',1,1,'',1) IS NOT NULL
+                               THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'Cash:([0-9]+)',1,1,'',1))
+                               ELSE 0 END
+                      ELSE 0 END) as cash,
+                  SUM(CASE
+                      WHEN pay_method IN ('UPI','GPay','GPay/UPI') THEN net_total
+                      WHEN pay_method LIKE 'Split|%' THEN
+                          CASE WHEN REGEXP_SUBSTR(pay_method,'UPI:([0-9]+)',1,1,'',1) IS NOT NULL
+                               THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'UPI:([0-9]+)',1,1,'',1))
+                               ELSE 0 END
+                      ELSE 0 END) as upi,
+                  SUM(CASE
+                      WHEN pay_method='Card' THEN net_total
+                      WHEN pay_method LIKE 'Split|%' THEN
+                          CASE WHEN REGEXP_SUBSTR(pay_method,'Card:([0-9]+)',1,1,'',1) IS NOT NULL
+                               THEN TO_NUMBER(REGEXP_SUBSTR(pay_method,'Card:([0-9]+)',1,1,'',1))
+                               ELSE 0 END
+                      ELSE 0 END) as card
            FROM daily_entries
            WHERE TO_CHAR(entry_date,'YYYY')=:1
            GROUP BY TO_CHAR(entry_date,'MM')

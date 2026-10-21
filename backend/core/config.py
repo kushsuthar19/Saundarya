@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY: str = os.getenv("AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY", "")
 
     # Rate limiting
-    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_PER_MINUTE: int = 300
     RATE_LIMIT_LOGIN: int = 10
 
     # PDF generation
