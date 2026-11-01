@@ -17,7 +17,7 @@ from backend.core.security import get_current_user, require_admin
 from backend.schemas.schemas import (
     AppointmentCreate, AppointmentOut,
     StaffCreate, StaffOut,
-    AttendanceUpsert, AttendanceOut,
+    AttendanceUpsert, AttendanceOut, DayOffToggle, DayOffOut,
     BridalCreate, BridalOut,
     DashboardStats, RevenueStats, SalaryPaymentCreate,
 )
@@ -310,6 +310,16 @@ async def staff_month_detail(
     att_cols = [d[0].lower() for d in cursor.description]
     attendance_by_day = {r[0]: dict(zip(att_cols, r)) for r in att_rows}
 
+    # Global business-closure days this month (e.g. Diwali shutdown) — these
+    # are excluded from absence deduction for every staff member, same as
+    # this one, regardless of their individual attendance rows.
+    await cursor.execute(
+        """SELECT TO_CHAR(off_date,'YYYY-MM-DD') as d FROM day_off_dates
+           WHERE off_date>=TO_DATE(:1,'YYYY-MM-DD') AND off_date<=TO_DATE(:2,'YYYY-MM-DD')""",
+        [month_start, month_end]
+    )
+    day_off_set = {r[0] for r in await cursor.fetchall()}
+
     # Services done each day this month by this staff
     await cursor.execute(
         """SELECT TO_CHAR(de.entry_date,'YYYY-MM-DD') as d, de.client_name, ei.service_name,
@@ -355,6 +365,7 @@ async def staff_month_detail(
             "is_present": is_present,
             "half_day": is_half,
             "morning_duty": is_morning,
+            "day_off": d_str in day_off_set,
             "in_time": att.get('in_time') if att else None,
             "out_time": att.get('out_time') if att else None,
             "hours_worked": float(att['hours_worked']) if att and att.get('hours_worked') else None,
@@ -376,7 +387,13 @@ async def staff_month_detail(
         effective_days = dp - (half_day_count * 0.5)
     else:
         effective_days = dp + (half_day_count * 0.5)
-    full_absent_days = max(0, days_in_month - dp)
+    # Day-off dates not already counted present are excluded from the
+    # absent count entirely — a business closure day costs nobody anything.
+    day_off_count = sum(
+        1 for d in day_off_set
+        if not (attendance_by_day.get(d) or {}).get('is_present')
+    )
+    full_absent_days = max(0, days_in_month - dp - day_off_count)
     absent_equivalent_days = full_absent_days + (half_day_count * 0.5)
     chargeable_absent_days = max(0, absent_equivalent_days - FREE_HOLIDAYS_PER_MONTH)
     absence_deduction = chargeable_absent_days * per_day
@@ -398,6 +415,7 @@ async def staff_month_detail(
             "effective_days": effective_days,
             "per_day_salary": round(per_day),
             "full_absent_days": full_absent_days,
+            "day_off_count": day_off_count,
             "absent_equivalent_days": absent_equivalent_days,
             "free_holidays": FREE_HOLIDAYS_PER_MONTH,
             "chargeable_absent_days": chargeable_absent_days,
@@ -605,6 +623,46 @@ async def get_monthly_attendance(
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
     return [dict(zip(cols, r)) for r in rows]
+
+
+@att_router.get("/day-off", response_model=DayOffOut)
+async def get_day_off(
+    att_date: date = Query(...),
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    await cursor.execute(
+        "SELECT 1 FROM day_off_dates WHERE off_date=TO_DATE(:1,'YYYY-MM-DD')",
+        [str(att_date)]
+    )
+    row = await cursor.fetchone()
+    return {"att_date": att_date, "is_day_off": bool(row)}
+
+
+@att_router.post("/day-off", response_model=DayOffOut)
+async def set_day_off(
+    data: DayOffToggle,
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    cursor = db.cursor()
+    ad = str(data.att_date)
+    if data.is_day_off:
+        try:
+            await cursor.execute(
+                "INSERT INTO day_off_dates (off_date) VALUES (TO_DATE(:1,'YYYY-MM-DD'))",
+                [ad]
+            )
+        except Exception:
+            pass  # already marked day off
+    else:
+        await cursor.execute(
+            "DELETE FROM day_off_dates WHERE off_date=TO_DATE(:1,'YYYY-MM-DD')",
+            [ad]
+        )
+    await db.commit()
+    return {"att_date": data.att_date, "is_day_off": data.is_day_off}
 
 
 # ════════════════════════════════
@@ -2018,9 +2076,18 @@ async def staff_performance(
     rows = await cursor.fetchall()
     cols = [d[0].lower() for d in cursor.description]
     result = [dict(zip(cols, r)) for r in rows]
+
+    await cursor.execute(
+        """SELECT COUNT(*) FROM day_off_dates
+           WHERE off_date>=TO_DATE(:1,'YYYY-MM-DD') AND off_date<=TO_DATE(:2,'YYYY-MM-DD')""",
+        [month_start, month_end]
+    )
+    day_off_count = (await cursor.fetchone())[0]
+
     for r in result:
         r['month'] = month
         r['days_in_month'] = days_in_month
+        r['day_off_count'] = day_off_count
     return result
 
 

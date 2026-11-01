@@ -759,10 +759,16 @@ table tbody tr:hover td{background:var(--bg2)}
     <div class="card-hd emerald" style="display:flex;align-items:center">
       <div class="card-hd-t"><i class="fas fa-user-clock"></i> Today's Attendance</div>
       <div id="att-dash-date" style="font-size:10px;opacity:.7;margin-left:8px"></div>
-      <button onclick="toggleDashAtt()" id="att-dash-toggle" title="Toggle attendance view"
-        style="margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">
-        <i class="fas fa-chevron-down" id="att-dash-chevron"></i>
-      </button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <button onclick="toggleDayOff()" id="att-dash-dayoff-toggle" data-admin="1" title="Mark today a Day Off — no salary deduction for anyone"
+          style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600">
+          Day Off
+        </button>
+        <button onclick="toggleDashAtt()" id="att-dash-toggle" title="Toggle attendance view"
+          style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">
+          <i class="fas fa-chevron-down" id="att-dash-chevron"></i>
+        </button>
+      </div>
     </div>
     <div class="card-body" id="att-dash-list" style="min-height:0;padding:0;max-height:320px;overflow-y:auto;transition:max-height .3s"></div>
   </div>
@@ -5552,7 +5558,7 @@ async function loadStaffDetail(staffId){
     <span style="background:#e8f5ee;color:var(--emerald);border-radius:20px;padding:3px 10px;font-weight:600">✓ ${sum.present_days} Present</span>
     <span style="background:#fff8e7;color:var(--amber);border-radius:20px;padding:3px 10px;font-weight:600">½ ${sum.half_day_count} Half Day</span>
     <span style="background:#e8f4ff;color:var(--teal);border-radius:20px;padding:3px 10px;font-weight:600">🌅 ${sum.morning_duty_count} Morning Duty</span>
-    <span style="background:#fff0f0;color:var(--rose);border-radius:20px;padding:3px 10px;font-weight:600">✗ ${data.days_in_month-sum.present_days} Absent</span>
+    <span style="background:#fff0f0;color:var(--rose);border-radius:20px;padding:3px 10px;font-weight:600">✗ ${Math.max(0,data.days_in_month-sum.present_days-(sum.day_off_count||0))} Absent</span>
   </div>
   <!-- Calendar -->
   <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--ink)"><i class="fas fa-calendar" style="margin-right:6px;color:var(--teal)"></i>Day-wise Attendance & Services (click any day to edit)</div>
@@ -5569,12 +5575,13 @@ async function loadStaffDetail(staffId){
         const dayNum=parseInt(d.date.split('-')[2]);
         const isToday=d.date===td();
         let bg='var(--bg)',border='var(--border)';
-        if(d.is_present&&d.half_day){bg='#fffbe6';border='var(--gold)';}
+        if(d.day_off){bg='#f0f4ff';border='var(--ink4)';}
+        else if(d.is_present&&d.half_day){bg='#fffbe6';border='var(--gold)';}
         else if(d.is_present){bg='#f0fff8';border='var(--emerald)';}
         else if(d.date<=td()){bg='#fff5f5';border='#ffcdd2';}
         cells+=`<div onclick="editAttDay('${d.date}')" style="min-height:54px;border-radius:6px;padding:4px;border:1.5px solid ${isToday?'var(--teal)':border};background:${bg};cursor:pointer;font-size:9px;position:relative" title="Click to edit">
           <div style="font-weight:${isToday?'700':'600'};color:${isToday?'var(--teal)':'var(--ink)'}">${dayNum}</div>
-          ${d.is_present?`<div style="color:var(--emerald);font-size:8px">${d.half_day?'½ day':'✓'}${d.morning_duty?' 🌅':''}</div>`:(d.date<=td()?'<div style="color:var(--rose);font-size:8px">✗</div>':'')}
+          ${d.day_off?'<div style="color:var(--ink3);font-size:8px">Day Off</div>':d.is_present?`<div style="color:var(--emerald);font-size:8px">${d.half_day?'½ day':'✓'}${d.morning_duty?' 🌅':''}</div>`:(d.date<=td()?'<div style="color:var(--rose);font-size:8px">✗</div>':'')}
           ${d.day_revenue>0?`<div style="color:var(--teal);font-weight:600;font-size:8px">${fmt(d.day_revenue)}</div>`:''}
         </div>`;
       });
@@ -5855,6 +5862,28 @@ async function renderDashAtt(){
     // Staff (reception) sees compact view — can mark everyone present/absent
     await _renderAttList(list, false);
   }
+  loadDayOffStatus();
+}
+
+let _dayOffToday=false;
+async function loadDayOffStatus(){
+  const r=await apiCall('GET',`/attendance/day-off?att_date=${td()}`);
+  _dayOffToday=!!(r&&r.is_day_off);
+  renderDayOffToggle();
+}
+function renderDayOffToggle(){
+  const btn=v('att-dash-dayoff-toggle');if(!btn)return;
+  btn.innerHTML=_dayOffToday?'<i class="fas fa-umbrella-beach"></i> Day Off: ON':'Day Off';
+  btn.style.background=_dayOffToday?'var(--gold)':'rgba(255,255,255,.15)';
+}
+async function toggleDayOff(){
+  if(_role!=='admin')return;
+  const next=!_dayOffToday;
+  const r=await apiCall('POST','/attendance/day-off',{att_date:td(),is_day_off:next});
+  if(!r)return;
+  _dayOffToday=!!r.is_day_off;
+  renderDayOffToggle();
+  toast(_dayOffToday?'Today marked as Day Off — no salary deduction for anyone':'Day Off removed for today',_dayOffToday?'var(--gold)':'var(--ink3)');
 }
 
 async function _renderAttSelf(container){
@@ -6610,7 +6639,7 @@ async function renderStaffPerfReport(){
     // First 2 absent-day-equivalents/month are free (paid holiday); two
     // half-days combine into one full-day-equivalent. Only equivalent
     // days beyond the free allowance are deducted, at the per-day rate.
-    const fullAbsentDays=Math.max(0,daysInMo-dp);
+    const fullAbsentDays=Math.max(0,daysInMo-dp-(s.day_off_count||0));
     const absentEquivDays=fullAbsentDays+(halfDays*0.5);
     const chargeableAbsentDays=Math.max(0,absentEquivDays-2);
     const baseEarned=Math.round(baseSalary-(chargeableAbsentDays*perDay));

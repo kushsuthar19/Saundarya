@@ -135,6 +135,13 @@ CREATE TABLE attendance (
 CREATE INDEX idx_att_date    ON attendance(att_date);
 CREATE INDEX idx_att_staff   ON attendance(staff_id);
 
+-- Global "Day Off" toggle — a date here excludes every staff member from
+-- absence deduction in salary calc that day (business-wide closure).
+CREATE TABLE day_off_dates (
+    off_date   DATE PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
+);
+
 -- ============================================================
 -- APPOINTMENTS
 -- ============================================================

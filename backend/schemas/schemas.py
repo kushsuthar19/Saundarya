@@ -157,6 +157,16 @@ class AttendanceOut(BaseModel):
     hours_worked: Optional[float]
 
 
+class DayOffToggle(BaseModel):
+    att_date: date
+    is_day_off: bool
+
+
+class DayOffOut(BaseModel):
+    att_date: date
+    is_day_off: bool
+
+
 # ── Appointment ───────────────────────────────────────────
 class AppointmentCreate(BaseModel):
     client_name: str = Field(..., min_length=1, max_length=100)
@@ -419,6 +429,7 @@ class BridalOut(BaseModel):
     balance_due: float
     status: str
     wa_sent: int
+    notes: Optional[str] = None
     functions: List[BridalFunctionOut] = []
     payments: List[BridalPaymentOut] = []
     pdf_token: Optional[str] = None

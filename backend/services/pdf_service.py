@@ -347,7 +347,11 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     # drop all but one person's name/amount. So split add-on rows out from
     # the plain schedule rows up front, and only merge-by-name the latter.
     def _is_addon_row(fn):
-        return bool(fn.get("addon_item")) or float(fn.get("addon_amount") or 0) > 0
+        # A named person (Add-on For) is enough on its own — the price may
+        # not be decided yet, but who's included shouldn't be lost because
+        # of that. Only a bare function with no name, item, or amount is
+        # safe to merge with another same-named row.
+        return bool(fn.get("addon_item")) or float(fn.get("addon_amount") or 0) > 0 or bool((fn.get("person_name") or "").strip())
     addon_rows = [fn for fn in functions if _is_addon_row(fn)]
     schedule_fns = [fn for fn in functions if not _is_addon_row(fn)]
 
