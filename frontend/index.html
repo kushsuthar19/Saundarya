@@ -6020,8 +6020,9 @@ async function _renderAttList(container, showTimeInputs){
       return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
         <div style="width:32px;height:32px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${ini}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--ink)">${s.name}</div>
+          <div style="font-size:12px;font-weight:600;color:var(--ink)">${s.name}${att.morning_duty?' 🌅':''}</div>
           <div style="font-size:10px;color:var(--ink3)">${s.role||'Staff'}</div>
+          ${(att.in_time||att.out_time)?`<div style="font-size:10px;color:var(--ink3)">In: ${att.in_time||'--:--'} · Out: ${att.out_time||'--:--'}</div>`:''}
         </div>
         <!-- Status pill -->
         <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;${att.present?(att.half_day?'background:var(--gold);color:#fff':'background:var(--emerald);color:#fff'):'background:var(--rose);color:#fff'}">
