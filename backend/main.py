@@ -28,6 +28,7 @@ from backend.routers.main_routers import (
     dash_router, revenue_router, reports_router, salary_router,
     svc_router, inquiry_router    # ← add inquiry_router here
 )
+from backend.routers.adms_router import adms_router
 from backend.services.scheduler import start_scheduler, stop_scheduler
 
 # ── Logging ───────────────────────────────────────────────
@@ -101,6 +102,10 @@ app.include_router(salary_router,   prefix=API_PREFIX)
 app.include_router(svc_router,      prefix=API_PREFIX)
 app.include_router(inquiry_router, prefix=API_PREFIX)
 app.include_router(wa_templates_router, prefix=API_PREFIX)
+
+# ADMS push receiver — the fingerprint machine calls these /iclock/...
+# paths directly, fixed by its own firmware, so no /api/v1 prefix here.
+app.include_router(adms_router)
 
 # ── Health check ──────────────────────────────────────────
 @app.get("/api/health")

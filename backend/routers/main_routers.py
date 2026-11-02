@@ -733,28 +733,21 @@ async def upsert_attendance(
     return dict(zip(cols, row))
 
 
-@att_router.post("/punch")
-async def receive_device_punch(
-    data: DevicePunch,
-    x_bridge_key: str = Header(None, alias="X-Bridge-Key"),
-    db: oracledb.AsyncConnection = Depends(get_db),
-):
-    """Called by the fingerprint-machine bridge program for every punch it
-    catches — not a logged-in user, authenticated with a shared secret
-    instead of a JWT. Routes the punch into either the Morning Duty session
-    (2:30-9:00 AM) or the main day-shift session based on its time, then
-    runs the same late-arrival/overtime schedule as a manual edit would."""
-    if not settings.PUNCH_BRIDGE_KEY or x_bridge_key != settings.PUNCH_BRIDGE_KEY:
-        raise HTTPException(status_code=403, detail="Invalid bridge key")
-
+async def _ingest_punch(db: oracledb.AsyncConnection, device_user_id: int, punch_dt) -> Optional[dict]:
+    """Shared by both punch sources — the local bridge's /attendance/punch
+    and the device's own direct ADMS push — so a punch is handled exactly
+    the same way regardless of which path it arrived through. Routes the
+    punch into either the Morning Duty session (2:30-9:00 AM) or the main
+    day-shift session based on its time, then runs the same late-arrival/
+    overtime schedule as a manual edit would. Returns None if the device
+    user_id isn't linked to any staff member."""
     cursor = db.cursor()
-    await cursor.execute("SELECT id FROM staff WHERE device_user_id=:1", [data.device_user_id])
+    await cursor.execute("SELECT id FROM staff WHERE device_user_id=:1", [device_user_id])
     srow = await cursor.fetchone()
     if not srow:
-        return {"ignored": True, "reason": "unknown device_user_id"}
+        return None
     staff_id = srow[0]
 
-    punch_dt = data.timestamp
     ad = str(punch_dt.date())
     hhmm = punch_dt.strftime('%H:%M')
     minute_of_day = punch_dt.hour * 60 + punch_dt.minute
@@ -848,6 +841,24 @@ async def receive_device_punch(
     return {"staff_id": staff_id, "att_date": ad, "in_time": in_time, "out_time": out_time,
             "morning_in_time": morning_in, "morning_out_time": morning_out,
             "is_present": bool(is_present), "half_day": bool(half)}
+
+
+@att_router.post("/punch")
+async def receive_device_punch(
+    data: DevicePunch,
+    x_bridge_key: str = Header(None, alias="X-Bridge-Key"),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Called by the fingerprint-machine bridge program for every punch it
+    catches — not a logged-in user, authenticated with a shared secret
+    instead of a JWT."""
+    if not settings.PUNCH_BRIDGE_KEY or x_bridge_key != settings.PUNCH_BRIDGE_KEY:
+        raise HTTPException(status_code=403, detail="Invalid bridge key")
+
+    result = await _ingest_punch(db, data.device_user_id, data.timestamp)
+    if result is None:
+        return {"ignored": True, "reason": "unknown device_user_id"}
+    return result
 
 
 @att_router.get("/monthly")
