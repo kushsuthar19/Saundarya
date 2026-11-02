@@ -143,6 +143,42 @@ async def run_membership_expiry_job():
         logger.error(f"Membership expiry job failed: {e}")
 
 
+async def run_auto_day_off_job():
+    """If literally nobody has punched in/out anywhere by 6 PM, assume the
+    salon is closed today (a Diwali-style shutdown) and auto-apply the same
+    Day Off exclusion the admin's manual dashboard toggle sets — no salary
+    deduction for anyone that day. Never overrides a day someone already
+    showed up on, and never double-inserts if the admin already toggled it
+    manually earlier in the day."""
+    try:
+        async with get_connection() as db:
+            cursor = db.cursor()
+            try:
+                await cursor.execute(
+                    """SELECT COUNT(*) FROM attendance
+                       WHERE TRUNC(att_date)=TRUNC(SYSDATE)
+                         AND (is_present=1 OR in_time IS NOT NULL OR morning_in_time IS NOT NULL)"""
+                )
+            except Exception:
+                # Fallback if morning_in_time column doesn't exist yet
+                await cursor.execute(
+                    """SELECT COUNT(*) FROM attendance
+                       WHERE TRUNC(att_date)=TRUNC(SYSDATE)
+                         AND (is_present=1 OR in_time IS NOT NULL)"""
+                )
+            row = await cursor.fetchone()
+            if row and row[0] > 0:
+                return  # someone showed up — not a closure day
+            await cursor.execute("SELECT 1 FROM day_off_dates WHERE off_date=TRUNC(SYSDATE)")
+            if await cursor.fetchone():
+                return  # already marked (e.g. admin's manual toggle)
+            await cursor.execute("INSERT INTO day_off_dates (off_date) VALUES (TRUNC(SYSDATE))")
+            await db.commit()
+            logger.info("Auto Day Off: no punches by 6 PM, marked today as a business closure.")
+    except Exception as e:
+        logger.error(f"Auto Day Off job failed: {e}")
+
+
 def start_scheduler():
     """Call once from main.py's lifespan on startup."""
     if _scheduler.running:
@@ -153,8 +189,9 @@ def start_scheduler():
     _scheduler.add_job(run_winback_30_job, CronTrigger(hour=8, minute=55), id="wa_winback_30", replace_existing=True)
     _scheduler.add_job(run_winback_job, CronTrigger(hour=9, minute=0), id="wa_winback", replace_existing=True)
     _scheduler.add_job(run_membership_expiry_job, CronTrigger(hour=9, minute=5), id="wa_membership_expiry", replace_existing=True)
+    _scheduler.add_job(run_auto_day_off_job, CronTrigger(hour=18, minute=0), id="auto_day_off", replace_existing=True)
     _scheduler.start()
-    logger.info("WhatsApp reminder scheduler started (winback 08:55/09:00, membership expiry 09:05 daily).")
+    logger.info("WhatsApp reminder scheduler started (winback 08:55/09:00, membership expiry 09:05, auto day-off 18:00 daily).")
 
 
 def stop_scheduler():

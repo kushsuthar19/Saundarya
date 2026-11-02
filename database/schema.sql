@@ -127,6 +127,8 @@ CREATE TABLE attendance (
     half_day     NUMBER(1) DEFAULT 0,
     in_time      VARCHAR2(10),
     out_time     VARCHAR2(10),
+    morning_in_time  VARCHAR2(10),
+    morning_out_time VARCHAR2(10),
     hours_worked NUMBER(5,2),
     created_at   TIMESTAMP    DEFAULT SYSTIMESTAMP,
     updated_at   TIMESTAMP    DEFAULT SYSTIMESTAMP,

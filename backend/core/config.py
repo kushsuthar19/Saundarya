@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     ORACLE_MAX_POOL: int = 10
     ORACLE_INCREMENT: int = 1
 
+    # Shared secret the fingerprint-machine bridge program sends on every
+    # punch it forwards (X-Bridge-Key header) — not a logged-in user, so it
+    # can't use the normal JWT auth. Set a real random value in .env.
+    PUNCH_BRIDGE_KEY: str = os.getenv("PUNCH_BRIDGE_KEY", "")
+
     # Publicly reachable base URL of this server — needed only by background
     # jobs (like the scheduler) that build a media URL to send with a
     # WhatsApp message without an incoming HTTP request to derive it from

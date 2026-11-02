@@ -167,6 +167,11 @@ class DayOffOut(BaseModel):
     is_day_off: bool
 
 
+class DevicePunch(BaseModel):
+    device_user_id: int
+    timestamp: datetime
+
+
 # ── Appointment ───────────────────────────────────────────
 class AppointmentCreate(BaseModel):
     client_name: str = Field(..., min_length=1, max_length=100)

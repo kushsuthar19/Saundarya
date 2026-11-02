@@ -5531,7 +5531,7 @@ async function loadStaffDetail(staffId){
     <div><div style="font-size:15px;font-weight:700">${s.name}</div><div style="font-size:11px;color:var(--ink3)">${s.role||'Staff'} • ₹${fmt(s.base_salary||0)}/month base</div></div>
   </div>
   <!-- Salary Summary -->
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px">
     <div style="background:#f0fff8;border:1px solid #b2dfdb;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Base Salary</div>
       <div style="font-size:14px;font-weight:700;color:var(--emerald)">${fmt(sum.base_earned)}</div>
@@ -5542,10 +5542,20 @@ async function loadStaffDetail(staffId){
       <div style="font-size:14px;font-weight:700;color:var(--teal)">${fmt(sum.commission_amt)}</div>
       <div style="font-size:10px;color:var(--ink3)">${(sum.commission_pct*100).toFixed(0)}% of ${fmt(sum.monthly_revenue)}</div>
     </div>
+    <div style="background:#eef6ff;border:1px solid #b3d7ff;border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Device ID</div>
+      <div style="font-size:14px;font-weight:700;color:#0984E3">${s.device_user_id!=null?('#'+s.device_user_id):'—'}</div>
+      <div style="font-size:10px;color:var(--ink3)">${s.device_user_id!=null?'Fingerprint linked':'Not linked yet'}</div>
+    </div>
     <div style="background:#fffbf0;border:1px solid #ffe082;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Morning Duty</div>
       <div style="font-size:14px;font-weight:700;color:var(--gold)">${fmt(sum.morning_duty_pay)}</div>
       <div style="font-size:10px;color:var(--ink3)">${sum.morning_duty_count} days × ₹150</div>
+    </div>
+    <div style="background:${sum.timing_net<0?'#fff0f0':sum.timing_net>0?'#f0fff8':'#f7f7f7'};border:1px solid ${sum.timing_net<0?'#ffcdd2':sum.timing_net>0?'#b2dfdb':'var(--border)'};border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Timing</div>
+      <div style="font-size:14px;font-weight:700;color:${sum.timing_net<0?'var(--rose)':sum.timing_net>0?'var(--emerald)':'var(--ink3)'}">${sum.timing_net>0?'+':''}${fmt(sum.timing_net)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${sum.timing_breakdown}</div>
     </div>
     <div style="background:#f5f0ff;border:1px solid #ce93d8;border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px">Total Salary</div>
@@ -5579,9 +5589,20 @@ async function loadStaffDetail(staffId){
         else if(d.is_present&&d.half_day){bg='#fffbe6';border='var(--gold)';}
         else if(d.is_present){bg='#f0fff8';border='var(--emerald)';}
         else if(d.date<=td()){bg='#fff5f5';border='#ffcdd2';}
+        // Punch time color: red = late arrival / absent-trigger, orange =
+        // half-day-trigger, green = overtime bonus, blue = on-time/no-penalty
+        let timeColor='#2979ff';
+        if(d.timing_status==='absent')timeColor='var(--rose)';
+        else if(d.timing_status==='half_day')timeColor='var(--gold)';
+        else if(d.late_deduction>0)timeColor='var(--rose)';
+        else if(d.overtime_addition>0)timeColor='var(--emerald)';
+        const mainTimeTxt=(d.in_time||d.out_time)?`${d.in_time||'--:--'}${d.out_time?'–'+d.out_time:''}`:'';
+        const morningTimeTxt=(d.morning_in_time||d.morning_out_time)?`🌅${d.morning_in_time||'--:--'}${d.morning_out_time?'–'+d.morning_out_time:''}`:'';
         cells+=`<div onclick="editAttDay('${d.date}')" style="min-height:54px;border-radius:6px;padding:4px;border:1.5px solid ${isToday?'var(--teal)':border};background:${bg};cursor:pointer;font-size:9px;position:relative" title="Click to edit">
           <div style="font-weight:${isToday?'700':'600'};color:${isToday?'var(--teal)':'var(--ink)'}">${dayNum}</div>
-          ${d.day_off?'<div style="color:var(--ink3);font-size:8px">Day Off</div>':d.is_present?`<div style="color:var(--emerald);font-size:8px">${d.half_day?'½ day':'✓'}${d.morning_duty?' 🌅':''}</div>`:(d.date<=td()?'<div style="color:var(--rose);font-size:8px">✗</div>':'')}
+          ${d.day_off?'<div style="color:var(--ink3);font-size:8px">Day Off</div>':d.is_present?`<div style="color:var(--emerald);font-size:8px">${d.half_day?'½ day':'✓'}</div>`:(d.date<=td()?'<div style="color:var(--rose);font-size:8px">✗</div>':'')}
+          ${mainTimeTxt?`<div style="color:${timeColor};font-size:7px;font-weight:600">${mainTimeTxt}</div>`:''}
+          ${morningTimeTxt?`<div style="color:var(--teal);font-size:7px;font-weight:600">${morningTimeTxt}</div>`:''}
           ${d.day_revenue>0?`<div style="color:var(--teal);font-weight:600;font-size:8px">${fmt(d.day_revenue)}</div>`:''}
         </div>`;
       });
@@ -5639,9 +5660,9 @@ function editAttDay(dateStr){
     </div>
     <div style="display:flex;gap:10px;margin-bottom:12px">
       <div style="flex:1"><label style="font-size:11px;color:var(--ink3)">In Time</label>
-        <input type="time" id="ead-in" value="${d.in_time||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+        <input type="time" id="ead-in" value="${d.in_time||''}" oninput="if(this.value)v('ead-present').value='1'" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
       <div style="flex:1"><label style="font-size:11px;color:var(--ink3)">Out Time</label>
-        <input type="time" id="ead-out" value="${d.out_time||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
+        <input type="time" id="ead-out" value="${d.out_time||''}" oninput="if(this.value)v('ead-present').value='1'" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:12px;background:var(--surface)"></div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;font-size:12px">
       <input type="checkbox" id="ead-half" ${d.half_day?'checked':''}> ½ Day (half salary for this day)

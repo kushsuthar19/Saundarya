@@ -1,0 +1,3 @@
+pyzk
+requests
+python-dotenv

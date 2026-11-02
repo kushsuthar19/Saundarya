@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import date
 from typing import List, Optional
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 import oracledb
 
@@ -17,7 +17,7 @@ from backend.core.security import get_current_user, require_admin
 from backend.schemas.schemas import (
     AppointmentCreate, AppointmentOut,
     StaffCreate, StaffOut,
-    AttendanceUpsert, AttendanceOut, DayOffToggle, DayOffOut,
+    AttendanceUpsert, AttendanceOut, DayOffToggle, DayOffOut, DevicePunch,
     BridalCreate, BridalOut,
     DashboardStats, RevenueStats, SalaryPaymentCreate,
 )
@@ -37,6 +37,78 @@ def _bridal_pdf_token(booking_id: int) -> str:
         f"bridal-pdf-{booking_id}".encode(),
         hashlib.sha256
     ).hexdigest()[:24]
+
+
+# ── Salon attendance timing schedule ───────────────────────
+# Morning Duty is a separate early session (2:30 AM-9:00 AM) from the main
+# day shift — any punch landing in this window belongs to Morning Duty.
+MORNING_DUTY_START_MIN = 2 * 60 + 30   # 02:30
+MORNING_DUTY_END_MIN = 9 * 60          # 09:00
+
+
+def _parse_hhmm(t):
+    if not t:
+        return None
+    try:
+        parts = str(t).split(':')
+        return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return None
+
+
+def _compute_day_timing(in_time, out_time):
+    """Derives the salon's late-arrival / overtime schedule from a main
+    day-shift's punch times (10:00 AM-7:45 PM nominal). Returns
+    (late_deduction, overtime_addition, forced_status):
+      - forced_status is None on a normal present day — the deduction and
+        addition amounts (each 0 if not applicable) apply on top of full pay.
+      - forced_status is 'half_day' or 'absent' when the punch times fall
+        into those bands — the rupee amounts don't apply; the existing
+        half-day/absent salary math takes over instead."""
+    in_min = _parse_hhmm(in_time)
+    out_min = _parse_hhmm(out_time)
+
+    deduction = 0
+    arrival_half = False
+    if in_min is not None:
+        if in_min <= 610:          # up to 10:10 AM — on time
+            deduction = 0
+        elif in_min <= 645:        # 10:10-10:45 AM
+            deduction = 20
+        elif in_min <= 750:        # 10:45 AM-12:30 PM
+            deduction = 50
+        else:                      # after 12:30 PM
+            arrival_half = True
+
+    addition = 0
+    departure_status = None
+    if out_min is not None:
+        if out_min < 825:          # before 1:45 PM
+            departure_status = 'absent'
+        elif out_min < 1080:       # 1:45 PM-6:00 PM
+            departure_status = 'half_day'
+        elif out_min < 1185:       # 6:00 PM-7:45 PM — normal, no penalty
+            departure_status = None
+        elif out_min < 1220:       # 7:45-8:20 PM — grace, no addition
+            addition = 0
+        elif out_min < 1260:       # 8:20-9:00 PM
+            addition = 20
+        else:                      # after 9:00 PM
+            addition = 40
+
+    if arrival_half:
+        # Credited as half day only if she stays to complete it (out >=
+        # 7:45 PM, or hasn't left yet today); leaving earlier downgrades
+        # the whole day to Absent.
+        if out_min is not None and out_min < 1185:
+            return 0, 0, 'absent'
+        return 0, 0, 'half_day'
+    if departure_status == 'absent':
+        return 0, 0, 'absent'
+    if departure_status == 'half_day':
+        return 0, 0, 'half_day'
+    return deduction, addition, None
+
 
 # ════════════════════════════════
 # APPOINTMENTS
@@ -287,25 +359,38 @@ async def staff_month_detail(
 
     # Staff base info
     await cursor.execute(
-        "SELECT id, name, role, base_salary FROM staff WHERE id=:1",
+        "SELECT id, name, role, base_salary, device_user_id FROM staff WHERE id=:1",
         [staff_id]
     )
     srow = await cursor.fetchone()
     if not srow:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Staff not found")
-    staff_info = {"id": srow[0], "name": srow[1], "role": srow[2], "base_salary": srow[3] or 0}
+    staff_info = {"id": srow[0], "name": srow[1], "role": srow[2], "base_salary": srow[3] or 0,
+                  "device_user_id": srow[4]}
 
     # Day-by-day attendance for the month
-    await cursor.execute(
-        """SELECT TO_CHAR(att_date,'YYYY-MM-DD') as d, is_present, in_time, out_time,
-                  hours_worked, NVL(half_day,0) as half_day, NVL(morning_duty,0) as morning_duty,
-                  id
-           FROM attendance
-           WHERE staff_id=:1 AND att_date>=TO_DATE(:2,'YYYY-MM-DD') AND att_date<=TO_DATE(:3,'YYYY-MM-DD')
-           ORDER BY att_date""",
-        [staff_id, month_start, month_end]
-    )
+    try:
+        await cursor.execute(
+            """SELECT TO_CHAR(att_date,'YYYY-MM-DD') as d, is_present, in_time, out_time,
+                      hours_worked, NVL(half_day,0) as half_day, NVL(morning_duty,0) as morning_duty,
+                      morning_in_time, morning_out_time, id
+               FROM attendance
+               WHERE staff_id=:1 AND att_date>=TO_DATE(:2,'YYYY-MM-DD') AND att_date<=TO_DATE(:3,'YYYY-MM-DD')
+               ORDER BY att_date""",
+            [staff_id, month_start, month_end]
+        )
+    except Exception:
+        # Fallback if morning_in_time/morning_out_time columns don't exist yet
+        await cursor.execute(
+            """SELECT TO_CHAR(att_date,'YYYY-MM-DD') as d, is_present, in_time, out_time,
+                      hours_worked, NVL(half_day,0) as half_day, NVL(morning_duty,0) as morning_duty,
+                      id
+               FROM attendance
+               WHERE staff_id=:1 AND att_date>=TO_DATE(:2,'YYYY-MM-DD') AND att_date<=TO_DATE(:3,'YYYY-MM-DD')
+               ORDER BY att_date""",
+            [staff_id, month_start, month_end]
+        )
     att_rows = await cursor.fetchall()
     att_cols = [d[0].lower() for d in cursor.description]
     attendance_by_day = {r[0]: dict(zip(att_cols, r)) for r in att_rows}
@@ -346,6 +431,10 @@ async def staff_month_detail(
     present_count = 0
     half_day_count = 0
     morning_duty_count = 0
+    total_late_deduction = 0
+    total_overtime_addition = 0
+    late_days_count = 0
+    overtime_days_count = 0
     for day in range(1, days_in_month + 1):
         d_str = f"{yr}-{mo:02d}-{day:02d}"
         att = attendance_by_day.get(d_str)
@@ -360,6 +449,17 @@ async def staff_month_detail(
         if is_morning:
             morning_duty_count += 1
         day_revenue = sum(float(s['line_total'] or 0) for s in svcs)
+
+        day_ded, day_add, day_forced = _compute_day_timing(
+            att.get('in_time') if att else None, att.get('out_time') if att else None
+        )
+        if day_ded:
+            total_late_deduction += day_ded
+            late_days_count += 1
+        if day_add:
+            total_overtime_addition += day_add
+            overtime_days_count += 1
+
         days.append({
             "date": d_str,
             "is_present": is_present,
@@ -368,8 +468,13 @@ async def staff_month_detail(
             "day_off": d_str in day_off_set,
             "in_time": att.get('in_time') if att else None,
             "out_time": att.get('out_time') if att else None,
+            "morning_in_time": att.get('morning_in_time') if att else None,
+            "morning_out_time": att.get('morning_out_time') if att else None,
             "hours_worked": float(att['hours_worked']) if att and att.get('hours_worked') else None,
             "attendance_id": att.get('id') if att else None,
+            "late_deduction": day_ded,
+            "overtime_addition": day_add,
+            "timing_status": day_forced,  # None / 'half_day' / 'absent'
             "services": svcs,
             "day_revenue": day_revenue,
         })
@@ -401,7 +506,15 @@ async def staff_month_detail(
     morning_pay = morning_duty_count * 150
     comm_pct = 0.03 if monthly_revenue >= 100000 else 0.02
     commission = round(monthly_revenue * comm_pct)
-    total_salary = base_earned + commission + morning_pay
+    timing_net = total_overtime_addition - total_late_deduction
+    total_salary = base_earned + commission + morning_pay + timing_net
+
+    timing_parts = []
+    if late_days_count:
+        timing_parts.append(f"{late_days_count} late arrival{'s' if late_days_count > 1 else ''} (−₹{total_late_deduction})")
+    if overtime_days_count:
+        timing_parts.append(f"{overtime_days_count} overtime (+₹{total_overtime_addition})")
+    timing_breakdown = " · ".join(timing_parts) if timing_parts else "No late arrivals or overtime this month"
 
     return {
         "staff": staff_info,
@@ -425,6 +538,10 @@ async def staff_month_detail(
             "commission_pct": comm_pct,
             "commission_amt": commission,
             "morning_duty_pay": morning_pay,
+            "late_deduction_total": total_late_deduction,
+            "overtime_addition_total": total_overtime_addition,
+            "timing_net": timing_net,
+            "timing_breakdown": timing_breakdown,
             "total_salary": total_salary,
         }
     }
@@ -551,6 +668,18 @@ async def upsert_attendance(
     morning = 1 if getattr(data, 'morning_duty', False) else 0
     half = 1 if getattr(data, 'half_day', False) else 0
 
+    # Auto late-arrival/overtime schedule — whenever punch times are present,
+    # they decide Half Day / Absent for the day (overriding whatever was
+    # submitted); admin can still override by adjusting the times themselves
+    # or explicitly marking Absent (no times at all, handled above).
+    _, _, forced_status = _compute_day_timing(data.in_time, data.out_time)
+    if data.in_time:
+        is_present = 1  # a recorded punch always means she showed up
+    if forced_status == 'half_day':
+        is_present, half = 1, 1
+    elif forced_status == 'absent':
+        is_present, half = 0, 0
+
     if existing:
         old_present = existing[1]
         try:
@@ -602,6 +731,123 @@ async def upsert_attendance(
     row = await cursor.fetchone()
     cols = [d[0].lower() for d in cursor.description]
     return dict(zip(cols, row))
+
+
+@att_router.post("/punch")
+async def receive_device_punch(
+    data: DevicePunch,
+    x_bridge_key: str = Header(None, alias="X-Bridge-Key"),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Called by the fingerprint-machine bridge program for every punch it
+    catches — not a logged-in user, authenticated with a shared secret
+    instead of a JWT. Routes the punch into either the Morning Duty session
+    (2:30-9:00 AM) or the main day-shift session based on its time, then
+    runs the same late-arrival/overtime schedule as a manual edit would."""
+    if not settings.PUNCH_BRIDGE_KEY or x_bridge_key != settings.PUNCH_BRIDGE_KEY:
+        raise HTTPException(status_code=403, detail="Invalid bridge key")
+
+    cursor = db.cursor()
+    await cursor.execute("SELECT id FROM staff WHERE device_user_id=:1", [data.device_user_id])
+    srow = await cursor.fetchone()
+    if not srow:
+        return {"ignored": True, "reason": "unknown device_user_id"}
+    staff_id = srow[0]
+
+    punch_dt = data.timestamp
+    ad = str(punch_dt.date())
+    hhmm = punch_dt.strftime('%H:%M')
+    minute_of_day = punch_dt.hour * 60 + punch_dt.minute
+
+    await cursor.execute(
+        """SELECT id, is_present, in_time, out_time, half_day, morning_duty,
+                  morning_in_time, morning_out_time
+           FROM attendance WHERE staff_id=:1 AND att_date=TO_DATE(:2,'YYYY-MM-DD')""",
+        [staff_id, ad]
+    )
+    row = await cursor.fetchone()
+    cols = [d[0].lower() for d in cursor.description] if row else []
+    cur = dict(zip(cols, row)) if row else {}
+
+    in_time = cur.get('in_time')
+    out_time = cur.get('out_time')
+    morning_in = cur.get('morning_in_time')
+    morning_out = cur.get('morning_out_time')
+    morning_duty = bool(cur.get('morning_duty'))
+
+    if MORNING_DUTY_START_MIN <= minute_of_day < MORNING_DUTY_END_MIN:
+        if not morning_in:
+            morning_in = hhmm
+        else:
+            morning_out = hhmm  # 2nd+ punch in the window is always the latest "out"
+        morning_duty = True
+    else:
+        if not in_time:
+            in_time = hhmm
+        else:
+            out_time = hhmm  # 2nd+ punch is always the latest "out"
+
+    hours = None
+    im, om = _parse_hhmm(in_time), _parse_hhmm(out_time)
+    if im is not None and om is not None and om > im:
+        hours = round((om - im) / 60, 2)
+
+    _, _, forced_status = _compute_day_timing(in_time, out_time)
+    is_present = 1  # any punch at all means she showed up today
+    half = 1 if forced_status == 'half_day' else 0
+    if forced_status == 'absent':
+        is_present, half = 0, 0
+
+    if row:
+        old_present = cur.get('is_present')
+        try:
+            await cursor.execute(
+                """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3, hours_worked=:4,
+                   half_day=:5, morning_duty=:6, morning_in_time=:7, morning_out_time=:8,
+                   updated_at=SYSTIMESTAMP
+                   WHERE staff_id=:9 AND att_date=TO_DATE(:10,'YYYY-MM-DD')""",
+                [is_present, in_time, out_time, hours, half, 1 if morning_duty else 0,
+                 morning_in, morning_out, staff_id, ad]
+            )
+        except Exception:
+            # Fallback if morning_in_time/morning_out_time columns don't exist yet
+            await cursor.execute(
+                """UPDATE attendance SET is_present=:1, in_time=:2, out_time=:3, hours_worked=:4,
+                   half_day=:5, morning_duty=:6, updated_at=SYSTIMESTAMP
+                   WHERE staff_id=:7 AND att_date=TO_DATE(:8,'YYYY-MM-DD')""",
+                [is_present, in_time, out_time, hours, half, 1 if morning_duty else 0, staff_id, ad]
+            )
+        if old_present != is_present:
+            delta = 1 if is_present else -1
+            await cursor.execute(
+                "UPDATE staff SET days_present=GREATEST(0, days_present+:1) WHERE id=:2",
+                [delta, staff_id]
+            )
+    else:
+        try:
+            await cursor.execute(
+                """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time,
+                   hours_worked, half_day, morning_duty, morning_in_time, morning_out_time)
+                   VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6,:7,:8,:9,:10)""",
+                [staff_id, ad, is_present, in_time, out_time, hours, half,
+                 1 if morning_duty else 0, morning_in, morning_out]
+            )
+        except Exception:
+            await cursor.execute(
+                """INSERT INTO attendance (staff_id, att_date, is_present, in_time, out_time,
+                   hours_worked, half_day, morning_duty)
+                   VALUES (:1,TO_DATE(:2,'YYYY-MM-DD'),:3,:4,:5,:6,:7,:8)""",
+                [staff_id, ad, is_present, in_time, out_time, hours, half, 1 if morning_duty else 0]
+            )
+        if is_present:
+            await cursor.execute(
+                "UPDATE staff SET days_present=days_present+1 WHERE id=:1", [staff_id]
+            )
+
+    await db.commit()
+    return {"staff_id": staff_id, "att_date": ad, "in_time": in_time, "out_time": out_time,
+            "morning_in_time": morning_in, "morning_out_time": morning_out,
+            "is_present": bool(is_present), "half_day": bool(half)}
 
 
 @att_router.get("/monthly")
