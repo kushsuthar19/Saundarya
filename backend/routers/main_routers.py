@@ -340,6 +340,30 @@ async def create_staff(
     return dict(zip(cols, row))
 
 
+@staff_router.get("/check-duplicate")
+async def check_duplicate_staff(
+    name: str = Query(...),
+    exclude_id: Optional[int] = Query(None),
+    current_user: dict = Depends(require_admin),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Used by the Add/Edit Staff form before saving, to catch accidentally
+    creating a second record for someone already in the system, or editing
+    the wrong person's card into someone else's identity — the exact two
+    mistakes that happened with Dhruv/Trushna and Dipti/Sabina."""
+    cursor = db.cursor()
+    sql = "SELECT id, name, phone FROM staff WHERE is_active=1 AND UPPER(TRIM(name))=UPPER(:1)"
+    params = [name.strip()]
+    if exclude_id:
+        sql += " AND id!=:2"
+        params.append(exclude_id)
+    await cursor.execute(sql, params)
+    row = await cursor.fetchone()
+    if row:
+        return {"duplicate": True, "existing_id": row[0], "existing_name": row[1], "existing_phone": row[2]}
+    return {"duplicate": False}
+
+
 @staff_router.get("/{staff_id}/month-detail")
 async def staff_month_detail(
     staff_id: int,

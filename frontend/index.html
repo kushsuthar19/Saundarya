@@ -1557,11 +1557,12 @@ table tbody tr:hover td{background:var(--bg2)}
     <div class="psub">Attendance with In/Out times · Salary · Commission tracking</div>
     <div class="nline emerald"></div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="btn btn-emerald btn-sm" onclick="toggleSF()"><i class="fas fa-user-plus"></i>Add Staff</button>
+      <button class="btn btn-emerald btn-sm" onclick="openAddStaffForm()"><i class="fas fa-user-plus"></i>Add Staff</button>
       <button class="btn btn-ghost btn-sm" onclick="lockSec('staff')"><i class="fas fa-lock"></i>Lock Section</button>
     </div>
     <div id="sf" style="display:none;margin-bottom:12px">
       <div class="card"><div class="card-hd emerald"><div class="card-hd-t"><i class="fas fa-user-plus"></i>Add Staff Member</div></div><div class="card-body">
+        <div id="sf-editing-label" style="display:none;background:#fff8e7;color:var(--amber);border:1px solid #ffe082;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600"><i class="fas fa-user-edit"></i> Now editing: <span id="sf-editing-name"></span></div>
         <div class="fg">
           <div class="fl"><label>Name</label><input type="text" id="st-n"></div>
           <div class="fl"><label>Role</label><select id="st-r" onchange="toggleOwnerFields()"><option>Senior Artist</option><option>Junior Artist</option><option>Hair Specialist</option><option>Nail Technician</option><option>Receptionist</option><option>Manager</option><option>Owner</option></select></div>
@@ -1571,7 +1572,7 @@ table tbody tr:hover td{background:var(--bg2)}
           <div class="fl" id="st-com-wrap"><label>Commission %</label><input type="number" id="st-com" placeholder="10" min="0" max="100"></div>
           <div class="fl"><label>Device User ID <span style="font-weight:400;color:var(--ink3)">(fingerprint machine)</span></label><input type="number" id="st-dev" placeholder="e.g. 7"></div>
         </div>
-        <div class="ar"><button class="btn btn-ghost" onclick="v('sf').style.display='none'">Cancel</button><button class="btn btn-emerald" onclick="saveStaff()"><i class="fas fa-save"></i>Save Staff</button></div>
+        <div class="ar"><button class="btn btn-ghost" onclick="resetStaffForm();v('sf').style.display='none'">Cancel</button><button class="btn btn-emerald" onclick="saveStaff()"><i class="fas fa-save"></i>Save Staff</button></div>
       </div></div>
     </div>
     <div class="sg" id="staff-grid"><div style="grid-column:1/-1;text-align:center;color:var(--ink4);padding:30px;font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r12)"><i class="fas fa-user-slash" style="font-size:24px;display:block;margin-bottom:8px;opacity:0.3"></i>No staff added yet</div></div>
@@ -5419,6 +5420,11 @@ function toggleOwnerFields(){
 
 async function saveStaff(){
   const nm=v('st-n').value.trim();if(!nm){toast('Enter staff name','var(--rose)');return;}
+  const dup=await apiCall('GET',`/staff/check-duplicate?name=${encodeURIComponent(nm)}`);
+  if(dup?.duplicate){
+    const proceed=confirm(`A staff member named "${dup.existing_name}"${dup.existing_phone?` (${dup.existing_phone})`:''} already exists — create a new, separate record anyway?`);
+    if(!proceed)return;
+  }
   const isOwner=v('st-r')?.value==='Owner';
   const r=await apiCall('POST','/staff',{
     name:nm,role:v('st-r').value||null,phone:v('st-ph').value||null,
@@ -5429,10 +5435,21 @@ async function saveStaff(){
   });
   if(!r)return;
   toast('<i class="fas fa-user-plus" style="color:var(--emerald)"></i> Staff saved!','var(--emerald)');
+  resetStaffForm();
+  toggleSF();renderStaffGrid();updateStaffSels();
+}
+function resetStaffForm(){
   ['st-n','st-ph','st-jd','st-sal','st-com','st-dev'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const sr=v('st-r');if(sr)sr.value='';
+  const btn=document.querySelector('#sf .ar button:last-child');
+  if(btn){btn.innerHTML='<i class="fas fa-save"></i>Save Staff';btn.setAttribute('onclick','saveStaff()');}
+  const lbl=v('sf-editing-label');if(lbl)lbl.style.display='none';
   toggleOwnerFields();
-  toggleSF();renderStaffGrid();updateStaffSels();
+}
+function openAddStaffForm(){
+  const f=v('sf');if(!f)return;
+  if(f.style.display==='none'){resetStaffForm();f.style.display='block';}
+  else{f.style.display='none';}
 }
 function toggleSF(){const f=v('sf');if(f)f.style.display=f.style.display==='none'?'block':'none';}
 
@@ -5706,13 +5723,23 @@ async function editStaff(id){
   // Show form
   const sf=v('sf');if(sf)sf.style.display='block';
   // Change button to Update
-  const btn=document.querySelector('#sf button[onclick="saveStaff()"]');
-  if(btn){btn.textContent='Update Staff';btn.setAttribute('onclick',`updateStaff(${id})`);}
+  const btn=document.querySelector('#sf .ar button:last-child');
+  if(btn){btn.innerHTML='<i class="fas fa-save"></i>Update Staff';btn.setAttribute('onclick',`updateStaff(${id})`);}
+  // Make it unmistakable whose record is now open, so a wrong-card click
+  // (the exact mistake that mixed up Dhruv/Trushna and Dipti/Sabina) gets
+  // caught before anything is typed, not just after Save.
+  const lbl=v('sf-editing-label'),lblName=v('sf-editing-name');
+  if(lbl&&lblName){lblName.textContent=s.name;lbl.style.display='block';}
   sf?.scrollIntoView({behavior:'smooth'});
 }
 
 async function updateStaff(id){
   const nm=v('st-n').value.trim();if(!nm){toast('Enter staff name','var(--rose)');return;}
+  const dup=await apiCall('GET',`/staff/check-duplicate?name=${encodeURIComponent(nm)}&exclude_id=${id}`);
+  if(dup?.duplicate){
+    const proceed=confirm(`"${dup.existing_name}"${dup.existing_phone?` (${dup.existing_phone})`:''} is a different, existing staff member (ID ${dup.existing_id}) — are you sure you want to save these details onto this record instead? If you meant to edit ${dup.existing_name}, cancel and open their card instead.`);
+    if(!proceed)return;
+  }
   const isOwner=v('st-r')?.value==='Owner';
   const r=await apiCall('PUT',`/staff/${id}`,{
     name:nm, role:v('st-r').value||null,
@@ -5724,10 +5751,7 @@ async function updateStaff(id){
   });
   if(!r)return;
   toast('<i class="fas fa-check"></i> Staff updated!','var(--emerald)');
-  ['st-n','st-ph','st-jd','st-sal','st-com','st-dev'].forEach(id=>{const el=v(id);if(el)el.value='';});
-  const sr=v('st-r');if(sr)sr.value='';
-  const btn=document.querySelector('#sf button');
-  if(btn){btn.textContent='Save Staff';btn.setAttribute('onclick','saveStaff()');}
+  resetStaffForm();
   toggleSF();renderStaffGrid();updateStaffSels();
 }
 
