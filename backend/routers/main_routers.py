@@ -614,8 +614,12 @@ async def update_staff_by_id(
     allowed = ['name','role','phone','join_date','base_salary','commission_pct','salary_type','device_user_id']
     for k,v2 in data.items():
         if k in allowed:
-            fields.append(f"{k}=:{len(values)+1}")
-            values.append(v2)
+            if k == 'join_date' and v2:
+                fields.append(f"join_date=TO_DATE(:{len(values)+1},'YYYY-MM-DD')")
+                values.append(str(v2))
+            else:
+                fields.append(f"{k}=:{len(values)+1}")
+                values.append(v2)
     if not fields:
         return {"error": "No valid fields"}
     values.append(staff_id)
