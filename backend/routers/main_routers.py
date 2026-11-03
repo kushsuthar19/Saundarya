@@ -267,6 +267,7 @@ async def list_staff(
 
     await cursor.execute(
         """SELECT s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
+                  NVL(s.salary_type,'commission') AS salary_type,
                   s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active,
                   NVL(SUM(CASE WHEN a.half_day=1 THEN 1 ELSE 0 END), 0) AS half_day_count,
                   NVL(SUM(CASE WHEN a.morning_duty=1 THEN 1 ELSE 0 END), 0) AS morning_duty_count,
@@ -291,7 +292,8 @@ async def list_staff(
              AND a.att_date <= TO_DATE(:6,'YYYY-MM-DD')
            WHERE s.is_active=1
            GROUP BY s.id, s.name, s.role, s.phone, s.join_date, s.base_salary, s.commission_pct,
-                    s.days_present, s.total_services, s.comm_earned, s.paid_salary, s.av_class, s.is_active
+                    s.salary_type, s.days_present, s.total_services, s.comm_earned, s.paid_salary,
+                    s.av_class, s.is_active
            ORDER BY s.name""",
         [month_start, month_end, month_start, month_end, month_start, month_end]
     )
@@ -322,17 +324,20 @@ async def create_staff(
     jd = str(data.join_date) if data.join_date else None
     await cursor.execute(
         """INSERT INTO staff (user_id, name, role, phone, join_date, base_salary,
-           commission_pct, av_class, device_user_id)
-           VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9)
-           RETURNING id INTO :10""",
+           commission_pct, salary_type, av_class, device_user_id)
+           VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),:6,:7,:8,:9,:10)
+           RETURNING id INTO :11""",
         [user_id, data.name, data.role, data.phone, jd,
-         data.base_salary, data.commission_pct, data.av_class, data.device_user_id,
+         data.base_salary, data.commission_pct, data.salary_type, data.av_class, data.device_user_id,
          cursor.var(oracledb.NUMBER)]
     )
     new_id = int(cursor.bindvars[-1].getvalue()[0])
     await db.commit()
     await cursor.execute(
-        "SELECT id,name,role,phone,join_date,base_salary,commission_pct,days_present,total_services,comm_earned,paid_salary,av_class,is_active,device_user_id FROM staff WHERE id=:1",
+        """SELECT id,name,role,phone,join_date,base_salary,commission_pct,
+           NVL(salary_type,'commission') AS salary_type,
+           days_present,total_services,comm_earned,paid_salary,av_class,is_active,device_user_id
+           FROM staff WHERE id=:1""",
         [new_id]
     )
     row = await cursor.fetchone()
@@ -383,7 +388,7 @@ async def staff_month_detail(
 
     # Staff base info
     await cursor.execute(
-        "SELECT id, name, role, base_salary, device_user_id FROM staff WHERE id=:1",
+        "SELECT id, name, role, base_salary, device_user_id, NVL(salary_type,'commission') FROM staff WHERE id=:1",
         [staff_id]
     )
     srow = await cursor.fetchone()
@@ -391,7 +396,7 @@ async def staff_month_detail(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Staff not found")
     staff_info = {"id": srow[0], "name": srow[1], "role": srow[2], "base_salary": srow[3] or 0,
-                  "device_user_id": srow[4]}
+                  "device_user_id": srow[4], "salary_type": srow[5]}
 
     # Day-by-day attendance for the month
     try:
@@ -528,7 +533,10 @@ async def staff_month_detail(
     absence_deduction = chargeable_absent_days * per_day
     base_earned = round((staff_info['base_salary'] or 0) - absence_deduction)
     morning_pay = morning_duty_count * 150
-    comm_pct = 0.03 if monthly_revenue >= 100000 else 0.02
+    if staff_info['salary_type'] == 'fixed':
+        comm_pct = 0.0
+    else:
+        comm_pct = 0.03 if monthly_revenue >= 100000 else 0.02
     commission = round(monthly_revenue * comm_pct)
     timing_net = total_overtime_addition - total_late_deduction
     total_salary = base_earned + commission + morning_pay + timing_net
@@ -580,6 +588,7 @@ async def get_staff_by_id(
     cursor = db.cursor()
     await cursor.execute(
         """SELECT id, name, role, phone, join_date, base_salary, commission_pct,
+                  NVL(salary_type,'commission') AS salary_type,
                   days_present, total_services, comm_earned, paid_salary, av_class, is_active,
                   device_user_id
            FROM staff WHERE id=:1""",
@@ -602,7 +611,7 @@ async def update_staff_by_id(
     cursor = db.cursor()
     fields = []
     values = []
-    allowed = ['name','role','phone','join_date','base_salary','commission_pct','device_user_id']
+    allowed = ['name','role','phone','join_date','base_salary','commission_pct','salary_type','device_user_id']
     for k,v2 in data.items():
         if k in allowed:
             fields.append(f"{k}=:{len(values)+1}")
@@ -2329,7 +2338,7 @@ async def staff_performance(
     month_end = f"{yr_i}-{mo_i:02d}-{days_in_month:02d}"
 
     await cursor.execute(
-        """SELECT s.id, s.name, s.role, s.base_salary,
+        """SELECT s.id, s.name, s.role, s.base_salary, NVL(s.salary_type,'commission') AS salary_type,
                   COUNT(DISTINCT CASE WHEN a.is_present=1 THEN a.att_date END) as present_days,
                   NVL(SUM(CASE WHEN a.half_day=1 THEN 1 ELSE 0 END), 0) as half_day_count,
                   NVL(SUM(CASE WHEN a.morning_duty=1 THEN 1 ELSE 0 END), 0) as morning_duty_count,
@@ -2350,7 +2359,7 @@ async def staff_performance(
              AND a.att_date >= TO_DATE(:5,'YYYY-MM-DD')
              AND a.att_date <= TO_DATE(:6,'YYYY-MM-DD')
            WHERE s.is_active=1
-           GROUP BY s.id, s.name, s.role, s.base_salary
+           GROUP BY s.id, s.name, s.role, s.base_salary, s.salary_type
            ORDER BY monthly_revenue DESC""",
         [month_start, month_end, month_start, month_end, month_start, month_end]
     )

@@ -106,6 +106,7 @@ CREATE TABLE staff (
     join_date       DATE,
     base_salary     NUMBER(10,2) DEFAULT 0,
     commission_pct  NUMBER(5,2)  DEFAULT 10,
+    salary_type     VARCHAR2(20) DEFAULT 'commission',
     days_present    NUMBER       DEFAULT 0,
     total_services  NUMBER       DEFAULT 0,
     comm_earned     NUMBER(10,2) DEFAULT 0,

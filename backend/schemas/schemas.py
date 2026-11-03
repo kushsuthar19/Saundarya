@@ -103,6 +103,9 @@ class StaffCreate(BaseModel):
     join_date: Optional[date] = None
     base_salary: float = 0
     commission_pct: float = Field(10, ge=0, le=100)
+    # 'commission' (default, today's 2%/3% monthly-revenue tier) or 'fixed'
+    # (no commission at all, regardless of revenue).
+    salary_type: str = "commission"
     av_class: Optional[str] = "a0"
     # RS9n biometric machine's internal numeric ID for this staff member's
     # fingerprint enrollment — links a punch event back to this staff row.
@@ -120,6 +123,7 @@ class StaffOut(BaseModel):
     join_date: Optional[date]
     base_salary: float
     commission_pct: float
+    salary_type: str = "commission"
     days_present: int
     total_services: int
     comm_earned: float

@@ -1570,6 +1570,7 @@ table tbody tr:hover td{background:var(--bg2)}
           <div class="fl"><label>Join Date</label><input type="date" id="st-jd"></div>
           <div class="fl" id="st-sal-wrap"><label>Base Salary (₹/month)</label><input type="number" id="st-sal" placeholder="0"></div>
           <div class="fl" id="st-com-wrap"><label>Commission %</label><input type="number" id="st-com" placeholder="10" min="0" max="100"></div>
+          <div class="fl"><label>Salary Type</label><select id="st-saltype"><option value="commission">Commission-based</option><option value="fixed">Fixed Salary (no commission)</option></select></div>
           <div class="fl"><label>Device User ID <span style="font-weight:400;color:var(--ink3)">(fingerprint machine)</span></label><input type="number" id="st-dev" placeholder="e.g. 7"></div>
         </div>
         <div class="ar"><button class="btn btn-ghost" onclick="resetStaffForm();v('sf').style.display='none'">Cancel</button><button class="btn btn-emerald" onclick="saveStaff()"><i class="fas fa-save"></i>Save Staff</button></div>
@@ -5431,6 +5432,7 @@ async function saveStaff(){
     join_date:v('st-jd').value||null,
     base_salary:isOwner?0:(parseFloat(v('st-sal').value)||0),
     commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10),
+    salary_type:v('st-saltype')?.value||'commission',
     device_user_id:v('st-dev')?.value?parseInt(v('st-dev').value):null
   });
   if(!r)return;
@@ -5441,6 +5443,7 @@ async function saveStaff(){
 function resetStaffForm(){
   ['st-n','st-ph','st-jd','st-sal','st-com','st-dev'].forEach(id=>{const el=v(id);if(el)el.value='';});
   const sr=v('st-r');if(sr)sr.value='';
+  const st=v('st-saltype');if(st)st.value='commission';
   const btn=document.querySelector('#sf .ar button:last-child');
   if(btn){btn.innerHTML='<i class="fas fa-save"></i>Save Staff';btn.setAttribute('onclick','saveStaff()');}
   const lbl=v('sf-editing-label');if(lbl)lbl.style.display='none';
@@ -5718,6 +5721,7 @@ async function editStaff(id){
   v('st-jd').value=s.join_date||'';
   v('st-sal').value=s.base_salary||0;
   v('st-com').value=s.commission_pct||10;
+  const stEl=v('st-saltype');if(stEl)stEl.value=s.salary_type||'commission';
   const devEl=v('st-dev');if(devEl)devEl.value=s.device_user_id||'';
   toggleOwnerFields();
   // Show form
@@ -5747,6 +5751,7 @@ async function updateStaff(id){
     join_date:v('st-jd').value||null,
     base_salary:isOwner?0:(parseFloat(v('st-sal').value)||0),
     commission_pct:isOwner?0:(parseFloat(v('st-com').value)||10),
+    salary_type:v('st-saltype')?.value||'commission',
     device_user_id:v('st-dev')?.value?parseInt(v('st-dev').value):null
   });
   if(!r)return;
@@ -6687,10 +6692,11 @@ async function renderStaffPerfReport(){
     const baseEarned=Math.round(baseSalary-(chargeableAbsentDays*perDay));
     const morningPay=(s.morning_duty_count||0)*150;
     const monthRev=s.monthly_revenue||0;
-    const commPct=monthRev>=100000?0.03:0.02;
-    const commAmt=Math.round(monthRev*commPct);
+    const isFixed=s.salary_type==='fixed';
+    const commPct=isFixed?0:(monthRev>=100000?0.03:0.02);
+    const commAmt=isFixed?0:Math.round(monthRev*commPct);
     const totalSalary=baseEarned+commAmt+morningPay;
-    const tierTxt=monthRev>=100000?'3% (≥₹1L)':'2% (<₹1L)';
+    const tierTxt=isFixed?'Fixed salary — no commission':(monthRev>=100000?'3% (≥₹1L)':'2% (<₹1L)');
     return `<tr>
     <td><b>${s.name}</b><br><small style="color:var(--ink3)">${s.role||''}</small></td>
     <td style="text-align:center">${s.services_count||0}<br><small style="color:var(--ink3)">${dp} days${halfDays?` (½×${halfDays})`:''}</small></td>
