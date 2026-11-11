@@ -6,7 +6,7 @@ fastapi==0.115.6
 uvicorn[standard]==0.32.1
 
 # Oracle DB (thin mode - no Oracle client needed)
-oracledb==2.5.0
+oracledb==26.1.0
 
 # Security
 python-jose[cryptography]==3.3.0

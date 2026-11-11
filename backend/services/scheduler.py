@@ -17,7 +17,9 @@ goes through send_whatsapp_template()'s own non-blocking error handling.
 Each also checks wa_log first so a server restart or manual re-trigger on
 the same day can't double-send the same client.
 """
+import asyncio
 import logging
+import sys
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -28,6 +30,38 @@ from backend.services.whatsapp_service import send_whatsapp_template
 logger = logging.getLogger(__name__)
 
 _scheduler = AsyncIOScheduler()
+
+
+async def _run_in_subprocess(job_name: str):
+    """Runs the named job (see backend/scripts/run_scheduled_job.py) in its
+    own disposable OS process instead of inline in this event loop. On
+    2026-11-10 a segfault inside the Oracle driver during the auto-Day-Off
+    job crashed the entire app process, taking the live website down for
+    ~13 seconds and killing the job before it could finish. Running each
+    job in a subprocess means a crash there only kills that subprocess —
+    the web server keeps serving requests untouched either way."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "backend.scripts.run_scheduled_job", job_name,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        output = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
+        if proc.returncode != 0:
+            logger.error(f"Scheduled job '{job_name}' crashed (exit code {proc.returncode}): {output[-2000:]}")
+        elif output:
+            logger.info(output[-2000:])
+    except Exception as e:
+        logger.error(f"Failed to launch scheduled job '{job_name}': {e}")
+
+
+# APScheduler needs real coroutine functions to await (a lambda returning a
+# coroutine object would just get garbage-collected unawaited), hence one
+# tiny wrapper per job rather than passing _run_in_subprocess directly.
+async def _winback_30_subprocess(): await _run_in_subprocess("winback_30")
+async def _winback_subprocess(): await _run_in_subprocess("winback")
+async def _membership_expiry_subprocess(): await _run_in_subprocess("membership_expiry")
+async def _auto_day_off_subprocess(): await _run_in_subprocess("auto_day_off")
 
 
 async def _already_sent_today(cursor, client_id, template_key: str) -> bool:
@@ -186,10 +220,10 @@ def start_scheduler():
     # 08:55 / 09:00 / 09:05 local server time — staggered a few minutes
     # apart so the jobs don't compete for DB connections at the exact same
     # tick.
-    _scheduler.add_job(run_winback_30_job, CronTrigger(hour=8, minute=55), id="wa_winback_30", replace_existing=True)
-    _scheduler.add_job(run_winback_job, CronTrigger(hour=9, minute=0), id="wa_winback", replace_existing=True)
-    _scheduler.add_job(run_membership_expiry_job, CronTrigger(hour=9, minute=5), id="wa_membership_expiry", replace_existing=True)
-    _scheduler.add_job(run_auto_day_off_job, CronTrigger(hour=18, minute=0), id="auto_day_off", replace_existing=True)
+    _scheduler.add_job(_winback_30_subprocess, CronTrigger(hour=8, minute=55), id="wa_winback_30", replace_existing=True)
+    _scheduler.add_job(_winback_subprocess, CronTrigger(hour=9, minute=0), id="wa_winback", replace_existing=True)
+    _scheduler.add_job(_membership_expiry_subprocess, CronTrigger(hour=9, minute=5), id="wa_membership_expiry", replace_existing=True)
+    _scheduler.add_job(_auto_day_off_subprocess, CronTrigger(hour=18, minute=0), id="auto_day_off", replace_existing=True)
     _scheduler.start()
     logger.info("WhatsApp reminder scheduler started (winback 08:55/09:00, membership expiry 09:05, auto day-off 18:00 daily).")
 
