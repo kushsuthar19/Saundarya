@@ -1289,8 +1289,14 @@ async def bridal_date_summary_whatsapp(
         raise HTTPException(status_code=400, detail="fn_date and phone are required")
     cursor = db.cursor()
     digest = await _build_bridal_date_digest(fn_date, cursor)
+    # WhatsApp template PARAMETERS reject literal newline/tab characters
+    # outright ("Param text cannot have new-line/tab characters") — swap
+    # real line breaks for U+2028 (LINE SEPARATOR), which isn't \n/\t so it
+    # passes that check, but WhatsApp's own renderer still displays it as a
+    # line break, so the message looks identical to the admin/preview text.
+    wa_text = digest["text"].replace("\n", " ")
     return await send_whatsapp_template(
-        db, phone, "bridal_date_digest", [digest["text"]],
+        db, phone, "bridal_date_digest", [wa_text],
         user_name="Saundarya Beauty Care",
     )
 
