@@ -1243,6 +1243,45 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
     else:
         text = f"{header}\n\nNo bookings for this date."
 
+    # WhatsApp template PARAMETERS reject literal newline/tab characters
+    # outright ("Param text cannot have new-line/tab characters") — this is
+    # a hard platform rule, not something swappable with a Unicode line-break
+    # look-alike (U+2028 was tried and renders as an unprintable "?" glyph
+    # instead of a line break on real devices). So the WhatsApp-bound text
+    # is built as a genuinely single-line message using plain, printable
+    # separators (•, -) instead of pretending at line breaks.
+    wa_parts = []
+    for idx, bid in enumerate(order, start=1):
+        b = bookings[bid]
+        fns = b['functions']
+        persons = len(fns)
+        due = float(b['balance_due'] or 0)
+        head = f"{idx}) {b['client_name']} ({b['phone'] or '—'}) - {b['booking_type']} - {persons} person{'s' if persons != 1 else ''}"
+        if persons == 1:
+            f = fns[0]
+            seg = f"{head} - {f['function_name'] or '—'} @{f['fn_time'] or '—'} - Pkg: {_pkg_label(f)} - Due ₹{due:,.0f}"
+        else:
+            sub = "; ".join(
+                f"{letters[i % 26]}) {f['function_name'] or '—'}"
+                + (f" for {f['person_name']}" if f['person_name'] else "")
+                + f" @{f['fn_time'] or '—'} Pkg:{_pkg_label(f)}"
+                for i, f in enumerate(fns)
+            )
+            seg = f"{head} - {sub} - Due (whole): ₹{due:,.0f}"
+        if b['wedding_date'] and b['wedding_date'] != fn_date_str:
+            main_pkg = f" ({b['package_name']} ₹{float(b['pkg_amount'] or 0):,.0f})" if b['package_name'] else ""
+            seg += f" - Main wedding: {_date_disp(b['wedding_date'])}{main_pkg}"
+        wa_parts.append(seg)
+
+    if order:
+        wa_text = (
+            f"{header} • " + " • ".join(wa_parts) +
+            f" • Total due across {len(order)} booking{'s' if len(order) != 1 else ''}: ₹{total_due:,.0f}"
+            f" • Total persons: {total_persons}"
+        )
+    else:
+        wa_text = f"{header} • No bookings for this date."
+
     return {
         "fn_date": fn_date_str,
         "bookings": [
@@ -1257,6 +1296,7 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
         "total_persons": total_persons,
         "total_due": total_due,
         "text": text,
+        "wa_text": wa_text,
     }
 
 
@@ -1289,14 +1329,8 @@ async def bridal_date_summary_whatsapp(
         raise HTTPException(status_code=400, detail="fn_date and phone are required")
     cursor = db.cursor()
     digest = await _build_bridal_date_digest(fn_date, cursor)
-    # WhatsApp template PARAMETERS reject literal newline/tab characters
-    # outright ("Param text cannot have new-line/tab characters") — swap
-    # real line breaks for U+2028 (LINE SEPARATOR), which isn't \n/\t so it
-    # passes that check, but WhatsApp's own renderer still displays it as a
-    # line break, so the message looks identical to the admin/preview text.
-    wa_text = digest["text"].replace("\n", " ")
     return await send_whatsapp_template(
-        db, phone, "bridal_date_digest", [wa_text],
+        db, phone, "bridal_date_digest", [digest["wa_text"]],
         user_name="Saundarya Beauty Care",
     )
 
