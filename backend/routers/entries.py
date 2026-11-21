@@ -292,25 +292,36 @@ async def create_entry(
                    FROM memberships WHERE client_id=:3 AND status='Active'""",
                 [pts_to_add, str(inv_no), client_id]
             )
-            # Read correct balance from log and write to DB
-            await cursor.execute(
-                """SELECT m.id,
-                       NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
-                       NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END),0)
-                   FROM memberships m
-                   LEFT JOIN beauty_points_log l ON l.membership_id=m.id
-                   WHERE m.client_id=:1 AND m.status='Active'
-                   GROUP BY m.id""",
-                [client_id]
-            )
-            sync_row = await cursor.fetchone()
-            if sync_row:
-                await cursor.execute(
-                    "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
-                    [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
+            if cursor.rowcount == 0:
+                logger.warning(
+                    f"Beauty points not credited for invoice {inv_no} (client {client_id}): "
+                    f"no active membership row matched — client may not be an active Exclusive member."
                 )
-        except Exception:
-            pass  # non-member or table not ready
+            else:
+                # Read correct balance from log and write to DB
+                await cursor.execute(
+                    """SELECT m.id,
+                           NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
+                           NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END),0)
+                       FROM memberships m
+                       LEFT JOIN beauty_points_log l ON l.membership_id=m.id
+                       WHERE m.client_id=:1 AND m.status='Active'
+                       GROUP BY m.id""",
+                    [client_id]
+                )
+                sync_row = await cursor.fetchone()
+                if sync_row:
+                    await cursor.execute(
+                        "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+                        [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
+                    )
+        except Exception as e:
+            # Previously a bare `except: pass` — this silently dropped beauty
+            # points for 21 Exclusive members (42 invoices) with no trace of
+            # why, discovered 2026-11-21. Logging now so a real failure is
+            # visible instead of invisible; entry creation still must not
+            # fail just because point-crediting had a problem.
+            logger.error(f"Failed to credit beauty points for invoice {inv_no} (client {client_id}): {e}")
 
     # Insert entry
     nv = str(data.next_visit) if data.next_visit else None

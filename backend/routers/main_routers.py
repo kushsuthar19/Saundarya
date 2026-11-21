@@ -992,6 +992,8 @@ async def _credit_beauty_points(cursor, client_id, inv_no, amount: float):
                FROM memberships WHERE client_id=:3 AND status='Active'""",
             [pts_to_add, str(inv_no), client_id]
         )
+        if cursor.rowcount == 0:
+            return  # not an active Exclusive member — expected, not an error
         await cursor.execute(
             """SELECT m.id,
                    NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
@@ -1008,8 +1010,13 @@ async def _credit_beauty_points(cursor, client_id, inv_no, amount: float):
                 "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
                 [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
             )
-    except Exception:
-        pass  # non-member or table not ready — don't fail the payment over this
+    except Exception as e:
+        # Previously a bare `except: pass` — silently dropped points with no
+        # trace of why (discovered 2026-11-21, affected 21 Exclusive members
+        # across both this path and entries.py's matching one). Logging now
+        # so a real failure is visible; a payment still must not fail just
+        # because point-crediting had a problem.
+        logger.error(f"Failed to credit beauty points for invoice {inv_no} (client {client_id}): {e}")
 
 
 async def _reverse_beauty_points(cursor, client_id, inv_no):
