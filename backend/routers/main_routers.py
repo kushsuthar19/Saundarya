@@ -1211,7 +1211,7 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
         due = float(b['balance_due'] or 0)
         total_due += due
         lines.append(
-            f"{idx}. {b['client_name']} ({b['phone'] or '—'}) — {b['booking_type']} — "
+            f"*{idx}.* {b['client_name']} ({b['phone'] or '—'}) — {b['booking_type']} — "
             f"{persons} person{'s' if persons != 1 else ''}"
         )
         if persons == 1:
@@ -1223,7 +1223,7 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
             for i, f in enumerate(fns):
                 who = f" — for {f['person_name']}" if f['person_name'] else ""
                 lines.append(
-                    f"   {letters[i % 26]}) {f['function_name'] or '—'}{who} | "
+                    f"   *{letters[i % 26]})* {f['function_name'] or '—'}{who} | "
                     f"Time: {f['fn_time'] or '—'} | Package: {_pkg_label(f)}"
                 )
             lines.append(f"   Due (whole booking): ₹{due:,.0f}")
@@ -1256,13 +1256,13 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
         fns = b['functions']
         persons = len(fns)
         due = float(b['balance_due'] or 0)
-        head = f"{idx}) {b['client_name']} ({b['phone'] or '—'}) - {b['booking_type']} - {persons} person{'s' if persons != 1 else ''}"
+        head = f"*{idx})* {b['client_name']} ({b['phone'] or '—'}) - {b['booking_type']} - {persons} person{'s' if persons != 1 else ''}"
         if persons == 1:
             f = fns[0]
             seg = f"{head} - {f['function_name'] or '—'} @{f['fn_time'] or '—'} - Pkg: {_pkg_label(f)} - Due ₹{due:,.0f}"
         else:
             sub = "; ".join(
-                f"{letters[i % 26]}) {f['function_name'] or '—'}"
+                f"*{letters[i % 26]})* {f['function_name'] or '—'}"
                 + (f" for {f['person_name']}" if f['person_name'] else "")
                 + f" @{f['fn_time'] or '—'} Pkg:{_pkg_label(f)}"
                 for i, f in enumerate(fns)
