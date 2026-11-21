@@ -5029,6 +5029,7 @@ async function openBridalDateReminder(dKey){
   const data=await apiCall('GET',`/bridal/date-summary?fn_date=${dKey}`);
   const box=v('brd-body');if(!box)return;
   if(!data){box.innerHTML='<div style="text-align:center;color:var(--rose);padding:14px">Failed to load</div>';return;}
+  _brdDigestText=data.text||'';
   if(!data.bookings||!data.bookings.length){
     box.innerHTML='<div style="text-align:center;color:var(--ink4);padding:14px">No bookings for this date</div>';
     return;
@@ -5057,15 +5058,44 @@ async function openBridalDateReminder(dKey){
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="font-size:11px;color:var(--ink3)"><i class="fas fa-circle-info" style="color:var(--teal)"></i> WhatsApp won't show line breaks in an auto-sent message — for the fully formatted version, copy it and paste it into WhatsApp yourself.</div>
+      <button onclick="copyBridalDigest()" style="margin-left:auto;background:var(--teal);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap"><i class="fas fa-copy"></i> Copy Message</button>
+    </div>
     <div style="border-top:1px solid var(--border);padding-top:12px">
-      <label style="font-size:11px;color:var(--ink3);font-weight:600">Send reminder summary to (your WhatsApp number)</label>
+      <label style="font-size:11px;color:var(--ink3);font-weight:600">Or auto-send a plain summary to (your WhatsApp number)</label>
       <input id="brd-phone" type="text" placeholder="e.g. 9876543210" value="${localStorage.getItem('brdReminderPhone')||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;background:var(--surface);margin-top:4px">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
-      <button onclick="sendBridalDateReminder('${dKey}')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fab fa-whatsapp"></i> Send</button>
+      <button onclick="sendBridalDateReminder('${dKey}')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fab fa-whatsapp"></i> Auto-Send</button>
     </div>
   `;
+}
+
+let _brdDigestText='';
+function copyBridalDigest(){
+  if(!_brdDigestText){toast('Nothing to copy yet','var(--rose)');return;}
+  const finish=()=>toast('<i class="fas fa-check-circle"></i> Copied — paste it into WhatsApp','var(--emerald)');
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(_brdDigestText).then(finish).catch(()=>_brdFallbackCopy(finish));
+  } else {
+    _brdFallbackCopy(finish);
+  }
+}
+function _brdFallbackCopy(onOk){
+  const ta=document.createElement('textarea');
+  ta.value=_brdDigestText;
+  ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='0';
+  document.body.appendChild(ta);
+  ta.focus();ta.select();
+  try{
+    document.execCommand('copy');
+    onOk();
+  }catch(e){
+    toast('Copy failed — long-press the text below to select it manually','var(--rose)');
+  }
+  document.body.removeChild(ta);
 }
 
 async function sendBridalDateReminder(dKey){
