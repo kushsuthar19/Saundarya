@@ -692,5 +692,69 @@ async def update_entry(
             "UPDATE daily_entries SET services=:1 WHERE id=:2",
             [svc_str[:2000], entry_id]
         )
+
+    # Adjust beauty points to match the entry's current net_total.
+    # client_id and visit_type are never editable here (not in `allowed`
+    # above), so the only thing that can move a client's earned points is
+    # net_total changing (via discount or item edits) — this corrects the
+    # existing log row for THIS invoice using the same matching key
+    # ('Service: '||inv_no) create_entry uses, instead of leaving points
+    # stuck at whatever was earned on the original (pre-edit) amount.
+    try:
+        await cursor.execute(
+            "SELECT inv_no, client_id, visit_type, net_total FROM daily_entries WHERE id=:1",
+            [entry_id]
+        )
+        erow = await cursor.fetchone()
+        if erow and erow[1]:
+            inv_no, e_client_id, e_visit_type, e_net = erow
+            correct_pts = int(float(e_net) // 100) if e_visit_type != 'Membership' else 0
+            await cursor.execute(
+                """SELECT l.id, l.points FROM beauty_points_log l
+                   JOIN memberships m ON m.id=l.membership_id AND m.client_id=:1
+                   WHERE l.notes='Service: '||:2 AND l.entry_type='Earned'""",
+                [e_client_id, str(inv_no)]
+            )
+            log_row = await cursor.fetchone()
+            changed = False
+            if log_row:
+                log_id, logged_pts = log_row
+                if correct_pts <= 0:
+                    await cursor.execute("DELETE FROM beauty_points_log WHERE id=:1", [log_id])
+                    changed = True
+                elif correct_pts != logged_pts:
+                    await cursor.execute(
+                        "UPDATE beauty_points_log SET points=:1 WHERE id=:2",
+                        [correct_pts, log_id]
+                    )
+                    changed = True
+            elif correct_pts > 0:
+                await cursor.execute(
+                    """INSERT INTO beauty_points_log (membership_id, entry_type, points, notes)
+                       SELECT id, 'Earned', :1, 'Service: '||:2
+                       FROM memberships WHERE client_id=:3 AND status='Active'""",
+                    [correct_pts, str(inv_no), e_client_id]
+                )
+                changed = cursor.rowcount > 0
+            if changed:
+                await cursor.execute(
+                    """SELECT m.id,
+                           NVL(SUM(CASE WHEN l.entry_type='redeem' THEN -l.points ELSE l.points END),0),
+                           NVL(SUM(CASE WHEN l.entry_type!='redeem' THEN l.points ELSE 0 END),0)
+                       FROM memberships m
+                       LEFT JOIN beauty_points_log l ON l.membership_id=m.id
+                       WHERE m.client_id=:1 AND m.status='Active'
+                       GROUP BY m.id""",
+                    [e_client_id]
+                )
+                sync_row = await cursor.fetchone()
+                if sync_row:
+                    await cursor.execute(
+                        "UPDATE memberships SET beauty_points=:1, lifetime_points=:2 WHERE id=:3",
+                        [max(0, int(sync_row[1] or 0)), int(sync_row[2] or 0), sync_row[0]]
+                    )
+    except Exception as e:
+        logger.error(f"Failed to adjust beauty points for edited entry {entry_id}: {e}")
+
     await db.commit()
     return {"updated": entry_id}
