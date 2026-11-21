@@ -1273,20 +1273,17 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
             seg += f" - Main wedding: {_date_disp(b['wedding_date'])}{main_pkg}"
         wa_parts.append(seg)
 
-    # Real visual separation between bookings is impossible within ONE
-    # WhatsApp message (no line breaks allowed at all), so instead this is
-    # sent as SEPARATE messages — one per booking — each its own bubble in
-    # the chat. The date/person-count header rides on the first message,
-    # the totals footer rides on the last.
+    # Reverted to ONE combined message (not one-per-booking) per explicit
+    # request — all the same detail, just delivered as a single WhatsApp
+    # message instead of several separate bubbles.
     if wa_parts:
-        wa_messages = list(wa_parts)
-        wa_messages[0] = f"{header} • {wa_messages[0]}"
-        wa_messages[-1] = (
-            f"{wa_messages[-1]} • Total due across {len(order)} booking{'s' if len(order) != 1 else ''}: "
-            f"₹{total_due:,.0f} • Total persons: {total_persons}"
+        wa_text = (
+            f"{header} • " + " • ".join(wa_parts) +
+            f" • Total due across {len(order)} booking{'s' if len(order) != 1 else ''}: ₹{total_due:,.0f}"
+            f" • Total persons: {total_persons}"
         )
     else:
-        wa_messages = [f"{header} • No bookings for this date."]
+        wa_text = f"{header} • No bookings for this date."
 
     return {
         "fn_date": fn_date_str,
@@ -1302,7 +1299,7 @@ async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
         "total_persons": total_persons,
         "total_due": total_due,
         "text": text,
-        "wa_messages": wa_messages,
+        "wa_text": wa_text,
     }
 
 
@@ -1328,41 +1325,18 @@ async def bridal_date_summary_whatsapp(
     """Send the per-date bookings digest to whatever WhatsApp number is
     entered on the reminder screen — a personal reminder for the salon
     owner/staff, never sent to a client. Rebuilds the text fresh from the
-    DB rather than trusting anything the frontend cached.
-
-    Sent as one WhatsApp message PER BOOKING (not one combined message) —
-    WhatsApp template parameters can't contain line breaks at all, so this
-    is the only way to get real visual separation between bookings; each
-    one lands as its own chat bubble, in order."""
-    import asyncio as _asyncio
-
+    DB rather than trusting anything the frontend cached. One combined
+    WhatsApp message with every booking's full detail."""
     fn_date = data.get("fn_date")
     phone = data.get("phone")
     if not fn_date or not phone:
         raise HTTPException(status_code=400, detail="fn_date and phone are required")
     cursor = db.cursor()
     digest = await _build_bridal_date_digest(fn_date, cursor)
-    messages = digest["wa_messages"]
-
-    sent, errors = 0, []
-    for i, msg in enumerate(messages):
-        result = await send_whatsapp_template(
-            db, phone, "bridal_date_digest", [msg],
-            user_name="Saundarya Beauty Care",
-        )
-        if result.get("success"):
-            sent += 1
-        else:
-            errors.append(result.get("error") or "Unknown error")
-        if i < len(messages) - 1:
-            await _asyncio.sleep(1)  # keep delivery order in the chat
-
-    return {
-        "success": sent == len(messages),
-        "sent": sent,
-        "total": len(messages),
-        "error": "; ".join(errors) if errors else None,
-    }
+    return await send_whatsapp_template(
+        db, phone, "bridal_date_digest", [digest["wa_text"]],
+        user_name="Saundarya Beauty Care",
+    )
 
 
 @bridal_router.patch("/{booking_id}/functions/{function_id}")
