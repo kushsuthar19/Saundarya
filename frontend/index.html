@@ -4906,6 +4906,7 @@ async function renderBridalList(search, typeF){
             <span style="font-size:10px;color:var(--ink3)">
               ${dBride?`<span style="color:var(--violet)">● ${dBride}B</span> `:''}${dGroom?`<span style="color:var(--gold)">● ${dGroom}G</span> `:''}${dSider?`<span style="color:var(--teal)">● ${dSider}S</span>`:''}
             </span>
+            ${dKey!=='No Date'?`<button onclick="event.stopPropagation();openBridalDateReminder('${dKey}')" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:14px" title="Bookings reminder for this date"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15" fill="#128C7E"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>`:''}
           </div>
         </td>
       </tr>`;
@@ -5009,6 +5010,76 @@ async function renderBridalList(search, typeF){
     const isPast = dateKeys.length > 0 && dateKeys.every(k => k < todayStr);
     if(isPast) toggleMonthGroup('mg-'+mLabel.replace(/\s/g,'_'));
   });
+}
+
+// Per-date Bridal Bookings reminder — a personal WhatsApp digest for the
+// salon owner/staff (never sent to a client), listing everyone with a
+// function on the clicked date across Bride/Groom/Sider.
+async function openBridalDateReminder(dKey){
+  const modal=v('inv-modal');if(!modal)return;
+  const dLabel=new Date(dKey+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
+  modal.innerHTML=`
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:-1" onclick="closeInvModal()"></div>
+  <div style="background:var(--surface);border-radius:var(--r12);padding:22px 24px;width:540px;max-width:94vw;max-height:84vh;overflow:auto;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.4);z-index:1">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--ink)"><i class="fas fa-calendar-day" style="color:var(--teal)"></i> Bookings Reminder — ${dLabel}</div>
+    <div id="brd-body" style="font-size:11px;color:var(--ink3);padding:10px 0"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+  </div>`;
+  modal.style.display='flex';
+
+  const data=await apiCall('GET',`/bridal/date-summary?fn_date=${dKey}`);
+  const box=v('brd-body');if(!box)return;
+  if(!data){box.innerHTML='<div style="text-align:center;color:var(--rose);padding:14px">Failed to load</div>';return;}
+  if(!data.bookings||!data.bookings.length){
+    box.innerHTML='<div style="text-align:center;color:var(--ink4);padding:14px">No bookings for this date</div>';
+    return;
+  }
+  const tc={'Bride':'p-wa','Groom':'p-bk','Sider':'p-nd'};
+  const rowsHtml=data.bookings.map(b=>{
+    const fns=(b.functions||[]).map(f=>f.function_name).filter(Boolean).join(', ')||'—';
+    return `<tr>
+      <td style="padding:6px 8px;font-size:11px;border-bottom:1px solid var(--border)"><span class="pill ${tc[b.booking_type]||'p-lt'}" style="font-size:9px">${b.booking_type}</span></td>
+      <td style="padding:6px 8px;font-size:11px;border-bottom:1px solid var(--border)"><b>${b.client_name}</b><div style="font-size:9px;color:var(--ink3)">${b.phone||'—'}</div></td>
+      <td style="padding:6px 8px;font-size:11px;border-bottom:1px solid var(--border)">${fns}</td>
+      <td style="padding:6px 8px;font-size:11px;font-weight:700;border-bottom:1px solid var(--border);color:${b.balance_due>0?'var(--rose)':'var(--emerald)'}">${fmt(b.balance_due||0)}</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:10px;background:var(--teal-l);color:var(--teal);border-radius:20px;padding:3px 10px;font-weight:600"><i class="fas fa-users"></i> ${data.total_persons} persons</span>
+      <span style="font-size:10px;background:var(--bg);color:var(--rose);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-weight:600">Total Due: ${fmt(data.total_due||0)}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+      <thead><tr>
+        <td style="padding:4px 8px;font-size:10px;color:var(--ink3);font-weight:600;border-bottom:1px solid var(--border)">TYPE</td>
+        <td style="padding:4px 8px;font-size:10px;color:var(--ink3);font-weight:600;border-bottom:1px solid var(--border)">NAME / PHONE</td>
+        <td style="padding:4px 8px;font-size:10px;color:var(--ink3);font-weight:600;border-bottom:1px solid var(--border)">FUNCTION</td>
+        <td style="padding:4px 8px;font-size:10px;color:var(--ink3);font-weight:600;border-bottom:1px solid var(--border)">DUE</td>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <label style="font-size:11px;color:var(--ink3);font-weight:600">Send reminder summary to (your WhatsApp number)</label>
+      <input id="brd-phone" type="text" placeholder="e.g. 9876543210" value="${localStorage.getItem('brdReminderPhone')||''}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;background:var(--surface);margin-top:4px">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button onclick="closeInvModal()" style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px">Cancel</button>
+      <button onclick="sendBridalDateReminder('${dKey}')" style="background:#128C7E;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:12px;font-weight:600"><i class="fab fa-whatsapp"></i> Send</button>
+    </div>
+  `;
+}
+
+async function sendBridalDateReminder(dKey){
+  const phone=v('brd-phone')?.value?.trim();
+  if(!phone){toast('Enter a WhatsApp number','var(--rose)');return;}
+  const r=await apiCall('POST','/bridal/date-summary/whatsapp',{fn_date:dKey,phone});
+  if(!r)return;
+  if(r.success){
+    localStorage.setItem('brdReminderPhone',phone);
+    toast('<i class="fas fa-check-circle"></i> Reminder sent','var(--emerald)');
+    closeInvModal();
+  } else {
+    toast('Failed: '+(r.error||'Unknown error'),'var(--rose)');
+  }
 }
 
 // Edit a single sider add-on (e.g. Mom/Sister) living inside a Bride/Groom

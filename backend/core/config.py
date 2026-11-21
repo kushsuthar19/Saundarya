@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # scheduled 7/3/0-day auto-send; this one is its own template with
     # its own wording for the one-off manual click.
     AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY: str = os.getenv("AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY", "")
+    # Per-date Bridal Bookings digest — the owner's own WhatsApp number
+    # (entered on the date-click reminder screen), not sent to any client.
+    # Template body is just "{{1}}" wrapped in static text (makeup_detail_message).
+    AISENSY_CAMPAIGN_BRIDAL_DATE_DIGEST: str = os.getenv("AISENSY_CAMPAIGN_BRIDAL_DATE_DIGEST", "")
 
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 300

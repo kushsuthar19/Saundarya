@@ -260,6 +260,7 @@ TEMPLATE_CAMPAIGNS = {
     "membership": settings.AISENSY_CAMPAIGN_MEMBERSHIP,
     "makeup_reminder": settings.AISENSY_CAMPAIGN_MAKEUP_REMINDER,
     "membership_expiry_manual": settings.AISENSY_CAMPAIGN_MEMBERSHIP_EXPIRY,
+    "bridal_date_digest": settings.AISENSY_CAMPAIGN_BRIDAL_DATE_DIGEST,
 }
 
 

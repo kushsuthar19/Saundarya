@@ -1153,6 +1153,148 @@ async def _recalc_bridal_balance(cursor, booking_id: int) -> float:
     return balance
 
 
+async def _build_bridal_date_digest(fn_date_str: str, cursor) -> dict:
+    """Build the owner's own WhatsApp digest for every bridal_functions row
+    on one date, across Bride/Groom/Sider bookings — a personal reminder
+    (not sent to any client), grouping multiple functions under the same
+    booking into lettered sub-lines so each person/package is distinguishable."""
+    from datetime import datetime as _dt
+
+    await cursor.execute(
+        """SELECT bb.id, bb.job_no, bb.booking_type, bb.client_name, bb.phone,
+                  TO_CHAR(bb.wedding_date,'YYYY-MM-DD') AS wedding_date,
+                  bb.package_name, bb.pkg_amount, bb.balance_due,
+                  bf.function_name, bf.fn_time, bf.person_name,
+                  bf.pkg_detail, bf.addon_item, bf.addon_amount
+           FROM bridal_functions bf
+           JOIN bridal_bookings bb ON bb.id = bf.booking_id
+           WHERE bf.fn_date = TO_DATE(:1,'YYYY-MM-DD')
+           ORDER BY bb.id, bf.id""",
+        [fn_date_str]
+    )
+    rows = await cursor.fetchall()
+    cols = [d[0].lower() for d in cursor.description]
+    raw = [dict(zip(cols, r)) for r in rows]
+
+    bookings, order = {}, []
+    for r in raw:
+        bid = r['id']
+        if bid not in bookings:
+            bookings[bid] = {**r, 'functions': []}
+            order.append(bid)
+        bookings[bid]['functions'].append({
+            'function_name': r['function_name'], 'fn_time': r['fn_time'],
+            'person_name': r['person_name'], 'pkg_detail': r['pkg_detail'],
+            'addon_item': r['addon_item'], 'addon_amount': r['addon_amount'],
+        })
+
+    def _pkg_label(f):
+        if f['addon_item']:
+            return f"{f['addon_item']} — ₹{float(f['addon_amount'] or 0):,.0f}"
+        return f['pkg_detail'] or "—"
+
+    def _date_disp(d):
+        try:
+            return _dt.strptime(d, '%Y-%m-%d').strftime('%d %b %Y')
+        except Exception:
+            return d or "—"
+
+    letters = 'abcdefghijklmnopqrstuvwxyz'
+    lines = []
+    total_due = 0.0
+    total_persons = 0
+    for idx, bid in enumerate(order, start=1):
+        b = bookings[bid]
+        fns = b['functions']
+        persons = len(fns)
+        total_persons += persons
+        due = float(b['balance_due'] or 0)
+        total_due += due
+        lines.append(
+            f"{idx}. {b['client_name']} ({b['phone'] or '—'}) — {b['booking_type']} — "
+            f"{persons} person{'s' if persons != 1 else ''}"
+        )
+        if persons == 1:
+            f = fns[0]
+            lines.append(f"   Function: {f['function_name'] or '—'} | Time: {f['fn_time'] or '—'}")
+            lines.append(f"   Package: {_pkg_label(f)}")
+            lines.append(f"   Due ₹{due:,.0f}")
+        else:
+            for i, f in enumerate(fns):
+                who = f" — for {f['person_name']}" if f['person_name'] else ""
+                lines.append(
+                    f"   {letters[i % 26]}) {f['function_name'] or '—'}{who} | "
+                    f"Time: {f['fn_time'] or '—'} | Package: {_pkg_label(f)}"
+                )
+            lines.append(f"   Due (whole booking): ₹{due:,.0f}")
+        if b['wedding_date'] and b['wedding_date'] != fn_date_str:
+            main_pkg = f" ({b['package_name']} — ₹{float(b['pkg_amount'] or 0):,.0f})" if b['package_name'] else ""
+            lines.append(f"   Main wedding: {_date_disp(b['wedding_date'])}{main_pkg}")
+        lines.append("")
+
+    header = f"{_date_disp(fn_date_str)} ({total_persons} person{'s' if total_persons != 1 else ''})"
+    body = "\n".join(lines).rstrip()
+    if order:
+        footer = (
+            f"Total due across {len(order)} booking{'s' if len(order) != 1 else ''}: ₹{total_due:,.0f}\n"
+            f"Total persons: {total_persons}"
+        )
+        text = f"{header}\n\n{body}\n\n{footer}"
+    else:
+        text = f"{header}\n\nNo bookings for this date."
+
+    return {
+        "fn_date": fn_date_str,
+        "bookings": [
+            {
+                "id": b["id"], "job_no": b["job_no"], "booking_type": b["booking_type"],
+                "client_name": b["client_name"], "phone": b["phone"],
+                "wedding_date": b["wedding_date"], "balance_due": b["balance_due"],
+                "functions": b["functions"],
+            }
+            for b in bookings.values()
+        ],
+        "total_persons": total_persons,
+        "total_due": total_due,
+        "text": text,
+    }
+
+
+@bridal_router.get("/date-summary")
+async def bridal_date_summary(
+    fn_date: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Everyone with a bridal_functions row on this date, across Bride/Groom/
+    Sider — feeds the date-click reminder screen in All Bookings (table +
+    the exact text that would be sent as the WhatsApp digest)."""
+    cursor = db.cursor()
+    return await _build_bridal_date_digest(fn_date, cursor)
+
+
+@bridal_router.post("/date-summary/whatsapp")
+async def bridal_date_summary_whatsapp(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: oracledb.AsyncConnection = Depends(get_db),
+):
+    """Send the per-date bookings digest to whatever WhatsApp number is
+    entered on the reminder screen — a personal reminder for the salon
+    owner/staff, never sent to a client. Rebuilds the text fresh from the
+    DB rather than trusting anything the frontend cached."""
+    fn_date = data.get("fn_date")
+    phone = data.get("phone")
+    if not fn_date or not phone:
+        raise HTTPException(status_code=400, detail="fn_date and phone are required")
+    cursor = db.cursor()
+    digest = await _build_bridal_date_digest(fn_date, cursor)
+    return await send_whatsapp_template(
+        db, phone, "bridal_date_digest", [digest["text"]],
+        user_name="Saundarya Beauty Care",
+    )
+
+
 @bridal_router.patch("/{booking_id}/functions/{function_id}")
 async def edit_bridal_function(
     booking_id: int,
