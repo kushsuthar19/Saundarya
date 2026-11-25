@@ -48,6 +48,20 @@ def SB(name, **kw):
     kw.setdefault("fontName", "Helvetica-Bold"); return S(name, **kw)
 
 
+def _fmt_time12(t):
+    """'HH:MM' (24-hour, straight from an <input type=time>) -> 'h:mm AM/PM'."""
+    if not t:
+        return ""
+    try:
+        h, m = str(t).split(":")[:2]
+        h = int(h)
+        ampm = "AM" if h < 12 else "PM"
+        h = h % 12 or 12
+        return f"{h}:{m.zfill(2)} {ampm}"
+    except Exception:
+        return str(t)
+
+
 def _header(booking_type=""):
     if os.path.exists(LOGO_PATH):
         logo_img = Image(LOGO_PATH, width=26*mm, height=25*mm)
@@ -102,6 +116,76 @@ def _footer():
         ("RIGHTPADDING",  (1,0),(1,0),   10),
     ]))
     return t
+
+
+# ── Bridal Terms & Conditions page ───────────────────────
+# Static second page appended to every Bride/Groom/Sider invoice (including
+# the individual sider add-on mini invoice) — same fixed content every
+# time, not tied to the specific booking.
+_TC_BULLETS = [
+    "A booking amount of 30% of the total package value is mandatory.",
+    "The full remaining package amount must be paid by the client at the bride's final sitting.",
+    "If there are any changes in the booked package, the difference amount cannot be refunded or adjusted against any other service.",
+    "Any damage or loss to jewellery provided by the salon will be charged at its full value.",
+    "Please double-check all jewellery before taking it from the salon.",
+    "If you take any jewellery or accessories from the salon, it must be returned within 24 hours.",
+    "If the items are not returned within 24 hours, the full value of those items will be charged.",
+    "No additional services or discounts will be provided on complimentary items included in any package.",
+]
+
+
+def _terms_conditions_page() -> list:
+    flow = [PageBreak()]
+
+    title_inner = Table(
+        [[Paragraph("<b>Terms &amp; Conditions</b>",
+                     S("tc_title", fontSize=14, textColor=WHITE, alignment=TA_CENTER))]],
+        colWidths=[75*mm]
+    )
+    title_inner.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), DARK_GREEN),
+        ("TOPPADDING",    (0,0),(-1,-1), 8),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 8),
+    ]))
+    title_wrap = Table([[title_inner]], colWidths=[182*mm])
+    title_wrap.setStyle(TableStyle([("ALIGN", (0,0),(-1,-1), "CENTER")]))
+    flow.append(title_wrap)
+    flow.append(Spacer(1, 10*mm))
+
+    bullet_style = S("tcb", fontSize=11, leading=16, leftIndent=14,
+                      firstLineIndent=-14, spaceAfter=10)
+    for term in _TC_BULLETS:
+        flow.append(Paragraph(f"•  {term}", bullet_style))
+
+    flow.append(Spacer(1, 6*mm))
+    blank_rows = [[""] for _ in range(14)]
+    blank_lines = Table(blank_rows, colWidths=[182*mm], rowHeights=[8*mm]*14)
+    line_style = [
+        ("TOPPADDING",    (0,0),(-1,-1), 0),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 0),
+        ("LEFTPADDING",   (0,0),(-1,-1), 0),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+    ]
+    for r in range(14):
+        line_style.append(("LINEBELOW", (0,r),(0,r), 0.6, MED_GRAY, None, (1,2)))
+    blank_lines.setStyle(TableStyle(line_style))
+    flow.append(blank_lines)
+
+    flow.append(Spacer(1, 8*mm))
+    caption = Table(
+        [["", Paragraph("<i>*Terms &amp; Conditions Applied.</i>",
+                         S("tc_cap", fontSize=10, alignment=TA_CENTER, textColor=TEXT_GRAY)), ""]],
+        colWidths=[55*mm, 72*mm, 55*mm]
+    )
+    caption.setStyle(TableStyle([
+        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+        ("LINEBELOW",     (0,0),(0,0),   0.8, DARK_GREEN),
+        ("LINEBELOW",     (2,0),(2,0),   0.8, DARK_GREEN),
+        ("TOPPADDING",    (0,0),(-1,-1), 4),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+    ]))
+    flow.append(caption)
+    return flow
 
 
 # ── Daily invoice ─────────────────────────────────────────
@@ -309,6 +393,11 @@ def generate_bridal_invoice(booking: Dict[str, Any],
         dotted("Wedding Person Name", booking.get("client_name", "")),
         dotted("Wedding Date",        wd_str),
         dotted("Venue",               booking.get("venue") or ""),
+    ]
+    # Only when there's an actual travel charge — no transport, no line.
+    if float(booking.get("transport") or 0) > 0 and booking.get("travel_address"):
+        info_rows.append(dotted("Travel Address", booking.get("travel_address")))
+    info_rows += [
         dotted("Reference",           booking.get("reference") or ""),
         dotted("Contact",             booking.get("phone") or ""),
     ]
@@ -412,7 +501,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
                 if is_booked else S("fnr", fontSize=9, leading=11)
             ),
             Paragraph(fd_str,                    S("fd", fontSize=9, alignment=TA_CENTER, leading=11)),
-            Paragraph(fn.get("fn_time") or "",   S("ft", fontSize=9, alignment=TA_CENTER, leading=11)),
+            Paragraph(_fmt_time12(fn.get("fn_time")),   S("ft", fontSize=9, alignment=TA_CENTER, leading=11)),
             Paragraph(pc_str,                    S("fp", fontSize=9, alignment=TA_CENTER, leading=11)),
             Paragraph(pkg,                       S("fpk", fontSize=9, leading=11)),
         ])
@@ -458,7 +547,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
                 Paragraph(fn.get("person_name") or "—", S("af", fontSize=9, alignment=TA_CENTER)),
                 Paragraph(fn.get("function_name") or "—", S("afn", fontSize=9, alignment=TA_CENTER)),
                 Paragraph(_fmt_short_date(fn.get("fn_date")), S("afd", fontSize=9, alignment=TA_CENTER)),
-                Paragraph(fn.get("fn_time") or "", S("aft", fontSize=9, alignment=TA_CENTER)),
+                Paragraph(_fmt_time12(fn.get("fn_time")), S("aft", fontSize=9, alignment=TA_CENTER)),
                 Paragraph(fn.get("addon_item") or "Add-on", S("ai", fontSize=9)),
                 Paragraph(f"Rs.{int(float(fn.get('addon_amount') or 0)):,}",
                           SB("aa", fontSize=9, alignment=TA_CENTER)),
@@ -584,6 +673,7 @@ def generate_bridal_invoice(booking: Dict[str, Any],
     story.append(combined)
     story.append(Spacer(1, 6*mm))
     story.append(_footer())
+    story.extend(_terms_conditions_page())
     doc.build(story)
     return buf.getvalue()
 
@@ -682,7 +772,7 @@ def generate_sider_invoice(booking: Dict[str, Any],
             Paragraph(fn_name,         S("fn2", fontSize=10, textColor=DARK_GREEN,
                                          fontName="Helvetica-Bold")),
             Paragraph(fd_str,          S("fd2", fontSize=10, alignment=TA_CENTER)),
-            Paragraph(fn.get("fn_time") or "", S("ft2", fontSize=10, alignment=TA_CENTER)),
+            Paragraph(_fmt_time12(fn.get("fn_time")), S("ft2", fontSize=10, alignment=TA_CENTER)),
             Paragraph(pkg_name,        S("pk2", fontSize=10)),
             Paragraph("",              S("am2", fontSize=10, alignment=TA_RIGHT)),
         ])
@@ -876,7 +966,7 @@ def generate_sider_invoice(booking: Dict[str, Any],
         else:
             fd_str = ""
 
-        ft_str = fn.get("fn_time") or ""
+        ft_str = _fmt_time12(fn.get("fn_time"))
 
         total_amount += amt
         amt_str = f"Rs.{int(amt):,}" if amt > 0 else "—"
@@ -972,6 +1062,7 @@ def generate_sider_invoice(booking: Dict[str, Any],
     story.append(combined)
     story.append(Spacer(1, 4*mm))
     story.append(_footer())
+    story.extend(_terms_conditions_page())
 
     doc.build(story)
     return buf.getvalue()
@@ -1052,7 +1143,7 @@ def generate_sider_addon_invoice(booking: Dict[str, Any], fn: Dict[str, Any]) ->
     ], [
         Paragraph(fn.get("function_name") or "—",              S("f1", fontSize=10)),
         Paragraph(fd_str,                                       S("f2", fontSize=10, alignment=TA_CENTER)),
-        Paragraph(fn.get("fn_time") or "—",                     S("f3", fontSize=10, alignment=TA_CENTER)),
+        Paragraph(_fmt_time12(fn.get("fn_time")) or "—",                     S("f3", fontSize=10, alignment=TA_CENTER)),
         Paragraph(fn.get("addon_item") or fn.get("pkg_detail") or "—", S("f4", fontSize=10)),
         Paragraph(f"Rs.{int(float(fn.get('addon_amount') or 0)):,}",
                   SB("f5", fontSize=10, alignment=TA_RIGHT)),
@@ -1077,6 +1168,7 @@ def generate_sider_addon_invoice(booking: Dict[str, Any], fn: Dict[str, Any]) ->
     ))
     story.append(Spacer(1, 8*mm))
     story.append(_footer())
+    story.extend(_terms_conditions_page())
 
     doc.build(story)
     return buf.getvalue()

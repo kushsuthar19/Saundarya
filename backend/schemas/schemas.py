@@ -364,6 +364,7 @@ class BridalCreate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     wedding_date: Optional[date] = None
     venue: Optional[str] = Field(None, max_length=200)
+    travel_address: Optional[str] = Field(None, max_length=200)
     reference: Optional[str] = Field(None, max_length=200)
     package_name: Optional[str] = Field(None, max_length=200)
     pkg_amount: float = 0
@@ -382,7 +383,7 @@ class BridalCreate(BaseModel):
             return None
         return v
 
-    @field_validator("venue", "reference", "package_name", "notes", "phone", mode="before")
+    @field_validator("venue", "travel_address", "reference", "package_name", "notes", "phone", mode="before")
     @classmethod
     def coerce_str_fields(cls, v):
         if v == "" or v is None:
@@ -429,6 +430,7 @@ class BridalOut(BaseModel):
     booking_date: Optional[date] = None
     wedding_date: Optional[date]
     venue: Optional[str]
+    travel_address: Optional[str] = None
     reference: Optional[str]
     package_name: Optional[str]
     pkg_amount: float

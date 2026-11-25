@@ -1056,26 +1056,37 @@ async def _get_bridal(booking_id: int, cursor) -> dict:
     try:
         await cursor.execute(
             """SELECT id, job_no, booking_type, client_name, phone, booking_date, wedding_date,
-                      venue, reference, package_name, pkg_amount, transport, discount,
+                      venue, travel_address, reference, package_name, pkg_amount, transport, discount,
                       advance_paid, balance_due, status, wa_sent, created_at, notes
                FROM bridal_bookings WHERE id=:1""",
             [booking_id]
         )
     except oracledb.DatabaseError:
-        # booking_date column not migrated yet on this DB — fall back gracefully
-        await cursor.execute(
-            """SELECT id, job_no, booking_type, client_name, phone, wedding_date, venue,
-                      reference, package_name, pkg_amount, transport, discount, advance_paid,
-                      balance_due, status, wa_sent, created_at, notes
-               FROM bridal_bookings WHERE id=:1""",
-            [booking_id]
-        )
+        try:
+            # travel_address column not migrated yet on this DB — fall back
+            await cursor.execute(
+                """SELECT id, job_no, booking_type, client_name, phone, booking_date, wedding_date,
+                          venue, reference, package_name, pkg_amount, transport, discount,
+                          advance_paid, balance_due, status, wa_sent, created_at, notes
+                   FROM bridal_bookings WHERE id=:1""",
+                [booking_id]
+            )
+        except oracledb.DatabaseError:
+            # booking_date column not migrated yet on this DB either — fall back further
+            await cursor.execute(
+                """SELECT id, job_no, booking_type, client_name, phone, wedding_date, venue,
+                          reference, package_name, pkg_amount, transport, discount, advance_paid,
+                          balance_due, status, wa_sent, created_at, notes
+                   FROM bridal_bookings WHERE id=:1""",
+                [booking_id]
+            )
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(404, "Bridal booking not found")
     cols = [d[0].lower() for d in cursor.description]
     booking = dict(zip(cols, row))
     booking.setdefault("booking_date", None)
+    booking.setdefault("travel_address", None)
     try:
         await cursor.execute(
             """SELECT id, function_name, fn_date, fn_time, person_count, person_name,
@@ -1449,13 +1460,13 @@ async def create_bridal(
         await cursor.execute(
             """INSERT INTO bridal_bookings
                (job_no, booking_type, client_name, phone, booking_date, wedding_date, venue,
-                reference, package_name, pkg_amount, transport, discount, advance_paid,
+                travel_address, reference, package_name, pkg_amount, transport, discount, advance_paid,
                 balance_due, notes, created_by)
-               VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),TO_DATE(:6,'YYYY-MM-DD'),:7,:8,:9,
-                       :10,:11,:12,:13,:14,:15,:16)
-               RETURNING id INTO :17""",
+               VALUES (:1,:2,:3,:4,TO_DATE(:5,'YYYY-MM-DD'),TO_DATE(:6,'YYYY-MM-DD'),:7,:8,:9,:10,
+                       :11,:12,:13,:14,:15,:16,:17)
+               RETURNING id INTO :18""",
             [job_no, data.booking_type, data.client_name, data.phone, bd, wd,
-             data.venue, data.reference, data.package_name,
+             data.venue, data.travel_address, data.reference, data.package_name,
              data.pkg_amount, data.transport, data.discount, data.advance_paid,
              balance, data.notes, int(current_user["id"]),
              cursor.var(oracledb.NUMBER)]
@@ -1845,7 +1856,7 @@ async def edit_bridal(
         prev_client_name, prev_phone, prev_advance, prev_type = prev_row
     prev_advance = float(prev_advance or 0)
 
-    allowed = ['client_name','phone','booking_date','wedding_date','venue','reference',
+    allowed = ['client_name','phone','booking_date','wedding_date','venue','travel_address','reference',
                'package_name','pkg_amount','transport','discount',
                'advance_paid','status','notes']
 

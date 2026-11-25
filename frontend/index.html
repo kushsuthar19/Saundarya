@@ -1029,6 +1029,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <div class="fg">
         <div class="fl"><label>Package (₹)</label><input type="number" id="br-pa" placeholder="0" oninput="brBill()"></div>
         <div class="fl"><label>Transport (₹)</label><input type="number" id="br-tr" placeholder="0" oninput="brBill()"></div>
+        <div class="fl" id="br-travel-wrap" style="display:none;grid-column:1/-1"><label><i class="fas fa-route"></i> Travel Address</label><input type="text" id="br-travel-addr" placeholder="Address of the venue being traveled to"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="br-di" placeholder="0" oninput="brBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="br-ad" placeholder="0" oninput="brBill()"></div>
         <div class="fl"><label>Payment Method</label>
@@ -1137,6 +1138,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <div class="fg">
         <div class="fl"><label>Package Amount (₹)</label><input type="number" id="gr-pa" placeholder="0" oninput="grBill()"></div>
         <div class="fl"><label>Transport (₹)</label><input type="number" id="gr-tr" placeholder="0" oninput="grBill()"></div>
+        <div class="fl" id="gr-travel-wrap" style="display:none;grid-column:1/-1"><label><i class="fas fa-route"></i> Travel Address</label><input type="text" id="gr-travel-addr" placeholder="Address of the venue being traveled to"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="gr-di" placeholder="0" oninput="grBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="gr-ad" placeholder="0" oninput="grBill()"></div>
         <div class="fl"><label>Payment Method</label>
@@ -1203,6 +1205,7 @@ table tbody tr:hover td{background:var(--bg2)}
       <button class="add-r" onclick="addSdRow()"><i class="fas fa-plus"></i>Add Person</button>
       <div class="fg" style="margin-top:12px">
         <div class="fl"><label>Transport (₹)</label><input type="number" id="sd-tr" placeholder="0" oninput="sdBill()"></div>
+        <div class="fl" id="sd-travel-wrap" style="display:none;grid-column:1/-1"><label><i class="fas fa-route"></i> Travel Address</label><input type="text" id="sd-travel-addr" placeholder="Address of the venue being traveled to"></div>
         <div class="fl"><label>Discount (₹)</label><input type="number" id="sd-di" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Advance (₹)</label><input type="number" id="sd-ad" placeholder="0" oninput="sdBill()"></div>
         <div class="fl"><label>Advance Payment</label><select id="sd-pay-method" onchange="toggleBridalSplit('sd')" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px"><option value="Cash">Cash</option><option value="GPay/UPI">GPay / UPI</option><option value="Card">Card</option><option value="Split">Split</option></select></div>
@@ -2017,6 +2020,17 @@ const DB={appts:[],bridal:[],entries:[],clients:[],staff:[],att:{},attTimes:{},i
 let PASSWORDS={staff:"STAFF2024",revenue:"REV@786",reports:"RPT#2024",att:"ATT123"};
 const UNLOCKED={staff:false,revenue:false,reports:false,att:false};
 const fmt=n=>"₹"+Math.round(n).toLocaleString("en-IN");
+// 'HH:MM' (24-hour, straight from an <input type=time>) -> 'h:mm AM/PM'
+function fmtTime12(t){
+  if(!t)return'';
+  const parts=String(t).split(':');
+  if(parts.length<2)return t;
+  let h=parseInt(parts[0],10);const m=(parts[1]||'00').padStart(2,'0');
+  if(isNaN(h))return t;
+  const ampm=h<12?'AM':'PM';
+  h=h%12||12;
+  return `${h}:${m} ${ampm}`;
+}
 const td=()=>new Date().toISOString().split("T")[0];
 const tM=()=>new Date().toISOString().slice(0,7);
 const tY=()=>new Date().getFullYear().toString();
@@ -4210,6 +4224,9 @@ function buildBridalPayMethod(prefix){
 function brBill(){
   const pa=parseFloat(v('br-pa')?.value)||0,tr=parseFloat(v('br-tr')?.value)||0;
   const di=parseFloat(v('br-di')?.value)||0,ad=parseFloat(v('br-ad')?.value)||0;
+  // Travel Address only matters once there's an actual travel charge
+  const travelWrap=v('br-travel-wrap');
+  if(travelWrap)travelWrap.style.display=tr>0?'block':'none';
   // Sum add-ons
   let addons=0;
   document.querySelectorAll('#bride-addons-list .bride-addon-amt').forEach(inp=>{addons+=parseFloat(inp.value)||0;});
@@ -4451,7 +4468,9 @@ async function saveBridal(type){
     client_name:name,phone:phone||null,wedding_date:wdate||null,
     booking_date:bookingDate||td(),
     advance_pay_method:advPayMethod,
-    venue:venue||null,reference:(type==='bride'?v('br-rf')?.value||null:type==='groom'?v('gr-rf')?.value||null:null),package_name:pkgName||null,
+    venue:venue||null,
+    travel_address:(type==='bride'?v('br-travel-addr')?.value:type==='groom'?v('gr-travel-addr')?.value:v('sd-travel-addr')?.value)||null,
+    reference:(type==='bride'?v('br-rf')?.value||null:type==='groom'?v('gr-rf')?.value||null:null),package_name:pkgName||null,
     pkg_amount:total||0,transport:transport||0,discount:discount||0,advance_paid:advance||0,
     notes:(type==='bride'?v('br-notes')?.value:type==='groom'?v('gr-notes')?.value:v('sd-notes')?.value)?.trim()||null,
     functions:funcs
@@ -4507,6 +4526,9 @@ async function editBridal(id){
         <input id="eb-amt" type="number" value="${b.pkg_amount||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Transport ₹</label>
         <input id="eb-tr" type="number" value="${b.transport||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
+      <div id="eb-travel-wrap" style="grid-column:1/-1;display:${(b.transport||0)>0?'block':'none'}">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600"><i class="fas fa-route"></i> Travel Address</label>
+        <input id="eb-travel-addr" value="${b.travel_address||''}" placeholder="Address of the venue being traveled to" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Discount ₹</label>
         <input id="eb-disc" type="number" value="${b.discount||0}" oninput="ebCalc()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;background:var(--surface)"></div>
       <div><label style="font-size:11px;color:var(--ink3);font-weight:600">Advance Paid ₹</label>
@@ -4601,6 +4623,8 @@ function ebCalc(){
   const tr=parseFloat(v('eb-tr')?.value)||0;
   const disc=parseFloat(v('eb-disc')?.value)||0;
   const adv=parseFloat(v('eb-adv')?.value)||0;
+  const travelWrap=v('eb-travel-wrap');
+  if(travelWrap)travelWrap.style.display=tr>0?'block':'none';
   let addons=0;
   document.querySelectorAll('#eb-func-tbody .eb-fn-addon-amt').forEach(inp=>{addons+=parseFloat(inp.value)||0;});
   const gross=pkg+addons+tr;
@@ -4653,6 +4677,7 @@ async function saveBridalEdit(id){
     wedding_date:v('eb-wdate')?.value||null,
     booking_date:v('eb-bkd')?.value||null,
     venue:v('eb-venue')?.value||null,
+    travel_address:v('eb-travel-addr')?.value||null,
     reference:v('eb-ref')?.value||null,
     package_name:v('eb-pkg')?.value||null,
     pkg_amount:parseFloat(v('eb-amt')?.value)||0,
@@ -5328,6 +5353,8 @@ async function sendBridalPdfWa(id,btn){
 function grBill(){
   const pa=parseFloat(v('gr-pa')?.value)||0,tr=parseFloat(v('gr-tr')?.value)||0;
   const di=parseFloat(v('gr-di')?.value)||0,ad=parseFloat(v('gr-ad')?.value)||0;
+  const travelWrap=v('gr-travel-wrap');
+  if(travelWrap)travelWrap.style.display=tr>0?'block':'none';
   // Sum add-ons (e.g. a Sider package for the groom's brother/father)
   let addons=0;
   document.querySelectorAll('#groom-addons-list .groom-addon-amt').forEach(inp=>{addons+=parseFloat(inp.value)||0;});
@@ -5457,6 +5484,8 @@ function sdBill(){
   const totOverride=parseFloat(v('sd-total-override')?.value);
   if(totOverride>0)tot=totOverride;
   const tr2=parseFloat(v('sd-tr')?.value)||0,di=parseFloat(v('sd-di')?.value)||0,ad=parseFloat(v('sd-ad')?.value)||0;
+  const sdTravelWrap=v('sd-travel-wrap');
+  if(sdTravelWrap)sdTravelWrap.style.display=tr2>0?'block':'none';
   const due=Math.max(0,tot+tr2-di-ad);
   const st=v('sb-t');if(st)st.textContent=fmt(tot);
   const str=v('sb-tr');if(str)str.textContent=fmt(tr2);
@@ -6884,6 +6913,7 @@ function showNotifToast(msg, count){
 async function loadBridalNotifications(){
   // Only show: TODAY and TOMORROW (1 day before event) — exact date match
   const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
   const todayStr=td();
   const tomDate=new Date(now);tomDate.setDate(tomDate.getDate()+1);
   const tomStr=tomDate.toISOString().split('T')[0];
@@ -6900,12 +6930,22 @@ async function loadBridalNotifications(){
       fns.forEach(fn=>{
         const fd=String(fn.fn_date||fn.date||'').substring(0,10);
         if(fd&&validDates.includes(fd)){
+          const ft=fn.fn_time||fn.time||'';
+          // Once TODAY's own function time has already passed, this
+          // specific reminder is stale (that appointment already
+          // happened earlier today) — drop it instead of leaving it
+          // showing for the rest of the day. A function with no time
+          // set, or one that's for tomorrow, is never time-filtered.
+          if(fd===todayStr && ft){
+            const [fh,fm]=ft.split(':').map(Number);
+            if(!isNaN(fh) && (fh*60+(fm||0))<=nowMin) return;
+          }
           upcoming.push({
             name:b.client_name||b.name||'Client', phone:b.phone||'—',
             booking_type:b.booking_type||'Bridal',
             pkg:b.package_name||b.booking_type||'—',
             fn_name:fn.function_name||fn.name||'Function',
-            fn_date:fd, fn_time:fn.fn_time||fn.time||'', isToday:fd===todayStr, id:b.id,
+            fn_date:fd, fn_time:ft, isToday:fd===todayStr, id:b.id,
             job_no:b.job_no||'', balance_due:b.balance_due||0
           });
         }
@@ -6943,7 +6983,7 @@ async function loadBridalNotifications(){
         <div style="flex:1;min-width:0">
           <div class="notif-text" style="font-weight:700;font-size:12px">${u.name}</div>
           <div style="font-size:11px;color:var(--ink2);margin-top:2px">${u.fn_name} — ${u.booking_type} · ${u.pkg}</div>
-          <div style="font-size:10px;color:var(--ink3);margin-top:1px">📞 ${u.phone} · 📅 ${u.fn_date}${u.fn_time?' · 🕐 '+u.fn_time:''}</div>
+          <div style="font-size:10px;color:var(--ink3);margin-top:1px">📞 ${u.phone} · 📅 ${u.fn_date}${u.fn_time?' · 🕐 '+fmtTime12(u.fn_time):''}</div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
             <span style="color:${color};font-weight:700;font-size:11px">${when}</span>
             ${u.balance_due>0?`<span style="background:var(--rose-l);color:var(--rose);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px">Due ${fmt(u.balance_due)}</span>`:`<span style="background:var(--emerald-l);color:var(--emerald);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px">✔ Paid</span>`}
