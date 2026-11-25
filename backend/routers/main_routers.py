@@ -2125,8 +2125,12 @@ async def record_advance_payment(
      client_name, phone, booking_type) = row
     new_advance = float(advance_paid or 0) + amount
     new_balance = max(0, float(balance_due or 0) - amount)
-    # If fully paid, mark completed
-    new_status = "Completed" if new_balance == 0 else "Active"
+    # Stays "Active" even once fully paid — being paid early must not make
+    # a booking vanish from the notification bell (which only shows Active
+    # bookings) days before its actual event. A separate daily job
+    # (run_bridal_auto_complete_job) marks it Completed once the event
+    # date itself has passed, regardless of payment status.
+    new_status = "Active"
     await cursor.execute(
         """UPDATE bridal_bookings
            SET advance_paid=:1, balance_due=:2, status=:3, updated_at=SYSTIMESTAMP

@@ -3,13 +3,16 @@ Scheduled WhatsApp reminders — runs once daily inside the FastAPI process
 via APScheduler (in-process; no OS-level cron needed). Registered from
 main.py's lifespan on startup, shut down on app shutdown.
 
-Three jobs:
+Four jobs:
   - run_winback_30_job()          ('winback_30') — any client whose
     last_visit was exactly 30 days ago (first, gentler reminder).
   - run_winback_job()             ('winback') — any client whose last_visit
     was exactly 60 days ago (follow-up if they still haven't come back).
   - run_membership_expiry_job()   ('membership') — Exclusive memberships
     expiring in exactly 7, 3, or 0 days.
+  - run_bridal_auto_complete_job() — Active bridal bookings whose event
+    date (wedding_date) has already passed get marked Completed, whatever
+    their payment status is.
 
 All are best-effort per client: one client's send failing (bad phone,
 AiSensy hiccup) never stops the rest of the batch, and every send already
@@ -62,6 +65,7 @@ async def _winback_30_subprocess(): await _run_in_subprocess("winback_30")
 async def _winback_subprocess(): await _run_in_subprocess("winback")
 async def _membership_expiry_subprocess(): await _run_in_subprocess("membership_expiry")
 async def _auto_day_off_subprocess(): await _run_in_subprocess("auto_day_off")
+async def _bridal_auto_complete_subprocess(): await _run_in_subprocess("bridal_auto_complete")
 
 
 async def _already_sent_today(cursor, client_id, template_key: str) -> bool:
@@ -213,6 +217,31 @@ async def run_auto_day_off_job():
         logger.error(f"Auto Day Off job failed: {e}")
 
 
+async def run_bridal_auto_complete_job():
+    """Active bridal bookings whose event (wedding_date) is before today —
+    the event has already happened, so mark it Completed regardless of
+    payment status. Being paid off early must not make a booking vanish
+    from the notification bell (which only shows Active bookings) days
+    before its actual event — that's what used to happen when payment
+    completion alone flipped the status; now only the event date passing
+    does."""
+    try:
+        async with get_connection() as db:
+            cursor = db.cursor()
+            await cursor.execute(
+                """UPDATE bridal_bookings
+                   SET status='Completed', updated_at=SYSTIMESTAMP
+                   WHERE status='Active'
+                     AND wedding_date IS NOT NULL
+                     AND TRUNC(wedding_date) < TRUNC(SYSDATE)"""
+            )
+            count = cursor.rowcount
+            await db.commit()
+            logger.info(f"Bridal auto-complete job: {count} booking(s) marked Completed (event date passed).")
+    except Exception as e:
+        logger.error(f"Bridal auto-complete job failed: {e}")
+
+
 def start_scheduler():
     """Call once from main.py's lifespan on startup."""
     if _scheduler.running:
@@ -224,8 +253,9 @@ def start_scheduler():
     _scheduler.add_job(_winback_subprocess, CronTrigger(hour=9, minute=0), id="wa_winback", replace_existing=True)
     _scheduler.add_job(_membership_expiry_subprocess, CronTrigger(hour=9, minute=5), id="wa_membership_expiry", replace_existing=True)
     _scheduler.add_job(_auto_day_off_subprocess, CronTrigger(hour=18, minute=0), id="auto_day_off", replace_existing=True)
+    _scheduler.add_job(_bridal_auto_complete_subprocess, CronTrigger(hour=0, minute=15), id="bridal_auto_complete", replace_existing=True)
     _scheduler.start()
-    logger.info("WhatsApp reminder scheduler started (winback 08:55/09:00, membership expiry 09:05, auto day-off 18:00 daily).")
+    logger.info("WhatsApp reminder scheduler started (winback 08:55/09:00, membership expiry 09:05, auto day-off 18:00, bridal auto-complete 00:15 daily).")
 
 
 def stop_scheduler():

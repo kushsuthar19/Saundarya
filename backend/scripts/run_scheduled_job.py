@@ -14,7 +14,8 @@ web server keeps serving requests untouched either way.
 Usage:
     python3 -m backend.scripts.run_scheduled_job <job_name>
 
-<job_name> is one of: winback_30, winback, membership_expiry, auto_day_off
+<job_name> is one of: winback_30, winback, membership_expiry, auto_day_off,
+bridal_auto_complete
 """
 import asyncio
 import logging
@@ -28,6 +29,7 @@ JOBS = {
     "winback": "run_winback_job",
     "membership_expiry": "run_membership_expiry_job",
     "auto_day_off": "run_auto_day_off_job",
+    "bridal_auto_complete": "run_bridal_auto_complete_job",
 }
 
 

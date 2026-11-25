@@ -6612,7 +6612,7 @@ async function submitBridalPayment(bookingId,clientName,balanceDue){
   closeInvModal();
   toast('<i class="fas fa-check-circle"></i> ₹'+Math.round(amt).toLocaleString('en-IN')+' recorded for '+clientName+'. Balance: '+fmt(r.new_balance_due),'var(--emerald)');
   if(r.new_balance_due===0){
-    toast('<i class="fas fa-star" style="color:var(--gold)"></i> '+clientName+' — FULLY PAID! Booking Completed.','var(--gold)');
+    toast('<i class="fas fa-star" style="color:var(--gold)"></i> '+clientName+' — FULLY PAID!','var(--gold)');
   }
   renderPendingDues();updateRevKpis();updateDash();
   if(typeof renderBridalList==='function')renderBridalList();
