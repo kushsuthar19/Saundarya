@@ -6927,9 +6927,16 @@ async function loadBridalNotifications(){
     try{
       // Check each function date
       const fns=Array.isArray(b.functions)?b.functions:[];
+      // Every fn_date actually evaluated for this booking, whether it got
+      // shown or was dropped for having already passed — not just the
+      // ones that made it into `upcoming` — so the wedding_date fallback
+      // below can't mistake "deliberately time-filtered" for "never
+      // covered" and resurrect it as a time-unaware duplicate.
+      const consideredDates=new Set();
       fns.forEach(fn=>{
         const fd=String(fn.fn_date||fn.date||'').substring(0,10);
         if(fd&&validDates.includes(fd)){
+          consideredDates.add(fd);
           const ft=fn.fn_time||fn.time||'';
           // Once TODAY's own function time has already passed, this
           // specific reminder is stale (that appointment already
@@ -6952,9 +6959,8 @@ async function loadBridalNotifications(){
       });
       // Also check wedding_date itself
       const wd=String(b.wedding_date||'').substring(0,10);
-      if(wd&&validDates.includes(wd)){
-        const already=upcoming.find(u=>u.id===b.id&&u.fn_date===wd);
-        if(!already) upcoming.push({
+      if(wd&&validDates.includes(wd)&&!consideredDates.has(wd)){
+        upcoming.push({
           name:b.client_name||b.name||'Client', phone:b.phone||'—',
           booking_type:b.booking_type||'Bridal',
           pkg:b.package_name||b.booking_type||'—',
