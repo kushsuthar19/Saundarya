@@ -2861,7 +2861,8 @@ async def send_inquiry_whatsapp(
 # ── Service booklet (template #9: inquiry_response_with_booklet) ───────────
 # One fixed PDF, admin-uploadable/replaceable from the app — not generated
 # per-record like the invoices, so no per-record signed token needed.
-_BOOKLET_FILENAME = "service_booklet.pdf"
+_BOOKLET_FILENAME = "service_booklet.pdf"  # on-disk storage name only
+_BOOKLET_DISPLAY_FILENAME = "Saundarya Makeup Packages.pdf"  # shown to the recipient in WhatsApp
 
 
 def _booklet_path() -> str:
@@ -2921,7 +2922,7 @@ async def send_inquiry_booklet_whatsapp(
     doc_url = f"{str(request.base_url).rstrip('/')}/api/v1/inquiries/booklet/public"
     result = await send_whatsapp_template(
         db, phone, "inquiry_pdf", [name, service or "our services"],
-        media_url=doc_url, media_filename=_BOOKLET_FILENAME,
+        media_url=doc_url, media_filename=_BOOKLET_DISPLAY_FILENAME,
         ref_id=inquiry_id, user_name=name,
     )
     return result
